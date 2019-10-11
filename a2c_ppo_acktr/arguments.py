@@ -105,7 +105,7 @@ def get_args():
     parser.add_argument(
         '--save-interval',
         type=int,
-        default=100,
+        default=10,
         help='save interval, one save per n updates (default: 100)')
     parser.add_argument(
         '--eval-interval',
@@ -123,11 +123,11 @@ def get_args():
         help='environment to train on (default: PongNoFrameskip-v4)')
     parser.add_argument(
         '--log-dir',
-        default='/tmp/gym/',
-        help='directory to save agent logs (default: /tmp/gym)')
+        default='log/',
+        help='directory to save agent logs (default: log/)')
     parser.add_argument(
         '--save-dir',
-        default='./trained_models/',
+        default='./trained_models_picking_new_2/',
         help='directory to save agent logs (default: ./trained_models/)')
     parser.add_argument(
         '--no-cuda',
