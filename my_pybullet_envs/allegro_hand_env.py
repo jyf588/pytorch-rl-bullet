@@ -177,6 +177,10 @@ class AllegroHandPickEnv(gym.Env):
         self.observation.extend(list(clPos))
         self.observation.extend(list(clOrnMat))
 
+        clVels = p.getBaseVelocity(self.cylinderId)
+        self.observation.extend(clVels[0])
+        self.observation.extend(clVels[1])
+
         # print("obv", self.observation)
 
         return self.observation
