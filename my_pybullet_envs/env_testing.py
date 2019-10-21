@@ -19,31 +19,33 @@ def test(args):
   # print("args.render=", args.render)
   # if (args.render == 1):
   #   env.render(mode="human")
-  env.reset()
-  if (args.resetbenchmark):
-    while (1):
-      env.reset()
-      print("p.getNumBodies()=", p.getNumBodies())
-      print("count=", count)
-      count += 1
-  print("action space:")
 
-  sample = env.action_space.sample()
-  action = sample
-  print("action=")
-  print(action)
+  for _ in range(10):
+    env.reset()
+    if (args.resetbenchmark):
+      while (1):
+        env.reset()
+        print("p.getNumBodies()=", p.getNumBodies())
+        print("count=", count)
+        count += 1
+    print("action space:")
 
-  for i in range(args.steps):
+    sample = env.action_space.sample()
+    action = sample
+    print("action=")
+    print(action)
 
-    obs, rewards, done, _ = env.step(action)
-    if (args.rgb):
-      print(env.render(mode="rgb_array"))
-    print("obs=")
-    print(obs)
-    print("rewards")
-    print(rewards)
-    print("done")
-    print(done)
+    for i in range(args.steps):
+
+      obs, rewards, done, _ = env.step(action)
+      if (args.rgb):
+        print(env.render(mode="rgb_array"))
+      print("obs=")
+      print(obs)
+      print("rewards")
+      print(rewards)
+      print("done")
+      print(done)
 
   # p.getCameraImage()
 
@@ -51,8 +53,9 @@ def test(args):
 def main():
   import argparse
   parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  parser.add_argument('--env', help='environment ID', default='AllegroHandPickBulletEnv-v0')
+  # parser.add_argument('--env', help='environment ID', default='AllegroHandPickBulletEnv-v0')
 
+  parser.add_argument('--env', help='environment ID', default='AllegroHandGraspBulletEnv-v0')
   # parser.add_argument('--env', help='environment ID', default='AntBulletEnv-v0')
   parser.add_argument('--seed', help='RNG seed', type=int, default=0)
   parser.add_argument('--render', help='OpenGL Visualizer', type=int, default=1)
@@ -61,7 +64,7 @@ def main():
                       help='Repeat reset to show reset performance',
                       type=int,
                       default=0)
-  parser.add_argument('--steps', help='Number of steps', type=int, default=2000)
+  parser.add_argument('--steps', help='Number of steps', type=int, default=400)
 
   args = parser.parse_args()
   test(args)

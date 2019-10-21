@@ -81,6 +81,8 @@ if args.env_name.find('Bullet') > -1:
         if (p.getBodyInfo(i)[0].decode() == "torso"):
             torsoId = i
 
+reward_total = 0
+
 while True:
     with torch.no_grad():
         value, action, _, recurrent_hidden_states = actor_critic.act(
@@ -88,6 +90,12 @@ while True:
 
     # Obser reward and next obs
     obs, reward, done, _ = env.step(action)
+
+    reward_total += reward
+
+    if done:
+        print("tr:", reward_total)
+        reward_total = 0.
 
     masks.fill_(0.0 if done else 1.0)
 

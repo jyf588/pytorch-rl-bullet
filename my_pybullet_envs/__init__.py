@@ -1,6 +1,7 @@
 import gym
 from gym.envs.registration import registry, make, spec
 from .allegro_hand_env import AllegroHandPickEnv
+from .allegro_hand_nofloor_env import AllegroHandGraspEnv
 
 
 def register(id, *args, **kvargs):
@@ -16,6 +17,12 @@ register(
     id='AllegroHandPickBulletEnv-v0',
     entry_point='my_pybullet_envs:AllegroHandPickEnv',
     max_episode_steps=700,
+)
+
+register(
+    id='AllegroHandGraspBulletEnv-v0',
+    entry_point='my_pybullet_envs:AllegroHandGraspEnv',
+    max_episode_steps=400,
 )
 
 def getList():
