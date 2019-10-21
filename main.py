@@ -57,6 +57,19 @@ def main():
         base_kwargs={'recurrent': args.recurrent_policy})
     actor_critic.to(device)
 
+    dummy = gym.make(args.env_name)
+    save_path = os.path.join(args.save_dir, args.algo)
+    try:
+        os.makedirs(save_path)
+    except OSError:
+        pass
+    pathname = os.path.join(save_path, "source_test.py")
+    text_file = open(pathname, "w+")
+    text_file.write(dummy.getSourceCode())
+    text_file.close()
+    input("source file stored press enter")
+    dummy.close()
+
     if args.algo == 'a2c':
         agent = algo.A2C_ACKTR(
             actor_critic,
@@ -172,16 +185,15 @@ def main():
         # save for every interval-th episode or for the last epoch
         if (j % args.save_interval == 0
                 or j == num_updates - 1) and args.save_dir != "":
-            save_path = os.path.join(args.save_dir, args.algo)
-            try:
-                os.makedirs(save_path)
-            except OSError:
-                pass
-
             torch.save([
                 actor_critic,
                 getattr(utils.get_vec_normalize(envs), 'ob_rms', None)
             ], os.path.join(save_path, args.env_name + ".pt"))
+
+            torch.save([
+                actor_critic,
+                getattr(utils.get_vec_normalize(envs), 'ob_rms', None)
+            ], os.path.join(save_path, args.env_name + "_" + str(j) + ".pt"))
 
         if j % args.log_interval == 0 and len(episode_rewards) > 1:
             total_num_steps = (j + 1) * args.num_processes * args.num_steps
