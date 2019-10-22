@@ -77,17 +77,17 @@ class AllegroHand:
         # TODO: bullet env reload urdfs in reset...
         # TODO: bullet env reset pos with added noise but velocity to zero always.
 
-        # initBasePos = np.array(self.baseInitPos) + self.np_random.uniform(low=-0.1, high=0.1, size=3)
-        # initOri = np.array(self.baseInitOri) + self.np_random.uniform(low=-0.2, high=0.2, size=3)
+        initBasePos = np.array(self.baseInitPos) + self.np_random.uniform(low=-0.05, high=0.05, size=3)
+        initOri = np.array(self.baseInitOri) + self.np_random.uniform(low=-0.2, high=0.2, size=3)
         # TODO: add noise
         # TODO: add noise
         # init self.np_random outside, in Env
-        # initPos = self.initPos + self.np_random.uniform(low=-0.05, high=0.05, size=len(self.initPos))
+        initPos = self.initPos + self.np_random.uniform(low=-0.1, high=0.1, size=len(self.initPos))
 
-        initBasePos = self.baseInitPos
-        initOri = self.baseInitOri
+        # initBasePos = self.baseInitPos
+        # initOri = self.baseInitOri
         initQuat = p.getQuaternionFromEuler(list(initOri))
-        initPos = self.initPos
+        # initPos = self.initPos
 
         p.removeConstraint(self.cid)
         p.resetBasePositionAndOrientation(self.handId, initBasePos, initQuat)
