@@ -62,23 +62,35 @@ class AllegroHand:
         self.tarBaseOri = np.copy(self.baseInitOri)     # euler angles
         self.tarFingerPos = np.copy(self.initPos)    # used for position control and as part of state
 
-        self.maxForce = 1000.
+        self.maxForce = 100.
 
         self.include_redun_body_pos = False
 
         self.np_random = None   # seeding inited outside in Env
 
-        print(self.tarFingerPos)
-        print(self.ll)
-        print(self.ul)
+        # print(self.tarFingerPos)
+        # print(self.ll)
+        # print(self.ul)
         assert len(self.tarFingerPos) == len(self.ll)
 
     def reset(self):
         # TODO: bullet env reload urdfs in reset...
         # TODO: bullet env reset pos with added noise but velocity to zero always.
 
-        initBasePos = np.array(self.baseInitPos) + self.np_random.uniform(low=-0.05, high=0.05, size=3)
-        initOri = np.array(self.baseInitOri) + self.np_random.uniform(low=-0.2, high=0.2, size=3)
+        # initBasePos = np.array(self.baseInitPos) + self.np_random.uniform(low=-0.05, high=0.05, size=3)
+        # initOri = np.array(self.baseInitOri) + self.np_random.uniform(low=-0.2, high=0.2, size=3)
+
+        # x_init -0.25~-0.15
+        # y_init -0.1~0.1
+        # z_init 0 ~ 0.2
+        # rot 1.57,0,0 +- (1.0)
+
+        initBasePos = np.array(self.baseInitPos)
+        initBasePos[0] += self.np_random.uniform(low=-0.05, high=0.05)
+        initBasePos[1] += self.np_random.uniform(low=-0.05, high=0.05)
+        initBasePos[2] += self.np_random.uniform(low=-0.1, high=0.1)    # enlarge here
+        initOri = np.array(self.baseInitOri) + self.np_random.uniform(low=-0.6, high=0.6, size=3)
+
         # TODO: add noise
         # TODO: add noise
         # init self.np_random outside, in Env
@@ -106,7 +118,7 @@ class AllegroHand:
 
     def get_raw_state_fingers(self):
         joints_state = p.getJointStates(self.handId, self.activeDofs)
-        joints_state = np.array(joints_state)[:,[0]]    #TODO # only position, no vel.
+        joints_state = np.array(joints_state)[:,[0,1]]
         # print(joints_state.flatten())
         return np.hstack(joints_state.flatten())
 
@@ -118,6 +130,10 @@ class AllegroHand:
         basePos, baseQuat = p.getBasePositionAndOrientation(self.handId)
         obs.extend(basePos)
         obs.extend(baseQuat)
+
+        baseVels = p.getBaseVelocity(self.handId)
+        obs.extend(baseVels[0])
+        obs.extend(baseVels[1])
 
         obs.extend(list(self.tarFingerPos))
         # print(self.tarFingerPos)
@@ -152,14 +168,17 @@ class AllegroHand:
         dxyz = a[0:3]
         dOri = a[3:6]
         self.tarBasePos += dxyz
-        self.tarBasePos[:2] = np.clip(self.tarBasePos[:2], -1, 1)
-        self.tarBasePos[2] = np.clip(self.tarBasePos[2], 0, 1)
+        self.tarBasePos[:2] = np.clip(self.tarBasePos[:2], -0.3, 0.3)
+        self.tarBasePos[2] = np.clip(self.tarBasePos[2], -0.05, 0.2)    # so that it cannot go below obj and stop obj wo grasp
 
+        ori_lb = self.baseInitOri - 1.57        # TODO: is this right?
+        ori_ub = self.baseInitOri + 1.57
         self.tarBaseOri += dOri
-        # so that state/obs is bounded
-        for i in range(len(self.tarBaseOri)):
-            if self.tarBaseOri[i] > math.pi: self.tarBaseOri[i] -= 2 * math.pi
-            if self.tarBaseOri[i] < -math.pi: self.tarBaseOri[i] += 2 * math.pi
+        self.tarBaseOri = np.clip(self.tarBaseOri, ori_lb, ori_ub)
+        # # so that state/obs is bounded
+        # for i in range(len(self.tarBaseOri)):
+        #     if self.tarBaseOri[i] > math.pi: self.tarBaseOri[i] -= 2 * math.pi
+        #     if self.tarBaseOri[i] < -math.pi: self.tarBaseOri[i] += 2 * math.pi
 
         tarQuat = p.getQuaternionFromEuler(list(self.tarBaseOri))
         p.changeConstraint(self.cid, list(self.tarBasePos), tarQuat, maxForce=self.maxForce)
@@ -183,26 +202,6 @@ class AllegroHand:
                                     controlMode=p.POSITION_CONTROL,
                                     targetPosition=self.tarFingerPos[i],
                                     force=self.maxForce)
-        #
-        # cubePos, cubeOrn = p.getBasePositionAndOrientation(self.handId)
-        # cubePos = list(cubePos)
-        # cubeOrn = list(cubeOrn)
-        # cubeEuler = list(p.getEulerFromQuaternion(cubeOrn))
-        # cubePos[0] += 0.005
-        # cubeEuler[0] += 0.005
-        # # cubeEuler[1] += 0.005
-        #
-        #
-        #
-        # cubeOrn = p.getQuaternionFromEuler(cubeEuler)
-        # p.resetBasePositionAndOrientation(self.handId, cubePos, cubeOrn)
-
-        # p.setJointMotorControl2(bodyUniqueId=objUid,
-        #                         jointIndex=0,
-        #                         controlMode=p.VELOCITY_CONTROL,
-        #                         targetVelocity=targetVel,
-        #                         force=maxForce)
-
 
 if __name__ == "__main__":
     physicsClient = p.connect(p.GUI)    #or p.DIRECT for non-graphical version

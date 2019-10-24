@@ -29,6 +29,7 @@ import my_pybullet_envs
 
 # TODO: modify NN size?
 # TODO: turn off normalization?
+# TODO: path override warning
 
 def main():
     args = get_args()
@@ -61,8 +62,10 @@ def main():
     save_path = os.path.join(args.save_dir, args.algo)
     try:
         os.makedirs(save_path)
+    except FileExistsError:
+        input("warning: path existed")
     except OSError:
-        pass
+        exit()
     pathname = os.path.join(save_path, "source_test.py")
     text_file = open(pathname, "w+")
     text_file.write(dummy.getSourceCode())

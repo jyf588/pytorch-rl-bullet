@@ -22,6 +22,7 @@ def test(args):
 
   for _ in range(10):
     env.reset()
+    input("press enter")
     if (args.resetbenchmark):
       while (1):
         env.reset()
