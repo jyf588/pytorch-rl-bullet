@@ -81,44 +81,56 @@ class AllegroHand:
         # initOri = np.array(self.baseInitOri) + self.np_random.uniform(low=-0.2, high=0.2, size=3)
 
         # x_init -0.25~-0.15
-        # y_init -0.1~0.1
+        # y_init -0.1~0.1   0.05~0.005 only work
         # z_init 0 ~ 0.2
         # rot 1.57,0,0 +- (1.0)
 
-        initBasePos = np.array(self.baseInitPos)
-        initBasePos[0] += self.np_random.uniform(low=-0.05, high=0.05)
-        initBasePos[1] += self.np_random.uniform(low=-0.05, high=0.05)
-        initBasePos[2] += self.np_random.uniform(low=-0.1, high=0.1)    # enlarge here
-        initOri = np.array(self.baseInitOri) + self.np_random.uniform(low=-0.6, high=0.6, size=3)
+        goodInit = False
+        while not goodInit:
+            # initBasePos = self.baseInitPos
+            # initOri = self.baseInitOri
+            initBasePos = np.array(self.baseInitPos)
+            initBasePos[0] += self.np_random.uniform(low=-0.05, high=0.05)
+            initBasePos[1] += self.np_random.uniform(low=-0.1, high=0.1)
+            initBasePos[2] += self.np_random.uniform(low=-0.1, high=0.1)  # enlarge here
+            initOri = np.array(self.baseInitOri) + self.np_random.uniform(low=-0.7, high=0.7, size=3)
+            initQuat = p.getQuaternionFromEuler(list(initOri))
 
-        # TODO: add noise
-        # TODO: add noise
-        # init self.np_random outside, in Env
-        initPos = self.initPos + self.np_random.uniform(low=-0.1, high=0.1, size=len(self.initPos))
+            # TODO: added noise
+            # init self.np_random outside, in Env
+            # initPos = self.initPos
+            initPos = self.initPos + self.np_random.uniform(low=-0.1, high=0.1, size=len(self.initPos))
 
-        # initBasePos = self.baseInitPos
-        # initOri = self.baseInitOri
-        initQuat = p.getQuaternionFromEuler(list(initOri))
-        # initPos = self.initPos
+            p.removeConstraint(self.cid)
+            p.resetBasePositionAndOrientation(self.handId, initBasePos, initQuat)
 
-        p.removeConstraint(self.cid)
-        p.resetBasePositionAndOrientation(self.handId, initBasePos, initQuat)
+            for ind in range(len(self.activeDofs)):
+                p.resetJointState(self.handId, self.activeDofs[ind], initPos[ind], 0.0)
 
-        for ind in range(len(self.activeDofs)):
-            p.resetJointState(self.handId, self.activeDofs[ind], initPos[ind], 0.0)
+            self.cid = p.createConstraint(self.handId, -1, -1, -1, p.JOINT_FIXED, [0, 0, 0], [0, 0, 0],
+                                          childFramePosition=initBasePos,
+                                          childFrameOrientation=initQuat)
+            # p.changeConstraint(self.cid, list(initBasePos), initQuat, maxForce=self.maxForce)
 
-        self.cid = p.createConstraint(self.handId, -1, -1, -1, p.JOINT_FIXED, [0, 0, 0], [0, 0, 0],
-                                      childFramePosition=initBasePos,
-                                      childFrameOrientation=initQuat)
-        # p.changeConstraint(self.cid, list(initBasePos), initQuat, maxForce=self.maxForce)
+            p.stepSimulation()  # TODO
 
-        self.tarBasePos = np.copy(initBasePos)
-        self.tarBaseOri = np.copy(initOri)
-        self.tarFingerPos = np.copy(initPos)
+            cps = p.getContactPoints(bodyA=self.handId)
+            # for cp in cps:
+            #     print(cp)
+            #     input("penter")
+            # print(cps[0][6])
+            if len(cps) == 0: goodInit = True   # TODO: init hand last and make sure it does not colllide with env
 
-    def get_raw_state_fingers(self):
+            self.tarBasePos = np.copy(initBasePos)
+            self.tarBaseOri = np.copy(initOri)
+            self.tarFingerPos = np.copy(initPos)
+
+    def get_raw_state_fingers(self, includeVel=True):
         joints_state = p.getJointStates(self.handId, self.activeDofs)
-        joints_state = np.array(joints_state)[:,[0,1]]
+        if includeVel:
+            joints_state = np.array(joints_state)[:,[0,1]]
+        else:
+            joints_state = np.array(joints_state)[:, [0]]
         # print(joints_state.flatten())
         return np.hstack(joints_state.flatten())
 
@@ -152,7 +164,16 @@ class AllegroHand:
         return len(self.get_robot_observation())
 
     def get_finger_dist_from_init(self):
-        return np.linalg.norm(self.get_raw_state_fingers() - self.initPos)
+        return np.linalg.norm(self.get_raw_state_fingers(includeVel=False) - self.initPos)
+
+    def get_three_finger_deviation(self):
+        fingers_q = self.get_raw_state_fingers(includeVel=False)
+        assert len(fingers_q) == 16     # TODO
+        f1 = fingers_q[:4]
+        f2 = fingers_q[4:8]
+        f3 = fingers_q[8:12]
+        # TODO: is this different from dist to mean
+        return np.linalg.norm(f1-f2) + np.linalg.norm(f2-f3) + np.linalg.norm(f1-f3)
 
     def apply_action(self, a):
 

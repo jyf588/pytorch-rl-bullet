@@ -53,14 +53,15 @@ class AllegroHandGraspEnv(gym.Env):
     def sim_setup(self):
         p.resetSimulation()
         p.setTimeStep(self._timeStep)
-        p.setGravity(0, 0, 0)   # turn on gravity later
+        p.setGravity(0, 0, -10)
 
         self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'), self.cylinderInitPos, useFixedBase=0)     # 0.2/2
+        self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'), [0, 0, 0], useFixedBase=1)
         p.changeDynamics(self.cylinderId, -1, lateralFriction=3.0)
+        p.changeDynamics(self.floorId, -1, lateralFriction=3.0)
         self.robot = AllegroHand(self.robotInitBasePos)
         self.seed(0) # TODO
         self.robot.reset()
-        p.stepSimulation()    # TODO
 
     def step(self, action):
         # action is in -1,1
@@ -89,6 +90,8 @@ class AllegroHandGraspEnv(gym.Env):
         reward = 3.0
         reward += -dist * 3.0
 
+        reward += -self.robot.get_three_finger_deviation() * 0.1
+
         for i in range(-1, p.getNumJoints(self.robot.handId)):
             cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
             if len(cps) > 0:
@@ -114,7 +117,8 @@ class AllegroHandGraspEnv(gym.Env):
 
         self.timer += 1
         if self.timer > 300:
-            p.setGravity(0, 0, -10)  # turn on gravity
+            # p.setGravity(0, 0, -10)  # turn on gravity
+            p.setCollisionFilterPair(self.cylinderId, self.floorId, -1, -1, enableCollision=0)
 
         return self.getExtendedObservation(), reward, False, {}
 
@@ -156,11 +160,14 @@ class AllegroHandGraspEnv(gym.Env):
         # self.sim_setup()
 
         self.robot.reset()
-        p.setGravity(0, 0, 0)
+        # p.setGravity(0, 0, 0)
         cyInit = np.array(self.cylinderInitPos)
         p.resetBasePositionAndOrientation(self.cylinderId,
                                           cyInit,
                                           p.getQuaternionFromEuler([0, 0, 0]))
+        p.changeDynamics(self.cylinderId, -1, lateralFriction=3.0)
+        p.changeDynamics(self.floorId, -1, lateralFriction=3.0)
+        p.setCollisionFilterPair(self.cylinderId, self.floorId, -1, -1, enableCollision=1)
         p.stepSimulation()
         self.timer = 0
 

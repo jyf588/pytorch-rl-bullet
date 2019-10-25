@@ -20,7 +20,7 @@ def test(args):
   # if (args.render == 1):
   #   env.render(mode="human")
 
-  for _ in range(10):
+  for _ in range(100):
     env.reset()
     input("press enter")
     if (args.resetbenchmark):
@@ -58,7 +58,7 @@ def main():
 
   parser.add_argument('--env', help='environment ID', default='AllegroHandGraspBulletEnv-v0')
   # parser.add_argument('--env', help='environment ID', default='AntBulletEnv-v0')
-  parser.add_argument('--seed', help='RNG seed', type=int, default=0)
+  parser.add_argument('--seed', help='RNG seed', type=int, default=200)
   parser.add_argument('--render', help='OpenGL Visualizer', type=int, default=1)
   parser.add_argument('--rgb', help='rgb_array gym rendering', type=int, default=0)
   parser.add_argument('--resetbenchmark',
