@@ -69,6 +69,18 @@ python main.py --env-name "AllegroHandGraspBulletEnv-v0" --algo ppo --use-gae --
 python main.py --env-name "AllegroHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1025_4_fingerSame01_floorBack_noCollideInit --seed 118 (good)
 
 
+11/3 21:14
+python main.py --env-name "AllegroHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1103_0_contactState_noCynS --seed 200
+python main.py --env-name "AllegroHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1103_1_contactState_noCynS --seed 201
+
+11/3 22:15
+try cylinder init pose variation / larger cylinder (0.04-->0.06)
+python main.py --env-name "AllegroHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1103_2_contactState_noCynS --seed 202
+python main.py --env-name "AllegroHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1103_3_contactState_noCynS --seed 203
+# should be able to create cylinder of arb size in bullet.
+# iter 370 seems good enough
+
+
 # copy header
 # copy folder
 

@@ -107,7 +107,7 @@ class AllegroHandGraspEnv(gym.Env):
         # print(clVels)
         clLinV = np.array(clVels[0])
         clAngV = np.array(clVels[1])
-        reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.1
+        reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.3
 
         if clPos[2] < -0.2 and self.timer > 300: # object dropped, do not penalize dropping when 0 gravity
             reward += -7.
@@ -127,22 +127,29 @@ class AllegroHandGraspEnv(gym.Env):
         # https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/gym/pybullet_envs/bullet/kukaGymEnv.py#L132
         self.observation = self.robot.get_robot_observation()
 
-        # TODO: no vel as well
-        clPos, clOrn = p.getBasePositionAndOrientation(self.cylinderId)
-        clPos = np.array(clPos)
-        # clPos = np.array(clPos) + self.np_random.uniform(low=-0.005, high=0.005, size=3)
-        clOrnMat = p.getMatrixFromQuaternion(clOrn)
-        clOrnMat = np.array(clOrnMat)
-        # clOrnMat = np.array(clOrnMat) + self.np_random.uniform(low=-0.02, high=0.02, size=9)
-        # dir0 = [clOrnMat[0], clOrnMat[3], clOrnMat[6]]
-        # dir1 = [clOrnMat[1], clOrnMat[4], clOrnMat[7]]
-        # dir2 = [clOrnMat[2], clOrnMat[5], clOrnMat[8]]
-        self.observation.extend(list(clPos))
-        self.observation.extend(list(clOrnMat))
+        # # TODO: no vel as well
+        # clPos, clOrn = p.getBasePositionAndOrientation(self.cylinderId)
+        # clPos = np.array(clPos)
+        # # clPos = np.array(clPos) + self.np_random.uniform(low=-0.005, high=0.005, size=3)
+        # clOrnMat = p.getMatrixFromQuaternion(clOrn)
+        # clOrnMat = np.array(clOrnMat)
+        # # clOrnMat = np.array(clOrnMat) + self.np_random.uniform(low=-0.02, high=0.02, size=9)
+        # # dir0 = [clOrnMat[0], clOrnMat[3], clOrnMat[6]]
+        # # dir1 = [clOrnMat[1], clOrnMat[4], clOrnMat[7]]
+        # # dir2 = [clOrnMat[2], clOrnMat[5], clOrnMat[8]]
+        # self.observation.extend(list(clPos))
+        # self.observation.extend(list(clOrnMat))
+        #
+        # clVels = p.getBaseVelocity(self.cylinderId)
+        # self.observation.extend(clVels[0])
+        # self.observation.extend(clVels[1])
 
-        clVels = p.getBaseVelocity(self.cylinderId)
-        self.observation.extend(clVels[0])
-        self.observation.extend(clVels[1])
+        for i in range(-1, p.getNumJoints(self.robot.handId)):
+            cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
+            if len(cps) > 0:
+                self.observation.extend([1.0])
+            else:
+                self.observation.extend([-1.0])
 
         # print("obv", self.observation)
 
@@ -161,7 +168,8 @@ class AllegroHandGraspEnv(gym.Env):
 
         self.robot.reset()
         # p.setGravity(0, 0, 0)
-        cyInit = np.array(self.cylinderInitPos)
+        # cyInit = np.array(self.cylinderInitPos)
+        cyInit = np.array(self.cylinderInitPos) + np.append(self.np_random.uniform(low=-0.03, high=0.03, size=2), 0)
         p.resetBasePositionAndOrientation(self.cylinderId,
                                           cyInit,
                                           p.getQuaternionFromEuler([0, 0, 0]))

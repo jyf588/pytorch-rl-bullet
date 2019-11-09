@@ -91,9 +91,9 @@ class AllegroHand:
             # initOri = self.baseInitOri
             initBasePos = np.array(self.baseInitPos)
             initBasePos[0] += self.np_random.uniform(low=-0.05, high=0.05)
-            initBasePos[1] += self.np_random.uniform(low=-0.1, high=0.1)
-            initBasePos[2] += self.np_random.uniform(low=-0.1, high=0.1)  # enlarge here
-            initOri = np.array(self.baseInitOri) + self.np_random.uniform(low=-0.7, high=0.7, size=3)
+            initBasePos[1] += self.np_random.uniform(low=-0.05, high=0.05)
+            initBasePos[2] += self.np_random.uniform(low=-0.05, high=0.05)  # enlarge here
+            initOri = np.array(self.baseInitOri) + self.np_random.uniform(low=-0.05, high=0.05, size=3)
             initQuat = p.getQuaternionFromEuler(list(initOri))
 
             # TODO: added noise
