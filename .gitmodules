@@ -1,0 +1,3 @@
+[submodule "my_pybullet_envs/assets/inmoov_ros"]
+	path = my_pybullet_envs/assets/inmoov_ros
+	url = https://github.com/jyf588/inmoov_ros.git
