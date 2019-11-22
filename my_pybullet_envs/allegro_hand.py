@@ -10,7 +10,6 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 
 # TODO: no mass
 # TODO: render
-# TODO: add vel as states
 
 class AllegroHand:
     def __init__(self,
@@ -22,7 +21,6 @@ class AllegroHand:
         self.baseInitOri = base_init_euler
         self.initPos = init_fin_pos
 
-        # TODO: note, no self-collision flag
         self.handId = p.loadURDF(os.path.join(currentdir, "assets/allegro_hand_description/allegro_hand_description_right.urdf"),
                                  list(self.baseInitPos), p.getQuaternionFromEuler(list(self.baseInitOri)),
                                  flags=p.URDF_USE_SELF_COLLISION)
@@ -142,6 +140,8 @@ class AllegroHand:
         basePos, baseQuat = p.getBasePositionAndOrientation(self.handId)
         obs.extend(basePos)
         obs.extend(baseQuat)
+
+        # TODO: no finger vel
 
         baseVels = p.getBaseVelocity(self.handId)
         obs.extend(baseVels[0])

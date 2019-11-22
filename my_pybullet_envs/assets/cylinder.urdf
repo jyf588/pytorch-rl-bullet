@@ -3,14 +3,14 @@
   <link name="baseLink">
     <visual>
       <geometry>
-        <cylinder length="0.20" radius="0.06"/>
+        <cylinder length="0.20" radius="0.04"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <material name="black"/>
     </visual>
     <collision>
       <geometry>
-        <cylinder length="0.20" radius="0.06"/>
+        <cylinder length="0.20" radius="0.04"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <contact_coefficients mu="3.0" />

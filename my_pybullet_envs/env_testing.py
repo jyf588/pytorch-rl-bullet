@@ -37,7 +37,6 @@ def test(args):
     print(action)
 
     for i in range(args.steps):
-
       obs, rewards, done, _ = env.step(action)
       if (args.rgb):
         print(env.render(mode="rgb_array"))
@@ -48,6 +47,8 @@ def test(args):
       print("done")
       print(done)
 
+    input("press enter")
+
   # p.getCameraImage()
 
 
@@ -56,7 +57,7 @@ def main():
   parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   # parser.add_argument('--env', help='environment ID', default='AllegroHandPickBulletEnv-v0')
 
-  parser.add_argument('--env', help='environment ID', default='AllegroHandGraspBulletEnv-v0')
+  parser.add_argument('--env', help='environment ID', default='InmoovHandGraspBulletEnv-v0')
   # parser.add_argument('--env', help='environment ID', default='AntBulletEnv-v0')
   parser.add_argument('--seed', help='RNG seed', type=int, default=200)
   parser.add_argument('--render', help='OpenGL Visualizer', type=int, default=1)
