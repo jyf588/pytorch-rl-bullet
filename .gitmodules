@@ -1,3 +1,6 @@
 [submodule "my_pybullet_envs/assets/inmoov_ros"]
 	path = my_pybullet_envs/assets/inmoov_ros
 	url = https://github.com/jyf588/inmoov_ros.git
+[submodule "my_pybullet_envs/assets/shadow_hand_arm"]
+	path = my_pybullet_envs/assets/shadow_hand_arm
+	url = https://github.com/jyf588/shadow_hand_arm.git
