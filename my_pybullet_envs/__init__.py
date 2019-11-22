@@ -3,6 +3,7 @@ from gym.envs.registration import registry, make, spec
 from .allegro_hand_env import AllegroHandPickEnv
 from .allegro_hand_nofloor_env import AllegroHandGraspEnv
 from .inmoov_hand_nofloor_env import InmoovHandGraspEnv
+from .shadow_hand_grasp_env import ShadowHandGraspEnv
 
 
 def register(id, *args, **kvargs):
@@ -29,6 +30,12 @@ register(
 register(
     id='InmoovHandGraspBulletEnv-v0',
     entry_point='my_pybullet_envs:InmoovHandGraspEnv',
+    max_episode_steps=400,
+)
+
+register(
+    id='ShadowHandGraspBulletEnv-v0',
+    entry_point='my_pybullet_envs:ShadowHandGraspEnv',
     max_episode_steps=400,
 )
 
