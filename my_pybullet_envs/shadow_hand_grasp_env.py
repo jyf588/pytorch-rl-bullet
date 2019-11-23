@@ -16,22 +16,22 @@ class ShadowHandGraspEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=False):
+                 renders=True):
         self.renders = renders
-        self._timeStep = 1. / 240.
+        self._timeStep = 1. / 480.
         if self.renders:
             p.connect(p.GUI)
         else:
             p.connect(p.DIRECT)
 
         # TODO: tune this is not principled
-        self.action_scale = np.array([0.005] * 3 + [0.005] * 3 + [0.015] * 22)  # shadow hand is 22dof
+        self.action_scale = np.array([0.004] * 3 + [0.004] * 3 + [0.01] * 17)  # shadow hand is 22-5=17dof
 
-        self.frameSkip = 1
+        self.frameSkip = 2
 
         self.cylinderInitPos = [0, 0, 0.105]    # initOri is identity
 
-        self.robotInitBasePos = np.array(np.array([-0.18, 0.1, 0.1]))  # TODO: note, diff for different model
+        self.robotInitBasePos = np.array(np.array([-0.13, 0.07, 0.1]))  # TODO: note, diff for different model
 
         self.sim_setup()
 
@@ -53,7 +53,7 @@ class ShadowHandGraspEnv(gym.Env):
     def sim_setup(self):
         p.resetSimulation()
         p.setTimeStep(self._timeStep)
-        p.setGravity(0, 0, -10)
+        p.setGravity(0, 0, -5)
 
         self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'), self.cylinderInitPos, useFixedBase=0)     # 0.2/2
         self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'), [0, 0, 0], useFixedBase=1)
@@ -93,16 +93,17 @@ class ShadowHandGraspEnv(gym.Env):
                 # print(len(cps))
                 reward += 4.0   # the more links in contact, the better
 
-            if i > 0 and i not in self.robot.activeDofs:
-                # this is fingertip
-                tipPos = p.getLinkState(self.robot.handId, i)[0]
-                reward += -np.minimum(np.linalg.norm(np.array(tipPos) - np.array(clPos)), 0.5) * 2.0
+            # if i > 0 and i not in self.robot.activeDofs:
+            #     # this is fingertip
+            #     tipPos = p.getLinkState(self.robot.handId, i)[0]
+            #     # print(tipPos)
+            #     reward += -np.minimum(np.linalg.norm(np.array(tipPos) - np.array(clPos)), 0.5) * 2.0
 
         clVels = p.getBaseVelocity(self.cylinderId)
         # print(clVels)
         clLinV = np.array(clVels[0])
         clAngV = np.array(clVels[1])
-        reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.6
+        reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.3
 
         if clPos[2] < -0.2 and self.timer > 300: # object dropped, do not penalize dropping when 0 gravity
             reward += -7.
@@ -112,7 +113,6 @@ class ShadowHandGraspEnv(gym.Env):
 
         self.timer += 1
         if self.timer > 300:
-            # p.setGravity(0, 0, -10)  # turn on gravity
             p.setCollisionFilterPair(self.cylinderId, self.floorId, -1, -1, enableCollision=0)
 
         return self.getExtendedObservation(), reward, False, {}
@@ -122,18 +122,18 @@ class ShadowHandGraspEnv(gym.Env):
         # https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/gym/pybullet_envs/bullet/kukaGymEnv.py#L132
         self.observation = self.robot.get_robot_observation()
 
-        # # TODO: no vel as well
-        clPos, clOrn = p.getBasePositionAndOrientation(self.cylinderId)
-        clPos = np.array(clPos)
-        clOrnMat = p.getMatrixFromQuaternion(clOrn)
-        clOrnMat = np.array(clOrnMat)
-
-        self.observation.extend(list(clPos))
-        self.observation.extend(list(clOrnMat))
-
-        clVels = p.getBaseVelocity(self.cylinderId)
-        self.observation.extend(clVels[0])
-        self.observation.extend(clVels[1])
+        # clPos, clOrn = p.getBasePositionAndOrientation(self.cylinderId)
+        # clPos = np.array(clPos)
+        # clOrnMat = p.getMatrixFromQuaternion(clOrn)
+        # clOrnMat = np.array(clOrnMat)
+        #
+        # self.observation.extend(list(clPos))
+        # # self.observation.extend(list(clOrnMat))
+        # self.observation.extend(list(clOrn))
+        #
+        # clVels = p.getBaseVelocity(self.cylinderId)
+        # self.observation.extend(clVels[0])
+        # self.observation.extend(clVels[1])
 
         for i in range(-1, p.getNumJoints(self.robot.handId)):
             cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)

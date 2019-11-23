@@ -13,10 +13,11 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 
 class ShadowHand:
     def __init__(self,
-                 base_init_pos=np.array([-0.2, 0.1, 0.1]),
+                 base_init_pos=np.array([-0.13, 0.07, 0.1]),
                  base_init_euler=np.array([1.8, -1.57, 0]),
                  # init_fin_pos=np.array([0.0, 0.4, 0.4, 0.4]*3+[0.0,0.0,0.4,0.4,0.4]+[0.0,0.6,0.1,0.4,0.5])):  # TODO
-                 init_fin_pos = np.array([0.0, 0.4, 0.4, 0.4] * 3 + [0.0, 0.0, 0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.0])):  # TODO
+                 # init_fin_pos = np.array([0.0, 0.4, 0.4, 0.4] * 3 + [0.0, 0.0, 0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.0])):  # TODO
+                 init_fin_pos = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.0])):  # TODO
 
         self.baseInitPos = base_init_pos
         self.baseInitOri = base_init_euler
@@ -31,12 +32,16 @@ class ShadowHand:
 
         # 4,4,4,5,5
         self.activeDofs = []
+        self.lockDofs = []
         start = 0
         for i in range(5):
             nDofs = [4,4,4,5,5]
-            self.activeDofs += (np.arange(nDofs[i]) + start).tolist()
+            fig_start = [1,1,1,2,0] # default 0,0,0,0,0 to include all finger dofs
+            self.activeDofs += (np.arange(fig_start[i], nDofs[i]) + start).tolist()
+            self.lockDofs += (np.arange(0, fig_start[i]) + start).tolist()
             start += (nDofs[i]+1)
-        # print(self.activeDofs)
+        print(self.activeDofs)
+        print(self.lockDofs)
         assert len(self.activeDofs) == len(init_fin_pos)
 
         self.ll = np.array([p.getJointInfo(self.handId, i)[8] for i in self.activeDofs])
@@ -44,13 +49,15 @@ class ShadowHand:
 
         for ind in range(len(self.activeDofs)):
             p.resetJointState(self.handId, self.activeDofs[ind], self.initPos[ind], 0.0)
+        for ind in range(len(self.lockDofs)):
+            p.resetJointState(self.handId, self.lockDofs[ind], 0.0, 0.0)
 
         for i in range(-1, p.getNumJoints(self.handId)):
             p.changeDynamics(self.handId, i, lateralFriction=3.0)
             # TODO: increase mass for now
             mass = p.getDynamicsInfo(self.handId, i)[0]
             # inertia = p.getDynamicsInfo(self.handId, i)[2]
-            mass = mass * 200.
+            mass = mass * 100.
             # inertia = [ele * 100. for ele in inertia]
             p.changeDynamics(self.handId, i, mass=mass)
             # p.changeDynamics(self.handId, i, localInertiaDiagnoal=inertia)    # TODO: default inertia from bullet
@@ -85,9 +92,9 @@ class ShadowHand:
             # initBasePos = self.baseInitPos
             # initOri = self.baseInitOri
             initBasePos = np.array(self.baseInitPos)
-            initBasePos[0] += self.np_random.uniform(low=-0.05, high=0.05)
-            initBasePos[1] += self.np_random.uniform(low=-0.01, high=0.01)
-            initBasePos[2] += self.np_random.uniform(low=-0.01, high=0.01)  # enlarge here
+            initBasePos[0] += self.np_random.uniform(low=-0.03, high=0.03)
+            initBasePos[1] += self.np_random.uniform(low=-0.03, high=0.03)
+            initBasePos[2] += self.np_random.uniform(low=-0.03, high=0.03)  # enlarge here
             initOri = np.array(self.baseInitOri) + self.np_random.uniform(low=-0.05, high=0.05, size=3)
             initQuat = p.getQuaternionFromEuler(list(initOri))
             #
@@ -95,13 +102,15 @@ class ShadowHand:
 
             # init self.np_random outside, in Env
             # initPos = self.initPos
-            initPos = self.initPos + self.np_random.uniform(low=-0.1, high=0.1, size=len(self.initPos))
+            initPos = self.initPos + self.np_random.uniform(low=-0.05, high=0.05, size=len(self.initPos))
 
             p.removeConstraint(self.cid)
             p.resetBasePositionAndOrientation(self.handId, initBasePos, initQuat)
 
             for ind in range(len(self.activeDofs)):
                 p.resetJointState(self.handId, self.activeDofs[ind], initPos[ind], 0.0)
+            for ind in range(len(self.lockDofs)):
+                p.resetJointState(self.handId, self.lockDofs[ind], 0.0, 0.0)
 
             self.cid = p.createConstraint(self.handId, -1, -1, -1, p.JOINT_FIXED, [0, 0, 0], [0, 0, 0],
                                           childFramePosition=initBasePos,
@@ -199,7 +208,7 @@ class ShadowHand:
         # print(self.tarBasePos)
         # print(p.getBasePositionAndOrientation(self.handId))
         tarQuat = p.getQuaternionFromEuler(list(self.tarBaseOri))
-        p.changeConstraint(self.cid, list(self.tarBasePos), tarQuat, maxForce=self.maxForce * 20.0)   # TODO: wrist force larger
+        p.changeConstraint(self.cid, list(self.tarBasePos), tarQuat, maxForce=self.maxForce * 5.0)   # TODO: wrist force larger
 
         self.tarFingerPos += a[6:]      # length should match
         self.tarFingerPos = np.clip(self.tarFingerPos, self.ll, self.ul)
@@ -220,6 +229,12 @@ class ShadowHand:
                                     controlMode=p.POSITION_CONTROL,
                                     targetPosition=self.tarFingerPos[i],
                                     force=self.maxForce)
+        for i in range(len(self.lockDofs)):
+            p.setJointMotorControl2(self.handId,
+                                    jointIndex=self.activeDofs[i],
+                                    controlMode=p.POSITION_CONTROL,
+                                    targetPosition=0.0,
+                                    force=self.maxForce / 4.0)
 
 if __name__ == "__main__":
     physicsClient = p.connect(p.GUI)    #or p.DIRECT for non-graphical version
@@ -239,8 +254,8 @@ if __name__ == "__main__":
     # cubePos, cubeOrn = p.getBasePositionAndOrientation(boxId)
     # print(cubePos,cubeOrn)
 
-    p.setTimeStep(1./240.)
-    p.setGravity(0, 0, -10)
+    p.setTimeStep(1./480.)
+    p.setGravity(0, 0, -5)
 
     floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'), [0, 0, 0], useFixedBase=1)
     p.changeDynamics(floorId, -1, lateralFriction=3.0)
@@ -260,13 +275,16 @@ if __name__ == "__main__":
 
         input("press enter to continue")
         print("init", a.get_robot_observation())
-        for t in range(400):
-            a.apply_action(np.random.uniform(low=-0.02, high=0.02, size=6+22)+np.array([0.0]*6+[0.01]*22))
+        for t in range(800):
+            # a.apply_action(np.random.uniform(low=-0.005, high=0.005, size=6+22)+np.array([0.0025]*6+[0.01]*22))
+            a.apply_action(
+                np.random.uniform(low=-0.005, high=0.005, size=6 + 17) + np.array([0.0025] * 6 + [-0.01] * 17))
             # a.apply_action(np.array([0.0]*6+[0.01]*22))
-            # a.apply_action(np.array([0] * (22+6)))
+            # a.apply_action(np.array([0.005] * (22+6)))
 
             p.stepSimulation()
-            time.sleep(1./240.)
+            p.stepSimulation()
+            time.sleep(1./480.)
         print("final obz", a.get_robot_observation())
 
     p.disconnect()

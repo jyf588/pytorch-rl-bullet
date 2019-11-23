@@ -94,6 +94,16 @@ python main.py --env-name "ShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --l
 # make finger forces smaller.
 python main.py --env-name "ShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1121_1 --seed 2001
 
+11/22 11:12
+# reconditioned masses
+python main.py --env-name "ShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1122_0 --seed 2002
+11/22 13:21 # move 3cm closer
+python main.py --env-name "ShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1122_1 --seed 2003
+11/22 14:58 # lock finger adductions
+python main.py --env-name "ShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1122_2 --seed 2004
+11/22 17:27 # remove cylinder state
+python main.py --env-name "ShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1122_3 --seed 2005
+
 # copy header
 # copy folder
 
