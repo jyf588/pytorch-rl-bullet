@@ -31,7 +31,7 @@ class ShadowHandGraspEnv(gym.Env):
 
         self.cylinderInitPos = [0, 0, 0.105]    # initOri is identity
 
-        self.robotInitBasePos = np.array(np.array([-0.13, 0.07, 0.1]))  # TODO: note, diff for different model
+        self.robotInitBasePos = np.array(np.array([-0.15, 0.07, 0.1]))  # TODO: note, diff for different model
 
         self.sim_setup()
 
@@ -91,19 +91,18 @@ class ShadowHandGraspEnv(gym.Env):
             cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
             if len(cps) > 0:
                 # print(len(cps))
-                reward += 4.0   # the more links in contact, the better
+                reward += 6.0   # the more links in contact, the better
 
-            # if i > 0 and i not in self.robot.activeDofs:
-            #     # this is fingertip
-            #     tipPos = p.getLinkState(self.robot.handId, i)[0]
-            #     # print(tipPos)
-            #     reward += -np.minimum(np.linalg.norm(np.array(tipPos) - np.array(clPos)), 0.5) * 2.0
+            if i > 0 and i not in self.robot.activeDofs and i not in self.robot.lockDofs:   # i in [4,9,14,20,26]
+                tipPos = p.getLinkState(self.robot.handId, i)[0]
+                # print(tipPos)
+                reward += -np.minimum(np.linalg.norm(np.array(tipPos) - np.array(clPos)), 0.5) * 1.0
 
         clVels = p.getBaseVelocity(self.cylinderId)
         # print(clVels)
         clLinV = np.array(clVels[0])
         clAngV = np.array(clVels[1])
-        reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.3
+        reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.5
 
         if clPos[2] < -0.2 and self.timer > 300: # object dropped, do not penalize dropping when 0 gravity
             reward += -7.

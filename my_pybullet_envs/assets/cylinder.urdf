@@ -3,21 +3,21 @@
   <link name="baseLink">
     <visual>
       <geometry>
-        <cylinder length="0.20" radius="0.04"/>
+        <cylinder length="0.20" radius="0.06"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <material name="black"/>
     </visual>
     <collision>
       <geometry>
-        <cylinder length="0.20" radius="0.04"/>
+        <cylinder length="0.20" radius="0.06"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <contact_coefficients mu="3.0" />
     </collision>
     <inertial>
       <mass value="5.0"/>
-      <inertia ixx="0.0002" ixy="0.0" ixz="0.0" iyy="0.0002" iyz="0.0" izz="0.0002"/>
+      <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001"/>
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </inertial>
   </link>
