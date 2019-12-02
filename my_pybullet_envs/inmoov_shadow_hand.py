@@ -10,6 +10,8 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 
 # TODO: mass good or not?
 # TODO: render
+# TODO: currently the waist is fixed, different from Openrave model.
+# TODO: forearm collision shape
 
 
 class InmoovShadowHand:
@@ -25,6 +27,8 @@ class InmoovShadowHand:
 
         self.robotId = p.loadURDF(os.path.join(currentdir, "assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand.urdf"),
                                   (self.palmInitPos + self.baseToPalmOffset).tolist(), flags=p.URDF_USE_SELF_COLLISION)
+        # self.robotId = p.loadURDF(os.path.join(currentdir, "assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand.urdf"),
+        #                           (self.palmInitPos + self.baseToPalmOffset).tolist())
         # nDof = p.getNumJoints(self.handId)
         # for i in range(p.getNumJoints(self.handId)):
         #     print(p.getJointInfo(self.handId, i)[2], p.getJointInfo(self.handId, i)[8], p.getJointInfo(self.handId, i)[9])
@@ -100,8 +104,8 @@ class InmoovShadowHand:
 
         goodInit = False
         while not goodInit:
-            armRp = self.arm_rp
-            armRp += self.np_random.uniform(low=-0.01, high=0.01, size=len(self.armDofs))
+            # armRp = self.arm_rp
+            armRp = self.arm_rp + self.np_random.uniform(low=-0.01, high=0.01, size=len(self.armDofs))
 
             # # initBasePos = self.baseInitPos
             # # initOri = self.baseInitOri
@@ -115,7 +119,7 @@ class InmoovShadowHand:
             # # print(p.getEulerFromQuaternion(initQuat))
 
             # init self.np_random outside, in Env
-            # initPos = self.initPos
+            # initPos = self.initFinPos
             initPos = self.initFinPos + self.np_random.uniform(low=-0.05, high=0.05, size=len(self.initFinPos))
 
             # p.removeConstraint(self.cid)
@@ -142,6 +146,10 @@ class InmoovShadowHand:
             if len(cps) == 0: goodInit = True   # TODO: init hand last and make sure it does not colllide with env
 
             newPos, newOrn = self.get_palm_pos_orn()
+            #
+            # print(p.getJointInfo(self.robotId, self.endEffectorId)[1])
+            # print(newPos)
+            # print(p.getEulerFromQuaternion(newOrn))
             self.palmInitPos = np.copy(newPos)
             self.palmInitOri = np.copy(p.getEulerFromQuaternion(newOrn))
             self.tarPalmPos = np.copy(self.palmInitPos)
@@ -152,6 +160,11 @@ class InmoovShadowHand:
         newPos = p.getLinkState(self.robotId, self.endEffectorId)[4]
         newOrn = p.getLinkState(self.robotId, self.endEffectorId)[5]
         return newPos, newOrn
+
+    def get_palm_vel(self):
+        newLinVel = p.getLinkState(self.robotId, self.endEffectorId, computeLinkVelocity=1)[6]
+        newAngVel = p.getLinkState(self.robotId, self.endEffectorId, computeLinkVelocity=1)[7]
+        return newLinVel, newAngVel
 
     def get_raw_state_arm(self, includeVel=True):
         joints_state = p.getJointStates(self.robotId, self.armDofs)
@@ -175,7 +188,12 @@ class InmoovShadowHand:
 
         obs.extend(list(self.get_raw_state_arm(includeVel=True)))
 
-        # TODO: palm pos and vel
+        pos, orn = self.get_palm_pos_orn()
+        linVel, angVel = self.get_palm_vel()
+        obs.extend(pos)
+        obs.extend(orn)
+        obs.extend(linVel)
+        obs.extend(angVel)
 
         obs.extend(list(self.get_raw_state_fingers(includeVel=False)))
         # print(self.get_raw_state_fingers())
@@ -219,8 +237,8 @@ class InmoovShadowHand:
         # TODO: but tar pos should be part of state vector (? how accurate is pos_con?)
 
         # bounds
-        xyz_ll = self.palmInitPos + np.array([-0.1, -0.1, -0.1])    # TODO: how to set these / palmInitPos->FK
-        xyz_ul = self.palmInitPos + np.array([0.2, 0.1, 0.1])
+        xyz_ll = self.palmInitPos + np.array([-0.1, -0.1, -0.1])    # TODO: how to set these
+        xyz_ul = self.palmInitPos + np.array([0.3, 0.1, 0.1])
         ori_lb = self.palmInitOri - 1.57        # TODO: is this right?
         ori_ub = self.palmInitOri + 1.57
 
@@ -249,7 +267,7 @@ class InmoovShadowHand:
                                     controlMode=p.POSITION_CONTROL,
                                     targetPosition=armQIK[ji],
                                     targetVelocity=0,
-                                    force=self.maxForce * 30.,        # TODO wrist force larger
+                                    force=self.maxForce * 10.,        # TODO wrist force larger
                                     positionGain=0.1,
                                     velocityGain=1)
 

@@ -16,7 +16,7 @@ class ShadowHandGraspEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=True):
+                 renders=False):
         self.renders = renders
         self._timeStep = 1. / 480.
         if self.renders:
@@ -31,9 +31,11 @@ class ShadowHandGraspEnv(gym.Env):
 
         self.cylinderInitPos = [0, 0, 0.105]    # initOri is identity
 
-        self.robotInitBasePos = np.array(np.array([-0.15, 0.07, 0.1]))  # TODO: note, diff for different model
+        self.robotInitBasePos = np.array(np.array([-0.17, 0.07, 0.1]))  # TODO: note, diff for different model
 
         self.sim_setup()
+
+        self.lastContact = None
 
         # self.seed()    # TODO
 
@@ -91,12 +93,12 @@ class ShadowHandGraspEnv(gym.Env):
             cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
             if len(cps) > 0:
                 # print(len(cps))
-                reward += 6.0   # the more links in contact, the better
+                reward += 5.0   # the more links in contact, the better
 
-            if i > 0 and i not in self.robot.activeDofs and i not in self.robot.lockDofs:   # i in [4,9,14,20,26]
-                tipPos = p.getLinkState(self.robot.handId, i)[0]
-                # print(tipPos)
-                reward += -np.minimum(np.linalg.norm(np.array(tipPos) - np.array(clPos)), 0.5) * 1.0
+            # if i > 0 and i not in self.robot.activeDofs and i not in self.robot.lockDofs:   # i in [4,9,14,20,26]
+            #     tipPos = p.getLinkState(self.robot.handId, i)[0]
+            #     # print(tipPos)
+            #     reward += -np.minimum(np.linalg.norm(np.array(tipPos) - np.array(clPos)), 0.5) * 1.0
 
         clVels = p.getBaseVelocity(self.cylinderId)
         # print(clVels)
@@ -134,12 +136,19 @@ class ShadowHandGraspEnv(gym.Env):
         # self.observation.extend(clVels[0])
         # self.observation.extend(clVels[1])
 
+        curContact = []
         for i in range(-1, p.getNumJoints(self.robot.handId)):
             cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
             if len(cps) > 0:
-                self.observation.extend([1.0])
+                curContact.extend([1.0])
             else:
-                self.observation.extend([-1.0])
+                curContact.extend([-1.0])
+        self.observation.extend(curContact)
+        if self.lastContact is not None:
+            self.observation.extend(self.lastContact)
+        else:   # first step
+            self.observation.extend(curContact)
+        self.lastContact = curContact.copy()
 
         # print("obv", self.observation)
         # print("max", np.max(np.abs(np.array(self.observation))))
@@ -155,7 +164,8 @@ class ShadowHandGraspEnv(gym.Env):
     def reset(self):
         self.robot.reset()
 
-        cyInit = np.array(self.cylinderInitPos) + np.append(self.np_random.uniform(low=-0.03, high=0.03, size=2), 0)
+        cyInit = np.array(self.cylinderInitPos) + np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
+        # cyInit = np.array(self.cylinderInitPos)
         p.resetBasePositionAndOrientation(self.cylinderId,
                                           cyInit,
                                           p.getQuaternionFromEuler([0, 0, 0]))
@@ -164,6 +174,7 @@ class ShadowHandGraspEnv(gym.Env):
         p.setCollisionFilterPair(self.cylinderId, self.floorId, -1, -1, enableCollision=1)
         p.stepSimulation()
         self.timer = 0
+        self.lastContact = None
 
         # if self.sim_reset_counter > 0 and (self.sim_reset_counter % self.sim_full_restart_freq) == 0:
         # if False:

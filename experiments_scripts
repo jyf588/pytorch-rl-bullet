@@ -112,6 +112,18 @@ python main.py --env-name "InmoovShadowHandGraspBulletEnv-v0" --algo ppo --use-g
 11/26 11:53 4->5cm no cylinder info, smaller cylinder noise
 python main.py --env-name "InmoovShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1126_1 --seed 3001
 
+11/27 18:05
+python main.py --env-name "InmoovShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1126_2 --seed 3002
+python main.py --env-name "ShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1126_3 --seed 2008
+11/27 19:52 # no forearm collide
+python main.py --env-name "InmoovShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1126_4 --seed 3004
+python main.py --env-name "InmoovShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1126_5 --seed 3005
+11/28 00:38 # try again, with init pos mod for inmoov (why??) 0.2,0.3 wrist range 5 gravity
+python main.py --env-name "InmoovShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1126_6 --seed 3007 # is bad
+python main.py --env-name "ShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1126_7 --seed 2009
+python main.py --env-name "InmoovShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1126_8 --seed 3008 # is good
+# reward value is the same - seems some issues here
+
 
 # copy header
 # copy folder

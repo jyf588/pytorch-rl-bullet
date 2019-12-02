@@ -13,7 +13,7 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 
 class ShadowHand:
     def __init__(self,
-                 base_init_pos=np.array([-0.13, 0.07, 0.1]),
+                 base_init_pos=np.array([-0.17, 0.07, 0.1]),
                  base_init_euler=np.array([1.8, -1.57, 0]),
                  # init_fin_pos=np.array([0.0, 0.4, 0.4, 0.4]*3+[0.0,0.0,0.4,0.4,0.4]+[0.0,0.6,0.1,0.4,0.5])):  # TODO
                  # init_fin_pos = np.array([0.0, 0.4, 0.4, 0.4] * 3 + [0.0, 0.0, 0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.0])):  # TODO
@@ -125,6 +125,11 @@ class ShadowHand:
             # print(cps[0][6])
             if len(cps) == 0: goodInit = True   # TODO: init hand last and make sure it does not colllide with env
 
+            # print("aaa")
+            # basePos, baseQuat = p.getBasePositionAndOrientation(self.handId)
+            # print(basePos)
+            # print(p.getEulerFromQuaternion(baseQuat))
+            # print(p.getEulerFromQuaternion(p.getQuaternionFromEuler([1.8, -1.57, 0])))
             self.tarBasePos = np.copy(initBasePos)
             self.tarBaseOri = np.copy(initOri)
             self.tarFingerPos = np.copy(initPos)
@@ -229,12 +234,12 @@ class ShadowHand:
                                     controlMode=p.POSITION_CONTROL,
                                     targetPosition=self.tarFingerPos[i],
                                     force=self.maxForce)
-        for i in range(len(self.lockDofs)):
-            p.setJointMotorControl2(self.handId,
-                                    jointIndex=self.activeDofs[i],
-                                    controlMode=p.POSITION_CONTROL,
-                                    targetPosition=0.0,
-                                    force=self.maxForce / 4.0)
+        # for i in range(len(self.lockDofs)):
+        #     p.setJointMotorControl2(self.handId,
+        #                             jointIndex=self.activeDofs[i],
+        #                             controlMode=p.POSITION_CONTROL,
+        #                             targetPosition=0.0,
+        #                             force=self.maxForce / 4.0)
 
 if __name__ == "__main__":
     physicsClient = p.connect(p.GUI)    #or p.DIRECT for non-graphical version

@@ -31,9 +31,11 @@ class InmoovShadowHandGraspEnv(gym.Env):
 
         self.cylinderInitPos = [0, 0, 0.105]    # initOri is identity
 
-        self.robotInitPalmPos = np.array(np.array([-0.17, 0.07, 0.1]))  # TODO: note, diff for different model
+        self.robotInitPalmPos = np.array(np.array([-0.19, 0.10, 0.1]))  # TODO: note, diff for different model
 
         self.sim_setup()
+
+        self.lastContact = None
 
         # self.seed()    # TODO
 
@@ -53,7 +55,7 @@ class InmoovShadowHandGraspEnv(gym.Env):
     def sim_setup(self):
         p.resetSimulation()
         p.setTimeStep(self._timeStep)
-        p.setGravity(0, 0, -5)
+        p.setGravity(0, 0, -5.)
 
         self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'), self.cylinderInitPos, useFixedBase=0)     # 0.2/2
 
@@ -91,7 +93,7 @@ class InmoovShadowHandGraspEnv(gym.Env):
         reward = 3.0
         reward += -dist * 3.0
 
-        for i in range(self.robot.endEffectorId, p.getNumJoints(self.robot.robotId)):    # TODO: not exact
+        for i in range(self.robot.endEffectorId, self.robot.endEffectorId + 27):    # TODO: not exact
             cps = p.getContactPoints(self.cylinderId, self.robot.robotId, -1, i)
             if len(cps) > 0:
                 # print(len(cps))
@@ -138,13 +140,21 @@ class InmoovShadowHandGraspEnv(gym.Env):
         # self.observation.extend(clVels[0])
         # self.observation.extend(clVels[1])
 
+        curContact = []
         for i in range(self.robot.endEffectorId-1, self.robot.endEffectorId + 27):  # TODO: not exact
             cps = p.getContactPoints(self.cylinderId, self.robot.robotId, -1, i)
             if len(cps) > 0:
-                self.observation.extend([1.0])
+                curContact.extend([1.0])
                 # print("touch!!!")
             else:
-                self.observation.extend([-1.0])
+                curContact.extend([-1.0])
+        self.observation.extend(curContact)
+        if self.lastContact is not None:
+            self.observation.extend(self.lastContact)
+        else:   # first step
+            self.observation.extend(curContact)
+        self.lastContact = curContact.copy()
+
 
         # print("obv", self.observation)
         # print("max", np.max(np.abs(np.array(self.observation))))
@@ -161,6 +171,7 @@ class InmoovShadowHandGraspEnv(gym.Env):
         self.robot.reset()
 
         cyInit = np.array(self.cylinderInitPos) + np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
+        # cyInit = np.array(self.cylinderInitPos)
         p.resetBasePositionAndOrientation(self.cylinderId,
                                           cyInit,
                                           p.getQuaternionFromEuler([0, 0, 0]))
@@ -169,6 +180,7 @@ class InmoovShadowHandGraspEnv(gym.Env):
         p.setCollisionFilterPair(self.cylinderId, self.floorId, -1, -1, enableCollision=1)
         p.stepSimulation()
         self.timer = 0
+        self.lastContact = None
 
         # if self.sim_reset_counter > 0 and (self.sim_reset_counter % self.sim_full_restart_freq) == 0:
         # if False:
