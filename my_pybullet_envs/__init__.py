@@ -5,6 +5,7 @@ from .allegro_hand_nofloor_env import AllegroHandGraspEnv
 from .inmoov_hand_nofloor_env import InmoovHandGraspEnv
 from .shadow_hand_grasp_env import ShadowHandGraspEnv
 from .inmoov_shadow_hand_grasp_env import InmoovShadowHandGraspEnv
+from .inmoov_shadow_hand_grasp_env_tmp import InmoovShadowHandGraspEnvTmp
 
 
 def register(id, *args, **kvargs):
@@ -44,6 +45,12 @@ register(
     id='InmoovShadowHandGraspBulletEnv-v0',
     entry_point='my_pybullet_envs:InmoovShadowHandGraspEnv',
     max_episode_steps=400,
+)
+
+register(
+    id='InmoovShadowHandGraspBulletEnvTmp-v0',
+    entry_point='my_pybullet_envs:InmoovShadowHandGraspEnvTmp',
+    max_episode_steps=800,
 )
 
 def getList():
