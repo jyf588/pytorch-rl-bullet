@@ -105,7 +105,7 @@ class InmoovShadowHand:
         goodInit = False
         while not goodInit:
             # armRp = self.arm_rp
-            armRp = self.arm_rp + self.np_random.uniform(low=-0.01, high=0.01, size=len(self.armDofs))
+            armRp = self.arm_rp + self.np_random.uniform(low=-0.002, high=0.002, size=len(self.armDofs))
 
             # # initBasePos = self.baseInitPos
             # # initOri = self.baseInitOri
@@ -186,7 +186,7 @@ class InmoovShadowHand:
     def get_robot_observation(self):
         obs = []
 
-        obs.extend(list(self.get_raw_state_arm(includeVel=True)))
+        # obs.extend(list(self.get_raw_state_arm(includeVel=True)))
 
         pos, orn = self.get_palm_pos_orn()
         linVel, angVel = self.get_palm_vel()

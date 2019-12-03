@@ -29,7 +29,7 @@ class InmoovShadowHandGraspEnv(gym.Env):
 
         self.frameSkip = 2
 
-        self.cylinderInitPos = [0, 0, 0.105]    # initOri is identity
+        self.cylinderInitPos = [0, 0, 0.101]    # initOri is identity
 
         self.robotInitPalmPos = np.array(np.array([-0.19, 0.10, 0.1]))  # TODO: note, diff for different model
 
@@ -76,7 +76,11 @@ class InmoovShadowHandGraspEnv(gym.Env):
             # print(np.array(action))
             # print(np.array(action) * self.action_scale)
             # action = np.clip(np.array(action), -1, 1)   # TODO
-            self.robot.apply_action(np.array(action) * self.action_scale)
+            a = np.array(action)
+            # if self.timer > 300:
+            #     a[:6] = np.array([0.] * 6)
+            #     a[:3] = np.array([1.] * 3)
+            self.robot.apply_action(a * self.action_scale)
 
         for _ in range(self.frameSkip):
             p.stepSimulation()
@@ -109,9 +113,13 @@ class InmoovShadowHandGraspEnv(gym.Env):
         clLinV = np.array(clVels[0])
         clAngV = np.array(clVels[1])
         reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.5
+        reward += np.maximum(-np.linalg.norm(clPos[:2]), -1.0) * 2.0
+        # if self.timer <= 300:
+        #     reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.5
+        #     # reward += np.maximum(-np.linalg.norm(clPos[:2]), -1.0) * 2.0
 
-        if clPos[2] < -0.2 and self.timer > 300: # object dropped, do not penalize dropping when 0 gravity
-            reward += -7.
+        if clPos[2] < -0.0 and self.timer > 300: # object dropped, do not penalize dropping when 0 gravity
+            reward += -20.
 
         if self.renders:
             time.sleep(self._timeStep)
