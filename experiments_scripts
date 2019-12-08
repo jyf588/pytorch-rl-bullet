@@ -141,6 +141,24 @@ python main.py --env-name "InmoovShadowHandGraspBulletEnv-v0" --algo ppo --use-g
 12/2 17:16 # increase cylinder pose norm a bit
 python main.py --env-name "InmoovShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1126_16 --seed 3016
 
+12/3 10:47 placing
+python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1203_0 --seed 4000
+12/3 11:34 # change ROM, add quat diff pen
+python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1203_1 --seed 4001
+# maybe need to bring wrist closer, need to delete cylinder state later
+python main.py --env-name "ShadowHandPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1203_2 --seed 4002
+# why there are exploding
+12/6 18:43
+python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1203_3 --seed 4003
+
+12/7 18:06
+python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1203_4 --seed 4004
+python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1203_5 --seed 4005
+12/8 13:57  # add vel reward
+python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1203_6 --seed 4006
+
+
+
 
 # copy header
 # copy folder

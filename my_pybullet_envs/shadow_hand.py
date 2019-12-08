@@ -15,13 +15,15 @@ class ShadowHand:
     def __init__(self,
                  base_init_pos=np.array([-0.17, 0.07, 0.1]),
                  base_init_euler=np.array([1.8, -1.57, 0]),
-                 # init_fin_pos=np.array([0.0, 0.4, 0.4, 0.4]*3+[0.0,0.0,0.4,0.4,0.4]+[0.0,0.6,0.1,0.4,0.5])):  # TODO
-                 # init_fin_pos = np.array([0.0, 0.4, 0.4, 0.4] * 3 + [0.0, 0.0, 0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.0])):  # TODO
-                 init_fin_pos = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.0])):  # TODO
+                 init_fin_pos = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.0]),
+                 base_ll = np.array([-0.1, -0.1, -0.1]),   # default range for reaching
+                 base_ul = np.array([0.3, 0.1, 0.1])):      # default range for reaching
 
         self.baseInitPos = base_init_pos
         self.baseInitOri = base_init_euler
         self.initPos = init_fin_pos
+        self.base_ll = base_ll
+        self.base_ul = base_ul
 
         self.handId = p.loadURDF(os.path.join(currentdir, "assets/shadow_hand_arm/sr_description/robots/shadowhand_motor.urdf"),
                                  list(self.baseInitPos), p.getQuaternionFromEuler(list(self.baseInitOri)),
@@ -40,8 +42,8 @@ class ShadowHand:
             self.activeDofs += (np.arange(fig_start[i], nDofs[i]) + start).tolist()
             self.lockDofs += (np.arange(0, fig_start[i]) + start).tolist()
             start += (nDofs[i]+1)
-        print(self.activeDofs)
-        print(self.lockDofs)
+        # print(self.activeDofs)
+        # print(self.lockDofs)
         assert len(self.activeDofs) == len(init_fin_pos)
 
         self.ll = np.array([p.getJointInfo(self.handId, i)[8] for i in self.activeDofs])
@@ -134,13 +136,54 @@ class ShadowHand:
             self.tarBaseOri = np.copy(initOri)
             self.tarFingerPos = np.copy(initPos)
 
+    def reset_to_q(self, save_robot_q):
+        # assume a certain ordering
+        initBasePos = save_robot_q[:3]
+        initOri = save_robot_q[3:6]
+        initQuat = p.getQuaternionFromEuler(list(initOri))
+        localpos = [0.0, 0.0, 0.035]
+        localquat = [0.0, 0.0, 0.0, 1.0]
+        initBasePos, initQuat= p.multiplyTransforms(initBasePos, initQuat, localpos, localquat)
+
+        # initQuat = p.getQuaternionFromEuler(list(initOri))
+        initBaseLinVel = save_robot_q[6:9]
+        initBaseAugVel = save_robot_q[9:12]
+
+        nDof = len(self.activeDofs + self.lockDofs)
+        assert len(save_robot_q) == (12+nDof)     # TODO: assume finger only q but not dq
+        initActivePos = save_robot_q[12:12+len(self.activeDofs)]
+        initLockPos = save_robot_q[12+len(self.activeDofs):12+nDof]
+
+        p.removeConstraint(self.cid)
+        p.resetBasePositionAndOrientation(self.handId, initBasePos, initQuat)
+        p.resetBaseVelocity(self.handId, initBaseLinVel, initBaseAugVel)
+
+        for ind in range(len(self.activeDofs)):
+            p.resetJointState(self.handId, self.activeDofs[ind], initActivePos[ind], 0.0)
+        for ind in range(len(self.lockDofs)):
+            p.resetJointState(self.handId, self.lockDofs[ind], initLockPos[ind], 0.0)
+
+        self.cid = p.createConstraint(self.handId, -1, -1, -1, p.JOINT_FIXED, [0, 0, 0], [0, 0, 0],
+                                      childFramePosition=initBasePos,
+                                      childFrameOrientation=initQuat)
+        # TODO: no vel here, is this correct? Think
+
+        p.stepSimulation()  # TODO
+
+        basePos, baseQuat = p.getBasePositionAndOrientation(self.handId)
+        self.baseInitPos = np.array(basePos)
+        self.baseInitOri = np.array(p.getEulerFromQuaternion(baseQuat))
+        self.tarBasePos = np.copy(self.baseInitPos)
+        self.tarBaseOri = np.copy(self.baseInitOri)
+        self.tarFingerPos = np.copy(initActivePos)
+
     def get_raw_state_fingers(self, includeVel=True):
-        joints_state = p.getJointStates(self.handId, self.activeDofs)
+        dofs = self.activeDofs + self.lockDofs
+        joints_state = p.getJointStates(self.handId, dofs)
         if includeVel:
             joints_state = np.array(joints_state)[:,[0,1]]
         else:
             joints_state = np.array(joints_state)[:, [0]]
-        # print(joints_state.flatten())
         return np.hstack(joints_state.flatten())
 
     def get_robot_observation(self):
@@ -201,8 +244,8 @@ class ShadowHand:
         dxyz = a[0:3]
         dOri = a[3:6]
         self.tarBasePos += dxyz
-        xyz_ll = self.baseInitPos + np.array([-0.1, -0.1, -0.1])
-        xyz_ul = self.baseInitPos + np.array([0.3, 0.1, 0.1])
+        xyz_ll = self.baseInitPos + self.base_ll    # TODO
+        xyz_ul = self.baseInitPos + self.base_ul
         self.tarBasePos = np.clip(self.tarBasePos, xyz_ll, xyz_ul)
 
         ori_lb = self.baseInitOri - 1.57        # TODO: is this right?
