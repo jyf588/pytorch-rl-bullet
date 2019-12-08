@@ -174,6 +174,11 @@ if __name__ == "__main__":
         iter = iter + 1
     print("iter=", iter)
 
+    ls = p.getLinkState(a.handId, endEffectorId)
+    newPos = ls[4]
+    print(newPos)
+
+
     input("press enter to continue")
 
     p.disconnect()

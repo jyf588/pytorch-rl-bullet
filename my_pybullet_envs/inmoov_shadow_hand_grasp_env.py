@@ -113,7 +113,7 @@ class InmoovShadowHandGraspEnv(gym.Env):
         clLinV = np.array(clVels[0])
         clAngV = np.array(clVels[1])
         reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.5
-        reward += np.maximum(-np.linalg.norm(clPos[:2]), -1.0) * 2.0
+        # reward += np.maximum(-np.linalg.norm(clPos[:2]), -1.0) * 2.0
         # if self.timer <= 300:
         #     reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.5
         #     # reward += np.maximum(-np.linalg.norm(clPos[:2]), -1.0) * 2.0

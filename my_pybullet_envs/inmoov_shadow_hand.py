@@ -186,6 +186,7 @@ class InmoovShadowHand:
     def get_robot_observation(self):
         obs = []
 
+        # could possibly be translated
         # obs.extend(list(self.get_raw_state_arm(includeVel=True)))
 
         pos, orn = self.get_palm_pos_orn()
