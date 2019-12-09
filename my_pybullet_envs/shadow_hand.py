@@ -54,16 +54,19 @@ class ShadowHand:
         for ind in range(len(self.lockDofs)):
             p.resetJointState(self.handId, self.lockDofs[ind], 0.0, 0.0)
 
+        total_m = 0
         for i in range(-1, p.getNumJoints(self.handId)):
             p.changeDynamics(self.handId, i, lateralFriction=3.0)
             # TODO: increase mass for now
             mass = p.getDynamicsInfo(self.handId, i)[0]
             # inertia = p.getDynamicsInfo(self.handId, i)[2]
-            mass = mass * 100.
+            mass = mass * 10.
+            total_m += mass
             # inertia = [ele * 100. for ele in inertia]
             p.changeDynamics(self.handId, i, mass=mass)
             # p.changeDynamics(self.handId, i, localInertiaDiagnoal=inertia)    # TODO: default inertia from bullet
 
+        # print("total hand Mass:", total_m)
         # # https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/examples/constraint.py#L11
         self.cid = p.createConstraint(self.handId, -1, -1, -1, p.JOINT_FIXED, [0, 0, 0], [0, 0, 0],
                                       childFramePosition=list(self.baseInitPos),
@@ -73,7 +76,7 @@ class ShadowHand:
         self.tarBaseOri = np.copy(self.baseInitOri)     # euler angles
         self.tarFingerPos = np.copy(self.initPos)    # used for position control and as part of state
 
-        self.maxForce = 100.
+        self.maxForce = 200.
         # self.maxForce = 0.
 
         self.include_redun_body_pos = False
@@ -94,9 +97,9 @@ class ShadowHand:
             # initBasePos = self.baseInitPos
             # initOri = self.baseInitOri
             initBasePos = np.array(self.baseInitPos)
-            initBasePos[0] += self.np_random.uniform(low=-0.03, high=0.03)
-            initBasePos[1] += self.np_random.uniform(low=-0.03, high=0.03)
-            initBasePos[2] += self.np_random.uniform(low=-0.03, high=0.03)  # enlarge here
+            initBasePos[0] += self.np_random.uniform(low=-0.015, high=0.015)
+            initBasePos[1] += self.np_random.uniform(low=-0.015, high=0.015)
+            initBasePos[2] += self.np_random.uniform(low=-0.015, high=0.015)  # enlarge here
             initOri = np.array(self.baseInitOri) + self.np_random.uniform(low=-0.05, high=0.05, size=3)
             initQuat = p.getQuaternionFromEuler(list(initOri))
             #
@@ -117,6 +120,10 @@ class ShadowHand:
             self.cid = p.createConstraint(self.handId, -1, -1, -1, p.JOINT_FIXED, [0, 0, 0], [0, 0, 0],
                                           childFramePosition=initBasePos,
                                           childFrameOrientation=initQuat)
+
+            # print(p.getNumJoints(self.handId))
+            # for i in range(p.getNumJoints(self.handId)):
+            #     print(p.getJointState(self.handId, i)[0])
 
             p.stepSimulation()  # TODO
 
@@ -256,7 +263,7 @@ class ShadowHand:
         # print(self.tarBasePos)
         # print(p.getBasePositionAndOrientation(self.handId))
         tarQuat = p.getQuaternionFromEuler(list(self.tarBaseOri))
-        p.changeConstraint(self.cid, list(self.tarBasePos), tarQuat, maxForce=self.maxForce * 5.0)   # TODO: wrist force larger
+        p.changeConstraint(self.cid, list(self.tarBasePos), tarQuat, maxForce=self.maxForce * 10.0)   # TODO: wrist force larger
 
         self.tarFingerPos += a[6:]      # length should match
         self.tarFingerPos = np.clip(self.tarFingerPos, self.ll, self.ul)
@@ -302,8 +309,8 @@ if __name__ == "__main__":
     # cubePos, cubeOrn = p.getBasePositionAndOrientation(boxId)
     # print(cubePos,cubeOrn)
 
-    p.setTimeStep(1./480.)
-    p.setGravity(0, 0, -5)
+    p.setTimeStep(1./240.)
+    p.setGravity(0, 0, -10)
 
     floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'), [0, 0, 0], useFixedBase=1)
     p.changeDynamics(floorId, -1, lateralFriction=3.0)
@@ -326,13 +333,16 @@ if __name__ == "__main__":
         for t in range(800):
             # a.apply_action(np.random.uniform(low=-0.005, high=0.005, size=6+22)+np.array([0.0025]*6+[0.01]*22))
             a.apply_action(
-                np.random.uniform(low=-0.005, high=0.005, size=6 + 17) + np.array([0.0025] * 6 + [-0.01] * 17))
+                np.random.uniform(low=-0.001, high=0.001, size=6 + 17) + np.array([0.002] * 6 + [0.01] * 17))
             # a.apply_action(np.array([0.0]*6+[0.01]*22))
             # a.apply_action(np.array([0.005] * (22+6)))
 
             p.stepSimulation()
-            p.stepSimulation()
-            time.sleep(1./480.)
+            print(p.getConstraintState(a.cid)[:3])
+            # a.apply_action(np.array([0.0] * 23))  # equivalent
+            # p.stepSimulation()
+            # print(p.getConstraintState(a.cid)[:3])
+            time.sleep(1./240.)
         print("final obz", a.get_robot_observation())
 
     p.disconnect()
