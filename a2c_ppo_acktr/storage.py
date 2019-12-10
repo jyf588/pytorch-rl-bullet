@@ -57,6 +57,16 @@ class RolloutStorage(object):
 
         self.step = (self.step + 1) % self.num_steps
 
+    def mod_reward(self, offset, reverse_l):
+        num_processes = self.rewards.size(1)
+        tmp_step = self.step
+        for _ in range(reverse_l):
+            tmp_step = (tmp_step - 1) % self.num_steps
+            # print(offset)
+            # print('r2', self.rewards[tmp_step])
+            self.rewards[tmp_step] += offset.view(num_processes, 1)
+            # print(self.rewards[tmp_step])
+
     def after_update(self):
         self.obs[0].copy_(self.obs[-1])
         self.recurrent_hidden_states[0].copy_(self.recurrent_hidden_states[-1])

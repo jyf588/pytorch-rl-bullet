@@ -135,6 +135,7 @@ def main():
                 agent.optimizer.lr if args.algo == "acktr" else args.lr)
 
         for step in range(args.num_steps):
+            # print(args.num_steps) 300*8
             # Sample actions
             with torch.no_grad():
                 value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(
@@ -156,6 +157,17 @@ def main():
                  for info in infos])
             rollouts.insert(obs, recurrent_hidden_states, action,
                             action_log_prob, value, reward, masks, bad_masks)
+
+            # rwd_offsets = torch.FloatTensor([0.0]*args.num_processes).to(device)
+            # # rwd_offsets = torch.tensor([0.0]*args.num_processes, dtype=torch.float32)
+            # need_run_offset = False
+            # for ind, info in enumerate(infos):
+            #     if 's' in info.keys() and info['s']:    # will only be true at end of sccuessful traj
+            #         rwd_offsets[ind] = 8.0      # TODO: hard-coded
+            #         need_run_offset = True
+            #
+            # if need_run_offset:
+            #     rollouts.mod_reward(rwd_offsets, 299)   # TODO: hard-coded
 
         with torch.no_grad():
             next_value = actor_critic.get_value(
