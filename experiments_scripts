@@ -178,6 +178,21 @@ python main.py --env-name "ShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --l
 python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_place_1208_0 --seed 4010
 python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_place_1208_1 --seed 4011
 
+12/9 21:54 # spread final r to whole traj
+python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2400 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_place_1208_2 --seed 4012
+
+12/9 22:54
+# original wo reward normalize
+python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2400 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_place_1208_3 --seed 4013
+# my new wo reward normalize
+python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2400 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_place_1208_4 --seed 4014
+
+12/10 10:05
+# delete cylinder info and add haptics 1/0
+python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2400 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_place_1208_5 --seed 4015
+python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2400 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_place_1208_6 --seed 4016
+
+
 
 # copy header
 # copy folder

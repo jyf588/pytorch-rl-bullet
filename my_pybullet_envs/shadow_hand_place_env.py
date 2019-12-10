@@ -147,6 +147,7 @@ class ShadowHandPlaceEnv(gym.Env):
             time.sleep(self._timeStep)
 
         self.timer += 1
+        succeed = False
         obs = self.getExtendedObservation()
         if self.timer == 300:
             # this is slightly different from mountain car's sparse reward,
@@ -160,22 +161,23 @@ class ShadowHandPlaceEnv(gym.Env):
                     time.sleep(self._timeStep)
             clPosNow, _ = p.getBasePositionAndOrientation(self.cylinderId)
             if clPosNow[2] > 0.05:
+                # succeed = True
                 reward += 2000
 
-        return obs, reward, False, {}
+        return obs, reward, False, {'s': succeed}
 
     def getExtendedObservation(self):
         # TODO: odd
         # https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/gym/pybullet_envs/bullet/kukaGymEnv.py#L132
         self.observation = self.robot.get_robot_observation()
 
-        clPos, clOrn = p.getBasePositionAndOrientation(self.cylinderId)
-        self.observation.extend(list(clPos))
-        self.observation.extend(list(clOrn))
-
-        clVels = p.getBaseVelocity(self.cylinderId)
-        self.observation.extend(clVels[0])
-        self.observation.extend(clVels[1])
+        # clPos, clOrn = p.getBasePositionAndOrientation(self.cylinderId)
+        # self.observation.extend(list(clPos))
+        # self.observation.extend(list(clOrn))
+        #
+        # clVels = p.getBaseVelocity(self.cylinderId)
+        # self.observation.extend(clVels[0])
+        # self.observation.extend(clVels[1])
 
         # TODO: add contact wrench info, getConstraintState? MOst of the force are used to combat own gravity
         cf = np.array(p.getConstraintState(self.robot.cid))
@@ -189,19 +191,19 @@ class ShadowHandPlaceEnv(gym.Env):
 
         # TODO: delete these for now (finger contact not seems important for releasing)
         # TODO: infact, finger torques might be more useful
-        # curContact = []
-        # for i in range(-1, p.getNumJoints(self.robot.handId)):
-        #     cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
-        #     if len(cps) > 0:
-        #         curContact.extend([1.0])
-        #     else:
-        #         curContact.extend([-1.0])
-        # self.observation.extend(curContact)
-        # if self.lastContact is not None:
-        #     self.observation.extend(self.lastContact)
-        # else:   # first step
-        #     self.observation.extend(curContact)
-        # self.lastContact = curContact.copy()
+        curContact = []
+        for i in range(-1, p.getNumJoints(self.robot.handId)):
+            cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
+            if len(cps) > 0:
+                curContact.extend([1.0])
+            else:
+                curContact.extend([-1.0])
+        self.observation.extend(curContact)
+        if self.lastContact is not None:
+            self.observation.extend(self.lastContact)
+        else:   # first step
+            self.observation.extend(curContact)
+        self.lastContact = curContact.copy()
 
         # print("obv", self.observation)
         # print("max", np.max(np.abs(np.array(self.observation))))

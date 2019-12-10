@@ -45,7 +45,7 @@ register(
 register(
     id='ShadowHandPlaceBulletEnv-v0',
     entry_point='my_pybullet_envs:ShadowHandPlaceEnv',
-    max_episode_steps=301,
+    max_episode_steps=300,
 )
 
 register(
