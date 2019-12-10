@@ -16,8 +16,10 @@ class ShadowHandGraspEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=True):
+                 renders=False,
+                 collect_final_state=False):
         self.renders = renders
+        self.collect_final_state = collect_final_state
         self._timeStep = 1. / 240.
         if self.renders:
             p.connect(p.GUI)
@@ -83,9 +85,10 @@ class ShadowHandGraspEnv(gym.Env):
             # print(np.array(action) * self.action_scale)
             # action = np.clip(np.array(action), -1, 1)   # TODO
             self.act = np.array(action)
-            # if self.timer > 300:
-            #     self.act[:6] = np.array([0.] * 6)
-            #     self.act[:3] = np.array([0.5] * 3)
+            if self.collect_final_state and self.timer > 300:
+                # testing
+                self.act[:6] = np.array([0.] * 6)
+                self.act[2] = np.array([0.6])
             self.robot.apply_action(self.act * self.action_scale)
 
         for _ in range(self.frameSkip):
@@ -127,7 +130,8 @@ class ShadowHandGraspEnv(gym.Env):
             time.sleep(self._timeStep)
 
         self.timer += 1
-        if self.timer > 300:
+        if self.timer > 300 and not self.collect_final_state:
+            # training
             p.setCollisionFilterPair(self.cylinderId, self.floorId, -1, -1, enableCollision=0)
             for i in range(-1, p.getNumJoints(self.robot.handId)):
                 p.setCollisionFilterPair(self.floorId, self.robot.handId, -1, i, enableCollision=0)

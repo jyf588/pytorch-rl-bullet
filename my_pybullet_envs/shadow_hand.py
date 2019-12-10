@@ -143,14 +143,15 @@ class ShadowHand:
             self.tarBaseOri = np.copy(initOri)
             self.tarFingerPos = np.copy(initPos)
 
-    def reset_to_q(self, save_robot_q):
+    def reset_to_q(self, save_robot_q, needCorrection=True):
         # assume a certain ordering
         initBasePos = save_robot_q[:3]
         initOri = save_robot_q[3:6]
         initQuat = p.getQuaternionFromEuler(list(initOri))
         localpos = [0.0, 0.0, 0.035]
         localquat = [0.0, 0.0, 0.0, 1.0]
-        initBasePos, initQuat= p.multiplyTransforms(initBasePos, initQuat, localpos, localquat)
+        if needCorrection:
+            initBasePos, initQuat= p.multiplyTransforms(initBasePos, initQuat, localpos, localquat)
 
         # initQuat = p.getQuaternionFromEuler(list(initOri))
         initBaseLinVel = save_robot_q[6:9]

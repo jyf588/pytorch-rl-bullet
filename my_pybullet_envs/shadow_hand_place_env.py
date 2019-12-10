@@ -42,6 +42,7 @@ class ShadowHandPlaceEnv(gym.Env):
             p.connect(p.DIRECT)
 
         self.np_random = None
+        self.robot = None
 
         # TODO: now DIFFERENT from grasping
         self.action_scale = np.array([0.004] * 3 + [0.004] * 3 + [0.01] * 17)  # shadow hand is 22-5=17dof
@@ -64,7 +65,7 @@ class ShadowHandPlaceEnv(gym.Env):
         self.timer = 0
 
         self.save_qs = None
-        with open('/home/yifengj/pytorch-rl-bullet/final_states.pickle', 'rb') as handle:   # TODO hardcoded
+        with open('/home/yifengj/pytorch-rl-bullet/final_states_1209.pickle', 'rb') as handle:   # TODO hardcoded
             self.save_qs = pickle.load(handle)
         assert self.save_qs is not None
 
@@ -76,8 +77,6 @@ class ShadowHandPlaceEnv(gym.Env):
         p.setTimeStep(self._timeStep)
         p.setGravity(0, 0, -10)
 
-        if self.np_random is not None:
-            self.robot.np_random = self.np_random
         if self.np_random is None:
             self.seed(0)    # used once, will be overwritten outside by env
 
@@ -88,6 +87,9 @@ class ShadowHandPlaceEnv(gym.Env):
         p.changeDynamics(self.cylinderId, -1, lateralFriction=1.0)      # TODO: 3.0/1.0
         p.changeDynamics(self.floorId, -1, lateralFriction=1.0)
         self.robot = ShadowHand(base_ll=np.array([-0.1, -0.1, -0.2]), base_ul=np.array([0.1, 0.1, 0.1]))
+
+        if self.np_random is not None:
+            self.robot.np_random = self.np_random
 
         self.robot.reset()  # TODO: leave this here for now and only modify env.reset()
 
@@ -120,11 +122,11 @@ class ShadowHandPlaceEnv(gym.Env):
         cps_floor = p.getContactPoints(self.cylinderId, self.floorId, -1, -1)
         for cp in cps_floor:
             total_nf += cp[9]
-        if np.abs(total_nf) > 50:       # TODO: 5kg * g=10
+        if np.abs(total_nf) > 70:       # TODO: 5kg * g=10
             meaningful_c = True
         else:
             meaningful_c = False
-        print(total_nf, meaningful_c)
+        # print(total_nf, meaningful_c)
 
         if rotMetric > 0.8 and xyzMetric > 0.8 and velMetric > 0.8 and meaningful_c:     # close to placing
             for i in range(-1, p.getNumJoints(self.robot.handId)):
@@ -145,7 +147,11 @@ class ShadowHandPlaceEnv(gym.Env):
             time.sleep(self._timeStep)
 
         self.timer += 1
+        obs = self.getExtendedObservation()
         if self.timer == 300:
+            # this is slightly different from mountain car's sparse reward,
+            # where you are only rewarded when reaching a certain state
+            # this is saying you must be at certain state at certain time (after test)
             for i in range(-1, p.getNumJoints(self.robot.handId)):
                 p.setCollisionFilterPair(self.cylinderId, self.robot.handId, -1, i, enableCollision=0)
             for _ in range(300):
@@ -156,7 +162,7 @@ class ShadowHandPlaceEnv(gym.Env):
             if clPosNow[2] > 0.05:
                 reward += 2000
 
-        return self.getExtendedObservation(), reward, False, {}
+        return obs, reward, False, {}
 
     def getExtendedObservation(self):
         # TODO: odd
@@ -173,7 +179,7 @@ class ShadowHandPlaceEnv(gym.Env):
 
         # TODO: add contact wrench info, getConstraintState? MOst of the force are used to combat own gravity
         cf = np.array(p.getConstraintState(self.robot.cid))
-        cf[:3] /= (self.robot.maxForce * 1)
+        cf[:3] /= (self.robot.maxForce * 5)
         cf[3:] /= (self.robot.maxForce * 1)     # just in case there is not state normalization in ppo
         # TODO: would like to see cf increase as obj touch floor,
         # but if cf is mainly determined by control itself
@@ -205,7 +211,8 @@ class ShadowHandPlaceEnv(gym.Env):
 
     def seed(self, seed=None):
         self.np_random, seed = gym.utils.seeding.np_random(seed)
-        self.robot.np_random = self.np_random  # use the same np_randomizer for robot as for env
+        if self.robot is not None:
+            self.robot.np_random = self.np_random  # use the same np_randomizer for robot as for env
         return [seed]
 
     def reset(self):
@@ -223,7 +230,7 @@ class ShadowHandPlaceEnv(gym.Env):
             save_q[-12] = 0
             save_q[-11] = 0
 
-            self.robot.reset_to_q(save_q[:-12])
+            self.robot.reset_to_q(save_q[:-12], needCorrection=False)
 
             cyInit = save_q[-12:-9]
             cyOri = save_q[-9:-6]

@@ -105,22 +105,22 @@ while not finish:
 
     reward_total += reward
 
-    if not done and timer >= 270 and reward_total > 7000:   # TODO
+    if not done and timer >= 380 and reward_total > 12000:   # TODO
         save_q = []
 
-        pos = p.getLinkState(robot.robotId, robot.endEffectorId)[0]
-        orn = p.getLinkState(robot.robotId, robot.endEffectorId)[1]
-        print(pos, orn)
+        # pos = p.getLinkState(robot.robotId, robot.endEffectorId)[0]
+        # orn = p.getLinkState(robot.robotId, robot.endEffectorId)[1]
+        # print(pos, orn)
+        #
+        # localpos = p.getLinkState(robot.robotId, robot.endEffectorId)[2]
+        # localorn = p.getLinkState(robot.robotId, robot.endEffectorId)[3]
+        # print(localpos, localorn)
+        #
+        pos, orn = p.getBasePositionAndOrientation(robot.handId)
+        # x,r = p.multiplyTransforms(pos, orn, localpos, localorn)
+        # print(x,r)
 
-        localpos = p.getLinkState(robot.robotId, robot.endEffectorId)[2]
-        localorn = p.getLinkState(robot.robotId, robot.endEffectorId)[3]
-        print(localpos, localorn)
-
-        pos, orn = robot.get_palm_pos_orn()
-        x,r = p.multiplyTransforms(pos, orn, localpos, localorn)
-        print(x,r)
-
-        linVel, angVel = robot.get_palm_vel()
+        linVel, angVel = p.getBaseVelocity(robot.handId)
         save_q.extend(pos)
         save_q.extend(p.getEulerFromQuaternion(orn))
         save_q.extend(linVel)
@@ -139,7 +139,9 @@ while not finish:
 
         save_qs.append(save_q)
 
-        if len(save_qs) > 100000:
+        print(len(save_qs))
+
+        if len(save_qs) > 60000:
             finish = True
 
     if done:
@@ -149,16 +151,16 @@ while not finish:
 
     masks.fill_(0.0 if done else 1.0)
 
-    if args.env_name.find('Bullet') > -1:
-        if torsoId > -1:
-            distance = 5
-            yaw = 0
-            humanPos, humanOrn = p.getBasePositionAndOrientation(torsoId)
-            p.resetDebugVisualizerCamera(distance, yaw, -20, humanPos)
+    # if args.env_name.find('Bullet') > -1:
+    #     if torsoId > -1:
+    #         distance = 5
+    #         yaw = 0
+    #         humanPos, humanOrn = p.getBasePositionAndOrientation(torsoId)
+    #         p.resetDebugVisualizerCamera(distance, yaw, -20, humanPos)
 
     # if render_func is not None:
     #     render_func('human')
     # p.getCameraImage()
 
-with open('final_states.pickle', 'wb') as handle:
+with open('final_states_1209.pickle', 'wb') as handle:
     pickle.dump(save_qs, handle, protocol=pickle.HIGHEST_PROTOCOL)
