@@ -16,7 +16,7 @@ class ShadowHandGraspEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=False,
+                 renders=True,
                  collect_final_state=False):
         self.renders = renders
         self.collect_final_state = collect_final_state
@@ -36,7 +36,7 @@ class ShadowHandGraspEnv(gym.Env):
 
         self.cylinderInitPos = [0, 0, 0.101]    # initOri is identity      # 0.2/2
 
-        self.robotInitBasePos = np.array(np.array([-0.17, 0.07, 0.13]))  # TODO: note, diff for different model
+        self.robotInitBasePos = np.array([-0.18, 0.105, 0.13])  # palm aux mod
 
         self.sim_setup()
 
@@ -64,8 +64,8 @@ class ShadowHandGraspEnv(gym.Env):
         if self.np_random is None:
             self.seed(0)    # used once temporarily, will be overwritten outside by env
 
-        cyInit = np.array(self.cylinderInitPos) + np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
-        # cyInit = np.array(self.cylinderInitPos)
+        # cyInit = np.array(self.cylinderInitPos) + np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
+        cyInit = np.array(self.cylinderInitPos)
         self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'), cyInit, useFixedBase=0)
         self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'), [0, 0, 0], useFixedBase=1)
         p.changeDynamics(self.cylinderId, -1, lateralFriction=3.0)
@@ -93,6 +93,16 @@ class ShadowHandGraspEnv(gym.Env):
 
         for _ in range(self.frameSkip):
             p.stepSimulation()
+
+        act_palm_com, _ = p.getBasePositionAndOrientation(self.robot.handId)
+
+        print(p.getConstraintState(self.robot.cid))
+        print(p.getJointState(self.robot.handId, 0)[2])
+        print("root mass", p.getDynamicsInfo(self.robot.handId, -1)[0])
+        print("root it", p.getDynamicsInfo(self.robot.handId, -1)[2])
+        # print("after ts tar", np.array(self.robot.tarBasePos))
+        # print("after ts act", np.array(act_palm_com))
+        # input("press enter")
 
         # rewards is height of target object
         clPos, _ = p.getBasePositionAndOrientation(self.cylinderId)
@@ -157,7 +167,7 @@ class ShadowHandGraspEnv(gym.Env):
         # self.observation.extend(clVels[1])
 
         curContact = []
-        for i in range(-1, p.getNumJoints(self.robot.handId)):
+        for i in range(0, p.getNumJoints(self.robot.handId)):   # ex palm aux
             cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
             if len(cps) > 0:
                 curContact.extend([1.0])
@@ -169,6 +179,9 @@ class ShadowHandGraspEnv(gym.Env):
         else:   # first step
             self.observation.extend(curContact)
         self.lastContact = curContact.copy()
+
+        print(self.observation)
+        input("press enetr")
 
         # print("obv", self.observation)
         # print("max", np.max(np.abs(np.array(self.observation))))
@@ -184,22 +197,17 @@ class ShadowHandGraspEnv(gym.Env):
 
     def reset(self):
         self.sim_setup()
-        #
-        # cyInit = np.array(self.cylinderInitPos) + np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
-        # # cyInit = np.array(self.cylinderInitPos)
-        # p.resetBasePositionAndOrientation(self.cylinderId,
-        #                                   cyInit,
-        #                                   p.getQuaternionFromEuler([0, 0, 0]))
-        # p.changeDynamics(self.cylinderId, -1, lateralFriction=3.0)
-        # p.changeDynamics(self.floorId, -1, lateralFriction=3.0)
-        # p.setCollisionFilterPair(self.cylinderId, self.floorId, -1, -1, enableCollision=1)
-        # for i in range(-1, p.getNumJoints(self.robot.handId)):
-        #     p.setCollisionFilterPair(self.floorId, self.robot.handId, -1, i, enableCollision=1)
-        # p.stepSimulation()
+
         self.timer = 0
         self.lastContact = None
 
         self.observation = self.getExtendedObservation()
+        #
+        # for j in range(-1, p.getNumJoints(self.robot.handId)):
+        #     if j > 0 and j not in self.robot.activeDofs and j not in self.robot.lockDofs:   # i in [4,9,14,20,26]
+        #         tipPos = p.getLinkState(self.robot.handId, j)[0]
+        #         print(tipPos)
+
         # print("post-reset", self.observation)
         return np.array(self.observation)
 
