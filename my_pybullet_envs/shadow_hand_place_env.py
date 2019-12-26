@@ -44,7 +44,6 @@ class ShadowHandPlaceEnv(gym.Env):
         self.np_random = None
         self.robot = None
 
-        # TODO: now DIFFERENT from grasping
         self.action_scale = np.array([0.004] * 3 + [0.004] * 3 + [0.01] * 17)  # shadow hand is 22-5=17dof
 
         self.frameSkip = 1
@@ -68,9 +67,23 @@ class ShadowHandPlaceEnv(gym.Env):
         with open('/home/yifengj/pytorch-rl-bullet/final_states_1209.pickle', 'rb') as handle:   # TODO hardcoded
             self.save_qs = pickle.load(handle)
         assert self.save_qs is not None
+        self.x_off, self.y_off = self.calcMeanOffset()
 
     def __del__(self):
         p.disconnect()
+
+    def calcMeanOffset(self):
+        sum_x = 0
+        sum_y = 0
+
+        for save_q in self.save_qs:
+            sum_x += (save_q[0] - save_q[-12])
+            sum_y += (save_q[1] - save_q[-11])
+
+        sum_x /= len(self.save_qs)
+        sum_y /= len(self.save_qs)
+
+        return sum_x, sum_y
 
     def sim_setup(self):
         p.resetSimulation()
@@ -83,7 +96,7 @@ class ShadowHandPlaceEnv(gym.Env):
         self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'), useFixedBase=0)     # 0.2/2
         # self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'), [0, 0, 0], useFixedBase=1)
         self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/bottom_object.urdf'), [0.0, 0, -0.05],
-                             useFixedBase=1)        # TODO: add noise later
+                                  p.getQuaternionFromEuler([0, 0, 0]), useFixedBase=1)        # TODO: add noise later
         p.changeDynamics(self.cylinderId, -1, lateralFriction=1.0)      # TODO: 3.0/1.0
         p.changeDynamics(self.floorId, -1, lateralFriction=1.0)
         self.robot = ShadowHand(base_ll=np.array([-0.1, -0.1, -0.2]), base_ul=np.array([0.1, 0.1, 0.1]))
@@ -129,7 +142,7 @@ class ShadowHandPlaceEnv(gym.Env):
         # print(total_nf, meaningful_c)
 
         if rotMetric > 0.8 and xyzMetric > 0.8 and velMetric > 0.8 and meaningful_c:     # close to placing
-            for i in range(-1, p.getNumJoints(self.robot.handId)):
+            for i in range(0, p.getNumJoints(self.robot.handId)):   # ex palm aux
                 cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
                 if len(cps) == 0:
                     reward += 0.5   # the fewer links in contact, the better
@@ -192,7 +205,7 @@ class ShadowHandPlaceEnv(gym.Env):
         # TODO: delete these for now (finger contact not seems important for releasing)
         # TODO: infact, finger torques might be more useful
         curContact = []
-        for i in range(-1, p.getNumJoints(self.robot.handId)):
+        for i in range(0, p.getNumJoints(self.robot.handId)):       # ex palm aux
             cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
             if len(cps) > 0:
                 curContact.extend([1.0])
@@ -218,7 +231,7 @@ class ShadowHandPlaceEnv(gym.Env):
         return [seed]
 
     def reset(self):
-        self.sim_setup()    # TODO: maybe we should do this
+        self.sim_setup()
 
         initDone = False
 
@@ -227,11 +240,19 @@ class ShadowHandPlaceEnv(gym.Env):
             save_q = self.save_qs[ran_ind]
 
             # TODO: for now make problem simpler by recentering wrist&cylinder pose
-            save_q[0] -= save_q[-12]
-            save_q[1] -= save_q[-11]
-            save_q[-12] = 0
-            save_q[-11] = 0
+            save_q[-12] -= (save_q[0] - self.x_off)
+            save_q[-11] -= (save_q[1] - self.y_off)
+            save_q[0] = self.x_off
+            save_q[1] = self.y_off
 
+            save_q[-10] -= 0.04     # TODO: 0.04
+            save_q[2] -= 0.04
+            # save_q[0] -= save_q[-12]
+            # save_q[1] -= save_q[-11]
+            # save_q[-12] = 0
+            # save_q[-11] = 0
+
+            print(save_q[3:6])
             self.robot.reset_to_q(save_q[:-12], needCorrection=False)
 
             cyInit = save_q[-12:-9]

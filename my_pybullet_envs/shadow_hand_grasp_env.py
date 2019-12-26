@@ -64,8 +64,8 @@ class ShadowHandGraspEnv(gym.Env):
         if self.np_random is None:
             self.seed(0)    # used once temporarily, will be overwritten outside by env
 
-        # cyInit = np.array(self.cylinderInitPos) + np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
-        cyInit = np.array(self.cylinderInitPos)
+        cyInit = np.array(self.cylinderInitPos) + np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
+        # cyInit = np.array(self.cylinderInitPos)
         self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'), cyInit, useFixedBase=0)
         self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'), [0, 0, 0], useFixedBase=1)
         p.changeDynamics(self.cylinderId, -1, lateralFriction=3.0)

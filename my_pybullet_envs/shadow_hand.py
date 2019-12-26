@@ -139,7 +139,7 @@ class ShadowHand:
             self.tarBaseEuler = np.copy(initEuler)
             self.tarFingerPos = np.copy(initPos)
 
-    def reset_to_q(self, save_robot_q, needCorrection=True):
+    def reset_to_q(self, save_robot_q, needCorrection=False):
         # assume a certain ordering
         initBasePos = save_robot_q[:3]
         initEuler = save_robot_q[3:6]

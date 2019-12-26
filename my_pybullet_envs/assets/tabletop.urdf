@@ -3,16 +3,16 @@
   <link name="baseLink">
     <visual>
       <geometry>
-        <box size="0.8 1.2 0.1"/>
+        <box size="0.6 1.2 0.1"/>
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0.3 0 -0.05"/>
       <material name="black"/>
     </visual>
     <collision>
       <geometry>
-        <box size="0.8 1.2 0.1"/>
+        <box size="0.6 1.2 0.1"/>
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0.3 0 -0.05"/>
       <contact_coefficients mu="3.0" />
     </collision>
     <inertial>
