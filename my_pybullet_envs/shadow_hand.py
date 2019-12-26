@@ -29,6 +29,8 @@ class ShadowHand:
         self.handId = p.loadURDF(os.path.join(currentdir, "assets/shadow_hand_arm/sr_description/robots/shadowhand_motor.urdf"),
                                  list(self.baseInitPos), p.getQuaternionFromEuler(list(self.baseInitEuler)),
                                  flags=p.URDF_USE_SELF_COLLISION)
+        # self.handId = p.loadURDF(os.path.join(currentdir, "assets/shadow_hand_arm/sr_description/robots/shadowhand_motor.urdf"),
+        #                          list(self.baseInitPos), p.getQuaternionFromEuler(list(self.baseInitEuler)))
         # nDof = p.getNumJoints(self.handId)
         # for i in range(p.getNumJoints(self.handId)):
         #     print(p.getJointInfo(self.handId, i)[0:3], p.getJointInfo(self.handId, i)[8], p.getJointInfo(self.handId, i)[9])
@@ -65,8 +67,9 @@ class ShadowHand:
             mass = mass * 10.
             total_m += mass
             p.changeDynamics(self.handId, i, mass=mass)
+            # p.setJointMotorControl2(self.handId, i, p.VELOCITY_CONTROL, force=0.000)
 
-        print("total hand Mass:", total_m)
+        # print("total hand Mass:", total_m)
         # # https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/examples/constraint.py#L11
         self.cid = p.createConstraint(self.handId, -1, -1, -1, p.JOINT_FIXED, [0, 0, 0], [0, 0, 0],
                                       childFramePosition=list(self.baseInitPos),
@@ -83,7 +86,7 @@ class ShadowHand:
 
         self.np_random = None   # seeding inited outside in Env
 
-        p.enableJointForceTorqueSensor(self.handId, 0, True)
+        # p.enableJointForceTorqueSensor(self.handId, 0, True)
 
         # print(self.tarFingerPos)
         # print(self.ll)
@@ -96,20 +99,20 @@ class ShadowHand:
 
         goodInit = False
         while not goodInit:
-            initBasePos = self.baseInitPos
-            initEuler = self.baseInitEuler
-            # initBasePos = np.array(self.baseInitPos)
-            # initBasePos[0] += self.np_random.uniform(low=-0.02, high=0.02)
-            # initBasePos[1] += self.np_random.uniform(low=-0.02, high=0.02)
-            # initBasePos[2] += self.np_random.uniform(low=-0.02, high=0.02)
-            # initEuler = np.array(self.baseInitEuler) + self.np_random.uniform(low=-0.05, high=0.05, size=3)
+            # initBasePos = self.baseInitPos
+            # initEuler = self.baseInitEuler
+            initBasePos = np.array(self.baseInitPos)
+            initBasePos[0] += self.np_random.uniform(low=-0.02, high=0.02)
+            initBasePos[1] += self.np_random.uniform(low=-0.02, high=0.02)
+            initBasePos[2] += self.np_random.uniform(low=-0.02, high=0.02)
+            initEuler = np.array(self.baseInitEuler) + self.np_random.uniform(low=-0.05, high=0.05, size=3)
             initQuat = p.getQuaternionFromEuler(list(initEuler))
             #
             # print(p.getEulerFromQuaternion(initQuat))
 
             # init self.np_random outside, in Env
-            initPos = self.initPos
-            # initPos = self.initPos + self.np_random.uniform(low=-0.05, high=0.05, size=len(self.initPos))
+            # initPos = self.initPos
+            initPos = self.initPos + self.np_random.uniform(low=-0.05, high=0.05, size=len(self.initPos))
 
             p.removeConstraint(self.cid)
             p.resetBasePositionAndOrientation(self.handId, initBasePos, initQuat)
@@ -123,10 +126,6 @@ class ShadowHand:
                                           childFramePosition=initBasePos,
                                           childFrameOrientation=initQuat)
 
-            # print(p.getNumJoints(self.handId))
-            # for i in range(p.getNumJoints(self.handId)):
-            #     print(p.getJointState(self.handId, i)[0])
-
             p.stepSimulation()  # TODO
 
             cps = p.getContactPoints(bodyA=self.handId)
@@ -136,11 +135,6 @@ class ShadowHand:
             # print(cps[0][6])
             if len(cps) == 0: goodInit = True   # TODO: init hand last and make sure it does not colllide with env
 
-            # print("aaa")
-            # basePos, baseQuat = p.getBasePositionAndOrientation(self.handId)
-            # print(basePos)
-            # print(p.getEulerFromQuaternion(baseQuat))
-            # print(p.getEulerFromQuaternion(p.getQuaternionFromEuler([1.8, -1.57, 0])))
             self.tarBasePos = np.copy(initBasePos)
             self.tarBaseEuler = np.copy(initEuler)
             self.tarFingerPos = np.copy(initPos)
@@ -202,9 +196,9 @@ class ShadowHand:
         basePos, baseQuat = p.getBasePositionAndOrientation(self.handId)
         obs.extend(basePos)
         obs.extend(baseQuat)
-
-        print("pos", basePos)
-        print("euler", p.getEulerFromQuaternion(baseQuat))
+        #
+        # print("pos", basePos)
+        # print("euler", p.getEulerFromQuaternion(baseQuat))
 
         obs.extend(list(self.get_raw_state_fingers(includeVel=False)))
         # print(self.get_raw_state_fingers())
@@ -214,12 +208,11 @@ class ShadowHand:
         baseVels = p.getBaseVelocity(self.handId)
         obs.extend(baseVels[0])
         obs.extend(baseVels[1])
-
-        print("linvel", baseVels[0])
-        print("angvel", baseVels[1])
+        #
+        # print("linvel", baseVels[0])
+        # print("angvel", baseVels[1])
 
         obs.extend(list(self.tarFingerPos))
-        # print(self.tarFingerPos)
         obs.extend(list(self.tarBasePos))
         tarQuat = p.getQuaternionFromEuler(list(self.tarBaseEuler))
         obs.extend(tarQuat)
@@ -268,7 +261,32 @@ class ShadowHand:
         # print(self.tarBasePos)
         # print(p.getBasePositionAndOrientation(self.handId))
         tarQuat = p.getQuaternionFromEuler(list(self.tarBaseEuler))
+
         p.changeConstraint(self.cid, list(self.tarBasePos), tarQuat, maxForce=self.maxForce * 10.0)   # TODO: wrist force larger
+
+        # # tmp, apply ext forces here
+        # p.removeConstraint(self.cid)
+        #
+        # # force = [1305.2429943942445, 814.8305070256084, -88.75239210661124]
+        # # tor = [111.09001369756704, -5.01105164325144, -8.617024915673836]
+        # # base_pos, base_quat = p.getBasePositionAndOrientation(self.handId)
+        # # inv_base_pos, inv_base_quat = p.invertTransform(base_pos, base_quat)
+        # # l_force = p.multiplyTransforms([0,0,0], inv_base_quat, force, [0,0,0,1])
+        # # print("l_force", l_force)
+        #
+        # # tor = [111.09001369756704, -5.01105164325144, -8.617024915673836]
+        # # root_pos, _ = p.getBasePositionAndOrientation(self.handId)
+        # # p.applyExternalForce(self.handId, -1, force, root_pos, flags=p.WORLD_FRAME)
+        # # p.applyExternalTorque(self.handId, -1, tor, flags=p.WORLD_FRAME)
+        #
+        # force = [-87.69514789251878, -1456.2983454130156, -496.959669106391]
+        # # force = [10.106244179329314, -939.3308505536016, -297.4481669327156]
+        # # tor = [60.119571606556605, -1.9417214666191618, -8.61702491336549]
+        # tor = [111.09001369756704, -5.01105164325144, -8.617024915673836]
+        # # tor = [40.38932609461888, -2.2311416025337847, -4.656959654796246]
+        # p.applyExternalForce(self.handId, -1, force, [0,0,0], flags=p.LINK_FRAME)
+        # p.applyExternalTorque(self.handId, -1, tor, flags=p.WORLD_FRAME)
+        # print("aaaaaaaaa")
 
         self.tarFingerPos += a[6:]      # length should match
         self.tarFingerPos = np.clip(self.tarFingerPos, self.ll, self.ul)
@@ -307,7 +325,7 @@ if __name__ == "__main__":
         for t in range(800):
             # a.apply_action(np.random.uniform(low=-0.005, high=0.005, size=6+22)+np.array([0.0025]*6+[0.01]*22))
             a.apply_action(
-                np.random.uniform(low=-0.001, high=0.001, size=6 + 17) + np.array([-0.002] * 3 + [-0.002]*3 + [0.01] * 17))
+                np.random.uniform(low=-0.001, high=0.001, size=6 + 17) + np.array([0.002] * 3 + [0.002]*3 + [-0.01] * 17))
             # a.apply_action(np.array([0.0]*6+[0.01]*22))
             # a.apply_action(np.array([0.005] * (22+6)))
 

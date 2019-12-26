@@ -16,7 +16,7 @@ class ShadowHandGraspEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=True,
+                 renders=False,
                  collect_final_state=False):
         self.renders = renders
         self.collect_final_state = collect_final_state
@@ -94,12 +94,11 @@ class ShadowHandGraspEnv(gym.Env):
         for _ in range(self.frameSkip):
             p.stepSimulation()
 
-        act_palm_com, _ = p.getBasePositionAndOrientation(self.robot.handId)
-
-        print(p.getConstraintState(self.robot.cid))
-        print(p.getJointState(self.robot.handId, 0)[2])
-        print("root mass", p.getDynamicsInfo(self.robot.handId, -1)[0])
-        print("root it", p.getDynamicsInfo(self.robot.handId, -1)[2])
+        # act_palm_com, _ = p.getBasePositionAndOrientation(self.robot.handId)
+        # print(p.getConstraintState(self.robot.cid))
+        # print(p.getJointState(self.robot.handId, 0)[2])
+        # print("root mass", p.getDynamicsInfo(self.robot.handId, -1)[0])
+        # print("root it", p.getDynamicsInfo(self.robot.handId, -1)[2])
         # print("after ts tar", np.array(self.robot.tarBasePos))
         # print("after ts act", np.array(act_palm_com))
         # input("press enter")
@@ -180,8 +179,8 @@ class ShadowHandGraspEnv(gym.Env):
             self.observation.extend(curContact)
         self.lastContact = curContact.copy()
 
-        print(self.observation)
-        input("press enetr")
+        # print(self.observation)
+        # input("press enetr")
 
         # print("obv", self.observation)
         # print("max", np.max(np.abs(np.array(self.observation))))
