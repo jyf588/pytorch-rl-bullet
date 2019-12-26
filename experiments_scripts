@@ -191,6 +191,14 @@ python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --l
 # delete cylinder info and add haptics 1/0
 python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2400 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_place_1208_5 --seed 4015
 python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2400 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_place_1208_6 --seed 4016
+12/10 12:29
+# statistical mean wrist pose, slightly lower z wrist
+python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2400 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_place_1208_7 --seed 4017
+python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2400 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_place_1208_8 --seed 4018
+12/10 13:10
+# make bottom object smaller (9cm-->7cm)
+python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2400 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_place_1208_9 --seed 4019
+python main.py --env-name "ShadowHandPlaceBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2400 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_place_1208_10 --seed 4020
 
 12/26 13:00
 # retrain grasping with palm aux
