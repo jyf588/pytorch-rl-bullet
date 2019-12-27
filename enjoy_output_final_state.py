@@ -105,7 +105,9 @@ while not finish:
 
     reward_total += reward
 
-    if not done and timer >= 380 and reward_total > 12000:   # TODO
+    if not done and timer >= 380 and reward_total > 18000:   # TODO
+        # if timer == 380:
+        #     input("press enter")
         save_q = []
 
         # pos = p.getLinkState(robot.robotId, robot.endEffectorId)[0]
@@ -162,5 +164,5 @@ while not finish:
     #     render_func('human')
     # p.getCameraImage()
 
-with open('final_states_1209.pickle', 'wb') as handle:
+with open('final_states_1226_from_fixed.pickle', 'wb') as handle:
     pickle.dump(save_qs, handle, protocol=pickle.HIGHEST_PROTOCOL)

@@ -21,6 +21,7 @@ class ShadowHandGraspEnv(gym.Env):
         self.renders = renders
         self.collect_final_state = collect_final_state
         self._timeStep = 1. / 240.
+        self.timer = 0
         if self.renders:
             p.connect(p.GUI)
         else:
@@ -51,7 +52,6 @@ class ShadowHandGraspEnv(gym.Env):
         self.observation_space = gym.spaces.Box(low=-np.inf*obs_dummy, high=np.inf*obs_dummy)
 
         self.viewer = None
-        self.timer = 0
 
     def __del__(self):
         p.disconnect()
@@ -88,7 +88,10 @@ class ShadowHandGraspEnv(gym.Env):
             if self.collect_final_state and self.timer > 300:
                 # testing
                 self.act[:6] = np.array([0.] * 6)
-                self.act[2] = np.array([0.6])
+                if self.timer < 375:
+                    self.act[2] = np.array([0.6])
+                else:
+                    self.act[:6] = self.np_random.uniform(low=-0.2, high=0.2, size=6)
             self.robot.apply_action(self.act * self.action_scale)
 
         for _ in range(self.frameSkip):
@@ -164,6 +167,11 @@ class ShadowHandGraspEnv(gym.Env):
         # clVels = p.getBaseVelocity(self.cylinderId)
         # self.observation.extend(clVels[0])
         # self.observation.extend(clVels[1])
+        #
+        # if self.collect_final_state and self.timer > 300:
+        #     # testing       # TODO
+        #     self.observation[2] = 0.13
+        #     self.observation[-5] -= (self.observation[2] - 0.13)
 
         curContact = []
         for i in range(0, p.getNumJoints(self.robot.handId)):   # ex palm aux

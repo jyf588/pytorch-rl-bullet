@@ -14,6 +14,9 @@
 # should not max out wrist force
 # wrist force should be a informative measure, if hitting below object, then should stop.
 
+# TODO: duiring usage, set wrist base pose so that mean cylinder pose is at [x,y,0.12(?)]
+# TODO: should also reset wrist orientation. Need a function calculating average T o->w (obj as origin)
+
 from .shadow_hand import ShadowHand
 
 import pybullet as p
@@ -64,10 +67,10 @@ class ShadowHandPlaceEnv(gym.Env):
         self.timer = 0
 
         self.save_qs = None
-        with open('/home/yifengj/pytorch-rl-bullet/final_states_1209.pickle', 'rb') as handle:   # TODO hardcoded
+        with open(os.path.join(currentdir, 'assets/place_init_dist/final_states_1226_from_fixed.pickle'), 'rb') as handle:   # TODO
             self.save_qs = pickle.load(handle)
         assert self.save_qs is not None
-        self.x_off, self.y_off = self.calcMeanOffset()
+        self.x_off, self.y_off, self.z_off = self.calcMeanOffset()
 
     def __del__(self):
         p.disconnect()
@@ -75,15 +78,18 @@ class ShadowHandPlaceEnv(gym.Env):
     def calcMeanOffset(self):
         sum_x = 0
         sum_y = 0
+        sum_z = 0
 
         for save_q in self.save_qs:
             sum_x += (save_q[0] - save_q[-12])
             sum_y += (save_q[1] - save_q[-11])
+            sum_z += (save_q[2] - save_q[-10])
 
         sum_x /= len(self.save_qs)
         sum_y /= len(self.save_qs)
+        sum_z /= len(self.save_qs)
 
-        return sum_x, sum_y
+        return sum_x, sum_y, sum_z
 
     def sim_setup(self):
         p.resetSimulation()
@@ -97,8 +103,8 @@ class ShadowHandPlaceEnv(gym.Env):
         # self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'), [0, 0, 0], useFixedBase=1)
         self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/bottom_object.urdf'), [0.0, 0, -0.05],
                                   p.getQuaternionFromEuler([0, 0, 0]), useFixedBase=1)        # TODO: add noise later
-        p.changeDynamics(self.cylinderId, -1, lateralFriction=1.0)      # TODO: 3.0/1.0
-        p.changeDynamics(self.floorId, -1, lateralFriction=1.0)
+        p.changeDynamics(self.cylinderId, -1, lateralFriction=3.0)
+        p.changeDynamics(self.floorId, -1, lateralFriction=3.0)
         self.robot = ShadowHand(base_ll=np.array([-0.1, -0.1, -0.2]), base_ul=np.array([0.1, 0.1, 0.1]))
 
         if self.np_random is not None:
@@ -239,14 +245,16 @@ class ShadowHandPlaceEnv(gym.Env):
             ran_ind = int(self.np_random.uniform(low=0, high=len(self.save_qs) - 0.1))
             save_q = self.save_qs[ran_ind]
 
-            # TODO: for now make problem simpler by recentering wrist&cylinder pose
             save_q[-12] -= (save_q[0] - self.x_off)
             save_q[-11] -= (save_q[1] - self.y_off)
+            save_q[-10] -= (save_q[2] - self.z_off - 0.12)
+
             save_q[0] = self.x_off
             save_q[1] = self.y_off
+            save_q[2] = self.z_off + 0.12       # TODO
 
-            save_q[-10] -= 0.04     # TODO: 0.04
-            save_q[2] -= 0.04
+            # save_q[-10] -= 0.04
+            # save_q[2] -= 0.04
             # save_q[0] -= save_q[-12]
             # save_q[1] -= save_q[-11]
             # save_q[-12] = 0
