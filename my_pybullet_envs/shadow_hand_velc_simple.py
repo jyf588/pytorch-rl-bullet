@@ -36,8 +36,8 @@ class ShadowHandVel:
                        useFixedBase=1)
 
         # nDof = p.getNumJoints(self.handId)
-        for i in range(p.getNumJoints(self.handId)):
-            print(p.getJointInfo(self.handId, i)[0:3], p.getJointInfo(self.handId, i)[8], p.getJointInfo(self.handId, i)[9])
+        # for i in range(p.getNumJoints(self.handId)):
+        #     print(p.getJointInfo(self.handId, i)[0:3], p.getJointInfo(self.handId, i)[8], p.getJointInfo(self.handId, i)[9])
 
         # input("press enter 0")
         # (0, b'world_x', 1) -0.3 0.3
@@ -80,7 +80,7 @@ class ShadowHandVel:
             # print(dyn[0])
             # p.setJointMotorControl2(self.handId, i, p.VELOCITY_CONTROL, force=0.000)  # turn off default control
 
-        print("total hand Mass:", total_m)
+        # print("total hand Mass:", total_m)
 
         self.maxForce = 1000.
 
@@ -182,6 +182,14 @@ class ShadowHandVel:
         joints_dq = np.hstack(joints_dq.flatten())
         return joints_q, joints_dq
 
+    def quaternion_multiply(self, quaternion1, quaternion0):
+        x0, y0, z0, w0 = quaternion0
+        x1, y1, z1, w1 = quaternion1
+        return np.array([x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0,
+                         -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
+                         x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0,
+                         -x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0], dtype=np.float64)
+
     def get_palm_pos_orn(self):
         newPos = p.getLinkState(self.handId, self.endEffectorId, computeForwardKinematics=1)[0]
         newOrn = p.getLinkState(self.handId, self.endEffectorId, computeForwardKinematics=1)[1]
@@ -223,7 +231,8 @@ class ShadowHandVel:
         # d_quat / dt = 0.5 * w * q, make a bit easier for policy to understand w
         w_tar = self.act[3:6]
         w_tar = list(w_tar) + [0]
-        _, d_quat = p.multiplyTransforms([0,0,0], w_tar, [0,0,0], baseQuat)
+        # _, d_quat = p.multiplyTransforms([0,0,0], w_tar, [0,0,0], baseQuat)
+        d_quat = self.quaternion_multiply(w_tar, baseQuat)
         obs.extend(list(d_quat))
 
         if self.include_redun_body_pos:

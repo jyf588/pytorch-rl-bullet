@@ -16,7 +16,7 @@ class ShadowHandGraspEnvVelC(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=True,
+                 renders=False,
                  collect_final_state=False,
                  init_noise=True,
                  act_noise=True):
@@ -117,14 +117,14 @@ class ShadowHandGraspEnvVelC(gym.Env):
         if dist > 1: dist = 1
         if dist < 0.15: dist = 0.15
 
-        reward = 3.0
+        reward = 6.0
         reward += -dist * 3.0
 
         for i in range(self.robot.endEffectorId+1, p.getNumJoints(self.robot.handId)):
             cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
             if len(cps) > 0:
                 # print(len(cps))
-                reward += 3.0   # the more links in contact, the better
+                reward += 5.0   # the more links in contact, the better
 
             # if i > 0 and i not in self.robot.activeDofs and i not in self.robot.lockDofs:   # i in [4,9,14,20,26]
             #     tipPos = p.getLinkState(self.robot.handId, i)[0]
