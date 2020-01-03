@@ -15,7 +15,7 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 
 class ShadowHandVel:
     def __init__(self,
-                 base_init_pos=np.array([-0.18, 0.105, 0.13]),      # 0.035 offset from old hand
+                 base_init_pos=np.array([-0.22, 0.08, 0.13]),      # 0.035 offset from old hand
                  init_fin_pos=np.array([0.4, 0.4, 0.4]*4 + [0.0, 1.0, 0.1, 0.5, 0.2]),    # last was 0.0
                  init_noise=True,
                  act_noise=True,

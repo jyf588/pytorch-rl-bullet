@@ -7,6 +7,7 @@ from .shadow_hand_grasp_env import ShadowHandGraspEnv
 from .inmoov_shadow_hand_grasp_env import InmoovShadowHandGraspEnv
 from .inmoov_shadow_hand_grasp_env_tmp import InmoovShadowHandGraspEnvTmp
 from .shadow_hand_place_env import ShadowHandPlaceEnv
+from .shadow_hand_grasp_env_velc import ShadowHandGraspEnvVelC
 # from .inmoov_shadow_hand_demo_fixed_grasp_env import InmoovShadowHandDemoFixedGraspEnv
 
 
