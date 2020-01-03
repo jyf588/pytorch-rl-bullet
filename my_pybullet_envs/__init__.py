@@ -7,7 +7,7 @@ from .shadow_hand_grasp_env import ShadowHandGraspEnv
 from .inmoov_shadow_hand_grasp_env import InmoovShadowHandGraspEnv
 from .inmoov_shadow_hand_grasp_env_tmp import InmoovShadowHandGraspEnvTmp
 from .shadow_hand_place_env import ShadowHandPlaceEnv
-from .inmoov_shadow_hand_demo_fixed_grasp_env import InmoovShadowHandDemoFixedGraspEnv
+# from .inmoov_shadow_hand_demo_fixed_grasp_env import InmoovShadowHandDemoFixedGraspEnv
 
 
 def register(id, *args, **kvargs):
