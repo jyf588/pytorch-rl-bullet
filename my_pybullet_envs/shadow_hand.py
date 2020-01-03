@@ -182,13 +182,20 @@ class ShadowHand:
         self.tarFingerPos = np.copy(initActivePos)
 
     def get_raw_state_fingers(self, includeVel=True):
-        dofs = self.activeDofs + self.lockDofs
+        # dofs = self.activeDofs + self.lockDofs
+        dofs = self.activeDofs
         joints_state = p.getJointStates(self.handId, dofs)
         if includeVel:
             joints_state = np.array(joints_state)[:,[0,1]]
         else:
             joints_state = np.array(joints_state)[:, [0]]
         return np.hstack(joints_state.flatten())
+
+    def get_fingers_last_torque(self):
+        joints_state = p.getJointStates(self.handId, self.activeDofs+self.lockDofs)
+        joints_taus = np.array(joints_state)[:, [3]]
+        joints_taus = np.hstack(joints_taus.flatten())
+        return joints_taus
 
     def get_robot_observation(self):
         obs = []
@@ -205,9 +212,9 @@ class ShadowHand:
 
         # TODO: no finger vel
 
-        baseVels = p.getBaseVelocity(self.handId)
-        obs.extend(baseVels[0])
-        obs.extend(baseVels[1])
+        # baseVels = p.getBaseVelocity(self.handId)
+        # obs.extend(baseVels[0])
+        # obs.extend(baseVels[1])
         #
         # print("linvel", baseVels[0])
         # print("angvel", baseVels[1])
@@ -324,15 +331,20 @@ if __name__ == "__main__":
         print("init", a.get_robot_observation())
         for t in range(800):
             # a.apply_action(np.random.uniform(low=-0.005, high=0.005, size=6+22)+np.array([0.0025]*6+[0.01]*22))
-            a.apply_action(
-                np.random.uniform(low=-0.001, high=0.001, size=6 + 17) + np.array([0.002] * 3 + [0.002]*3 + [-0.01] * 17))
-            # a.apply_action(np.array([0.0]*6+[0.01]*22))
+            # a.apply_action(
+            #     np.random.uniform(low=-0.001, high=0.001, size=6 + 17) + np.array([0.002] * 3 + [0.002]*3 + [-0.01] * 17))
+            a.apply_action(np.array([0.0]*6+[-0.01]*17))
             # a.apply_action(np.array([0.005] * (22+6)))
 
             p.stepSimulation()
             # print(p.getConstraintState(a.cid)[:3])
             act_palm_com, _ = p.getBasePositionAndOrientation(a.handId)
             print("after ts", np.array(a.tarBasePos) - np.array(act_palm_com))
+
+            joints_state = p.getJointStates(a.handId, a.activeDofs)
+            joints_state = np.array(joints_state)[:, [0]]
+            print(np.hstack(joints_state.flatten()))
+
             # a.apply_action(np.array([0.0] * 23))  # equivalent
             # p.stepSimulation()
             # print(p.getConstraintState(a.cid)[:3])

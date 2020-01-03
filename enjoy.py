@@ -45,7 +45,7 @@ env = make_vec_envs(
     1,
     None,
     None,
-    device='cuda',
+    device='cpu',
     allow_early_resets=False)
 
 # # Get a render function
@@ -55,7 +55,13 @@ env = make_vec_envs(
 
 # We need to use the same statistics for normalization as used in training
 actor_critic, ob_rms = \
-            torch.load(os.path.join(args.load_dir, args.env_name + ".pt"))
+            torch.load(os.path.join(args.load_dir, args.env_name + ".pt"), map_location='cpu')
+if ob_rms:
+    print(ob_rms.mean)
+    print(ob_rms.var)
+    print(ob_rms.count)
+    input("ob_rms")
+
 
 vec_norm = get_vec_normalize(env)
 if vec_norm is not None:
