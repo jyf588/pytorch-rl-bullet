@@ -124,7 +124,7 @@ class ShadowHandGraspEnvVelC(gym.Env):
             cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
             if len(cps) > 0:
                 # print(len(cps))
-                reward += 5.0   # the more links in contact, the better
+                reward += 3.0   # the more links in contact, the better
 
             # if i > 0 and i not in self.robot.activeDofs and i not in self.robot.lockDofs:   # i in [4,9,14,20,26]
             #     tipPos = p.getLinkState(self.robot.handId, i)[0]
@@ -136,6 +136,10 @@ class ShadowHandGraspEnvVelC(gym.Env):
         clLinV = np.array(clVels[0])
         clAngV = np.array(clVels[1])
         reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.5
+
+        wm, _ = self.robot.get_wrist_q_dq()
+        wm = np.array([wm[0]+0.1, wm[1], wm[2], wm[3]/2, wm[4]/2, wm[5]/2])
+        reward += np.maximum(-np.linalg.norm(wm), -1.0) * 3.0
 
         if clPos[2] < -0.0 and self.timer > 300: # object dropped, do not penalize dropping when 0 gravity
             reward += -9.
