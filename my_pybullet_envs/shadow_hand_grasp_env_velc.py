@@ -19,7 +19,7 @@ class ShadowHandGraspEnvVelC(gym.Env):
                  renders=False,
                  collect_final_state=False,
                  init_noise=True,
-                 act_noise=True):
+                 act_noise=False):
         self.renders = renders
         self.collect_final_state = collect_final_state
         self.init_noise = init_noise
@@ -36,11 +36,11 @@ class ShadowHandGraspEnvVelC(gym.Env):
         self.robot = None
 
         # TODO: tune this is not principled
-        self.action_scale = np.array([0.003] * 3 + [0.004] * 3 + [0.006] * 17)
+        self.action_scale = np.array([0.003] * 3 + [0.004] * 3 + [0.008] * 17)
 
-        self.frameSkip = 1
+        self.frameSkip = 4
 
-        self.cylinderInitPos = [0, 0, 0.101]    # initOri is identity      # 0.2/2
+        self.cylinderInitPos = [-0.0, -0.0, 0.101]    # TODO 0.02 # initOri is identity      # 0.2/2
 
         self.sim_setup()
 
@@ -71,10 +71,10 @@ class ShadowHandGraspEnvVelC(gym.Env):
         if self.init_noise:
             cyInit += np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
 
-        self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'), cyInit, useFixedBase=0)
+        self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder_heavier.urdf'), cyInit, useFixedBase=0)
         self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'), [0, 0, 0], useFixedBase=1)
-        p.changeDynamics(self.cylinderId, -1, lateralFriction=2.0, spinningFriction=1.0)
-        p.changeDynamics(self.floorId, -1, lateralFriction=2.0, spinningFriction=1.0)
+        p.changeDynamics(self.cylinderId, -1, lateralFriction=3.0, spinningFriction=1.0)
+        p.changeDynamics(self.floorId, -1, lateralFriction=3.0, spinningFriction=1.0)
 
         self.robot = ShadowHandVel(init_noise=self.init_noise, act_noise=self.act_noise,
                                    timestep=self._timeStep)
@@ -86,71 +86,79 @@ class ShadowHandGraspEnvVelC(gym.Env):
 
     def step(self, action):
         if action is not None:
-            action = np.clip(np.array(action), -1., 1)     # action could go beyond [-1,1]
+            # action = np.clip(np.array(action), -1., 1)     # TODO: action could go beyond [-1,1]
+            action = np.array(action)
             self.act = action
-            # if self.collect_final_state and self.timer > 300:
-            #     # testing
-            #     self.act[:6] = np.array([0.] * 6)
-            #     if self.timer < 375:
-            #         self.act[2] = np.array([0.6])
-            #     else:
-            #         self.act[:6] = self.np_random.uniform(low=-0.2, high=0.2, size=6)
+            # print(self.act[:3])
             self.robot.apply_action(self.act * self.action_scale)
 
+        reward = 3.0 * self.frameSkip
         for _ in range(self.frameSkip):
             p.stepSimulation()
+            clPos, _ = p.getBasePositionAndOrientation(self.cylinderId)
+            for i in range(self.robot.endEffectorId + 1, p.getNumJoints(self.robot.handId)):
+                cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
+                if len(cps) > 0:
+                    reward += 5.0  # the more links in contact, the better
+            if clPos[2] < -0.0 and self.timer > 300:  # object dropped, do not penalize dropping when 0 gravity
+                reward += -9.
+            if self.renders:
+                time.sleep(self._timeStep)
 
-        # act_palm_com, _ = p.getBasePositionAndOrientation(self.robot.handId)
-        # print(p.getConstraintState(self.robot.cid))
-        # print(p.getJointState(self.robot.handId, 0)[2])
-        # print("root mass", p.getDynamicsInfo(self.robot.handId, -1)[0])
-        # print("root it", p.getDynamicsInfo(self.robot.handId, -1)[2])
-        # print("after ts tar", np.array(self.robot.tarBasePos))
-        # print("after ts act", np.array(act_palm_com))
-        # input("press enter")
+            self.timer += 1
+            if self.timer > 300 and not self.collect_final_state:
+                # training
+                p.setCollisionFilterPair(self.cylinderId, self.floorId, -1, -1, enableCollision=0)
 
-        # rewards is height of target object
-        clPos, _ = p.getBasePositionAndOrientation(self.cylinderId)
-        handPos, _ = p.getBasePositionAndOrientation(self.robot.handId)
-
-        dist = np.linalg.norm(np.array(handPos) - self.robot.baseInitPos - np.array(clPos))  # TODO
-        if dist > 1: dist = 1
-        if dist < 0.15: dist = 0.15
-
-        reward = 6.0
-        reward += -dist * 3.0
-
-        for i in range(self.robot.endEffectorId+1, p.getNumJoints(self.robot.handId)):
-            cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
-            if len(cps) > 0:
-                # print(len(cps))
-                reward += 5.0   # the more links in contact, the better
-
-            # if i > 0 and i not in self.robot.activeDofs and i not in self.robot.lockDofs:   # i in [4,9,14,20,26]
-            #     tipPos = p.getLinkState(self.robot.handId, i)[0]
-            #     # print(tipPos)
-            #     reward += -np.minimum(np.linalg.norm(np.array(tipPos) - np.array(clPos)), 0.5) * 1.0
-
-        clVels = p.getBaseVelocity(self.cylinderId)
-        # print(clVels)
-        clLinV = np.array(clVels[0])
-        clAngV = np.array(clVels[1])
-        reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.5
-
-        wm, _ = self.robot.get_wrist_q_dq()
-        wm = np.array([wm[0]+0.1, wm[1], wm[2], wm[3]/2, wm[4]/2, wm[5]/2])
-        reward += np.maximum(-np.linalg.norm(wm), -1.0) * 3.0
-
-        if clPos[2] < -0.0 and self.timer > 300: # object dropped, do not penalize dropping when 0 gravity
-            reward += -9.
-
-        if self.renders:
-            time.sleep(self._timeStep)
-
-        self.timer += 1
-        if self.timer > 300 and not self.collect_final_state:
-            # training
-            p.setCollisionFilterPair(self.cylinderId, self.floorId, -1, -1, enableCollision=0)
+        #
+        # reward = 4.0 * self.frameSkip
+        # for _ in range(self.frameSkip):
+        #     p.stepSimulation()
+        #
+        #     # rewards is height of target object
+        #     clPos, _ = p.getBasePositionAndOrientation(self.cylinderId)
+        #     handPos, _ = self.robot.get_palm_pos_orn()
+        #
+        #     dist = np.linalg.norm(np.array(handPos) - np.array(clPos))  # TODO
+        #     if dist > 1: dist = 1
+        #     if dist < 0.15: dist = 0.15
+        #
+        #     reward += -dist * 3.0
+        #
+        #     one_contact = False
+        #     for i in range(self.robot.endEffectorId + 1, p.getNumJoints(self.robot.handId)):
+        #         cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
+        #         if len(cps) > 0:
+        #             one_contact = True
+        #             # print(len(cps))
+        #             reward += 4.0  # the more links in contact, the better
+        #     if one_contact:
+        #         reward += 10
+        #
+        #     reward += -self.robot.get_wrist_torque_pen()
+        #
+        #     # # TODO: is position better?
+        #     reward += np.maximum(-np.linalg.norm(np.array(clPos) - np.array(self.cylinderInitPos)), -0.2) * 5.0
+        #     # clVels = p.getBaseVelocity(self.cylinderId)
+        #     # # print(clVels)
+        #     # clLinV = np.array(clVels[0])
+        #     # clAngV = np.array(clVels[1])
+        #     # reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.5
+        #
+        #     # wm, _ = self.robot.get_wrist_q_dq()
+        #     # wm = np.array([wm[0]+0.1, wm[1], wm[2], wm[3]/2, wm[4]/2, wm[5]/2])
+        #     # reward += np.maximum(-np.linalg.norm(wm), -1.0) * 3.0
+        #
+        #     if clPos[2] < -0.0 and self.timer > 300:  # object dropped, do not penalize dropping when 0 gravity
+        #         reward += -11.
+        #
+        #     if self.renders:
+        #         time.sleep(self._timeStep)
+        #
+        #     self.timer += 1
+        #     if self.timer > 300 and not self.collect_final_state:
+        #         # training
+        #         p.setCollisionFilterPair(self.cylinderId, self.floorId, -1, -1, enableCollision=0)
 
         return self.getExtendedObservation(), reward, False, {}
 
@@ -178,8 +186,8 @@ class ShadowHandGraspEnvVelC(gym.Env):
         curContact = []
         for i in range(self.robot.endEffectorId+1, p.getNumJoints(self.robot.handId)):   # ex palm aux
             cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
-            cps2 = p.getContactPoints(self.floorId, self.robot.handId, -1, i)
-            if len(cps)+len(cps2) > 0:
+            # cps2 = p.getContactPoints(self.floorId, self.robot.handId, -1, i)
+            if len(cps) > 0:
                 curContact.extend([1.0])
             else:
                 curContact.extend([-1.0])

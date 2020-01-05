@@ -32,10 +32,19 @@ parser.add_argument(
     help='directory to save agent logs (default: ./trained_models/)')
 parser.add_argument(
     '--non-det',
-    action='store_true',
-    default=False,
-    help='whether to use a non-deterministic policy')
+    type=int,
+    default=1,
+    help='whether to use a non-deterministic policy, 1 true 0 false')
+parser.add_argument(
+    '--iter',
+    type=int,
+    default=-1,
+    help='which iter pi to test')
 args = parser.parse_args()
+
+# TODO
+is_cuda = True
+device = 'cuda' if is_cuda else 'cpu'
 
 args.det = not args.non_det
 
@@ -45,7 +54,7 @@ env = make_vec_envs(
     1,
     None,
     None,
-    device='cpu',
+    device=device,
     allow_early_resets=False)
 
 # # Get a render function
@@ -54,8 +63,16 @@ env = make_vec_envs(
 # print(render_func)
 
 # We need to use the same statistics for normalization as used in training
-actor_critic, ob_rms = \
-            torch.load(os.path.join(args.load_dir, args.env_name + ".pt"), map_location='cpu')
+if args.iter >= 0:
+    path = os.path.join(args.load_dir, args.env_name + "_" + str(args.iter) + ".pt")
+else:
+    path = os.path.join(args.load_dir, args.env_name + ".pt")
+
+if is_cuda:
+    actor_critic, ob_rms = torch.load(path)
+else:
+    actor_critic, ob_rms = torch.load(path, map_location='cpu')
+
 if ob_rms:
     print(ob_rms.mean)
     print(ob_rms.var)

@@ -15,8 +15,8 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 
 class ShadowHandVel:
     def __init__(self,
-                 base_init_pos=np.array([-0.22, 0.08, 0.13]),      # 0.035 offset from old hand
-                 init_fin_pos=np.array([0.4, 0.4, 0.4]*4 + [0.0, 1.0, 0.1, 0.5, 0.2]),    # last was 0.0
+                 base_init_pos=np.array([-0.205, 0.08, 0.10]),      # 0.035 offset from old hand
+                 init_fin_pos=np.array([0.4, 0.4, 0.4]*4 + [0.0, 1.0, 0.1, 0.5, 0.0]),    # TODO: last was 0.2
                  init_noise=True,
                  act_noise=True,
                  timestep=1./240):
@@ -26,6 +26,8 @@ class ShadowHandVel:
         self.initPos = init_fin_pos
         self.act_noise = act_noise
         self._timestep = timestep
+
+        self.erp = 0.2      # TODO
 
         self.handId = \
             p.loadURDF(os.path.join(currentdir,
@@ -91,11 +93,13 @@ class ShadowHandVel:
         self.n_dofs = 6 + len(self.activeDofs)      # exclude fixed joints for IK/Jac
         self.act = np.zeros(self.n_dofs)            # dummy, action dim
 
-        p.enableJointForceTorqueSensor(self.handId, self.endEffectorId + 1, True)
+        # p.enableJointForceTorqueSensor(self.handId, self.endEffectorId + 1, True)
 
     def reset(self):
         # TODO: bullet env reload urdfs in reset...
         # TODO: bullet env reset pos with added noise but velocity to zero always.
+
+        self.lastAct = None
 
         good_init = False
         while not good_init:
@@ -206,6 +210,11 @@ class ShadowHandVel:
         joints_taus = np.hstack(joints_taus.flatten())
         return joints_taus
 
+    def get_wrist_torque_pen(self):
+        w_tau = self.get_wrist_last_torque()
+        w_tau = np.abs(w_tau) / 10000
+        return np.sum(w_tau)    # max pen = 6
+
     def get_fingers_last_torque(self):
         joints_state = p.getJointStates(self.handId, self.activeDofs)
         joints_taus = np.array(joints_state)[:, [3]]
@@ -223,17 +232,23 @@ class ShadowHandVel:
         fq, fdq = self.get_fingers_q_dq()
         obs.extend(list(fq))
 
-        # baseVels = p.getBaseVelocity(self.handId)
-        # obs.extend(baseVels[0])
-        # obs.extend(baseVels[1])
+        v, w = self.get_palm_vel()
+        obs.extend(v)
+        obs.extend(w)
 
         obs.extend(list(self.act * 240))
         # d_quat / dt = 0.5 * w * q, make a bit easier for policy to understand w
-        w_tar = self.act[3:6]
+        w_tar = self.act[3:6] * 240
         w_tar = list(w_tar) + [0]
         # _, d_quat = p.multiplyTransforms([0,0,0], w_tar, [0,0,0], baseQuat)
         d_quat = self.quaternion_multiply(w_tar, baseQuat)
         obs.extend(list(d_quat))
+
+        if self.lastAct is not None:
+            obs.extend(list(self.lastAct * 240))
+        else:   # first step
+            obs.extend(list(self.act * 240))
+        self.lastAct = self.act.copy()
 
         if self.include_redun_body_pos:
             for i in range(6, p.getNumJoints(self.handId)):
@@ -254,7 +269,7 @@ class ShadowHandVel:
                         jac_r[0][:6], jac_r[1][:6], jac_r[2][:6]])
         # vel = jac * dq, vel is 6D
         tar_dq, residue, _, _ = np.linalg.lstsq(jac, vel, 1e-4)
-        if np.abs(residue) > 0.01: print("warning!!Jac inv")
+        if len(residue) > 0 and np.abs(residue) > 0.01: print("warning!!Jac inv")
         return tar_dq
 
     def apply_action(self, a):
@@ -264,6 +279,9 @@ class ShadowHandVel:
         self.act = np.array(a)
 
         root_v = self.act[:6] * 240    # TODO: timestep 240 Hz
+        cur_lv, cur_av = self.get_palm_vel()
+        cur_v = np.array(list(cur_lv)+list(cur_av))
+        root_v = self.erp * root_v + (1.0-self.erp) * cur_v
 
         tar_w_dq = self.get_tar_dq_from_tar_vel(root_v)
         if self.act_noise:
@@ -279,6 +297,8 @@ class ShadowHandVel:
         f_v = self.act[6:] * 240
         if self.act_noise:
             f_v += self.np_random.uniform(low=-0.1, high=0.1, size=len(f_v))
+        _, cur_f_v = self.get_fingers_q_dq()
+        f_v = self.erp * f_v + (1.0-self.erp) * cur_f_v
 
         p.setJointMotorControlArray(
             bodyIndex=self.handId,
@@ -289,7 +309,7 @@ class ShadowHandVel:
 
 
 if __name__ == "__main__":
-    physicsClient = p.connect(p.GUI)    #or p.DIRECT for non-graphical version
+    physicsClient = p.connect(p.GUI)    # or p.DIRECT for non-graphical version
 
     p.setTimeStep(1. / 240.)
 
@@ -303,7 +323,7 @@ if __name__ == "__main__":
         p.setGravity(0, 0, -10.)
 
         floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'), [0, 0, 0], useFixedBase=1)
-        p.changeDynamics(floorId, -1, lateralFriction=2.0, spinningFriction=1.0)
+        p.changeDynamics(floorId, -1, lateralFriction=3.0, spinningFriction=1.0)
         # cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'), [0,0,0.2], useFixedBase=0)
         # p.changeDynamics(cylinderId, -1, lateralFriction=2.0, spinningFriction=1.0)
 
@@ -345,8 +365,8 @@ if __name__ == "__main__":
             # # print("fin_q", a.get_fingers_q_dq()[0])
             # print("fin_vel", a.get_fingers_q_dq()[1])
             #
-            # print("last wrist torque", a.get_wrist_last_torque())
-            # print("last finger torque", a.get_fingers_last_torque())
+            print("last wrist torque", a.get_wrist_last_torque())
+            print("last finger torque", a.get_fingers_last_torque())
 
             print(a.get_robot_observation())
 

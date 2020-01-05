@@ -47,7 +47,7 @@ register(
 register(
     id='ShadowHandGraspBulletEnv-v1',
     entry_point='my_pybullet_envs:ShadowHandGraspEnvVelC',
-    max_episode_steps=400,
+    max_episode_steps=100,
 )
 
 register(

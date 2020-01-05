@@ -66,7 +66,7 @@ def main():
                       help='Repeat reset to show reset performance',
                       type=int,
                       default=0)
-  parser.add_argument('--steps', help='Number of steps', type=int, default=300)
+  parser.add_argument('--steps', help='Number of steps', type=int, default=100)
 
   args = parser.parse_args()
   test(args)
