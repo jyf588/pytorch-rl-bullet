@@ -27,7 +27,8 @@ class ShadowHandVel:
         self.act_noise = act_noise
         self._timestep = timestep
 
-        self.erp = 0.4      # TODO
+        self.erp = 0.1      # TODO
+        self.damping_ratio = 1.3    # TODO: / dr, 1.0 no damping
 
         self.handId = \
             p.loadURDF(os.path.join(currentdir,
@@ -71,7 +72,7 @@ class ShadowHandVel:
             mass = dyn[0]
             mass = mass / 10.
             lid = dyn[2]
-            lid = (lid[0] / 100., lid[1] / 100., lid[2] / 100.,)       # TODO
+            lid = (lid[0] / 10., lid[1] / 10., lid[2] / 10.,)       # TODO
             total_m += mass
             p.changeDynamics(self.handId, i, mass=mass)
             p.changeDynamics(self.handId, i, localInertiaDiagonal=lid)
@@ -84,7 +85,7 @@ class ShadowHandVel:
 
         # print("total hand Mass:", total_m)
 
-        self.maxForce = 1000.
+        self.maxForce = 200.
 
         self.include_redun_body_pos = False
 
@@ -218,7 +219,7 @@ class ShadowHandVel:
     def get_wrist_torque_pen(self):
         w_tau = self.get_wrist_last_torque()
         w_tau = np.abs(w_tau) / 10000
-        return np.sum(w_tau)    # max pen = 6
+        return np.sum(w_tau)    # TODO: max pen = 6 if 10000
 
     def get_fingers_last_torque(self):
         joints_state = p.getJointStates(self.handId, self.activeDofs)
@@ -241,19 +242,22 @@ class ShadowHandVel:
         obs.extend(v)
         obs.extend(w)
 
-        obs.extend(list(self.act * 240))
+        obs.extend(list(self.dq_e_w))
+        obs.extend(list(self.dq_e_f))
+
+        obs.extend(list(self.act / self._timestep))
         # d_quat / dt = 0.5 * w * q, make a bit easier for policy to understand w
-        w_tar = self.act[3:6] * 240
+        w_tar = self.act[3:6] / self._timestep
         w_tar = list(w_tar) + [0]
         # _, d_quat = p.multiplyTransforms([0,0,0], w_tar, [0,0,0], baseQuat)
         d_quat = self.quaternion_multiply(w_tar, baseQuat)
         obs.extend(list(d_quat))
 
-        if self.lastAct is not None:
-            obs.extend(list(self.lastAct * 240))
-        else:   # first step
-            obs.extend(list(self.act * 240))
-        self.lastAct = self.act.copy()
+        # if self.lastAct is not None:
+        #     obs.extend(list(self.lastAct * 240))
+        # else:   # first step
+        #     obs.extend(list(self.act * 240))
+        # self.lastAct = self.act.copy()
 
         if self.include_redun_body_pos:
             for i in range(6, p.getNumJoints(self.handId)):
@@ -265,26 +269,22 @@ class ShadowHandVel:
     def get_robot_observation_dim(self):
         return len(self.get_robot_observation())
 
-    def get_tar_dq_from_tar_vel(self, vel):
+    def get_cur_jac(self):
         wq, _ = self.get_wrist_q_dq()
         [jac_t, jac_r] = p.calculateJacobian(self.handId, self.endEffectorId, [0] * 3,
                                              list(wq)+list(self.get_fingers_q_dq()[0]),
                                              [0.] * self.n_dofs, [0.] * self.n_dofs)
         jac = np.array([jac_t[0][:6], jac_t[1][:6], jac_t[2][:6],
                         jac_r[0][:6], jac_r[1][:6], jac_r[2][:6]])
-        # vel = jac * dq, vel is 6D
-        tar_dq, residue, _, _ = np.linalg.lstsq(jac, vel, 1e-4)
+        return jac
+
+    def get_dq_from_vel(self, vel, cur_jac):        # provide J so it is faster in multiple calls
+        tar_dq, residue, _, _ = np.linalg.lstsq(cur_jac, vel, 1e-4)
         if len(residue) > 0 and np.abs(residue) > 0.01: print("warning!!Jac inv")
         return tar_dq
 
-    def get_tar_vel_from_tar_dq(self, dq):
-        wq, _ = self.get_wrist_q_dq()
-        [jac_t, jac_r] = p.calculateJacobian(self.handId, self.endEffectorId, [0] * 3,
-                                             list(wq)+list(self.get_fingers_q_dq()[0]),
-                                             [0.] * self.n_dofs, [0.] * self.n_dofs)
-        jac = np.array([jac_t[0][:6], jac_t[1][:6], jac_t[2][:6],
-                        jac_r[0][:6], jac_r[1][:6], jac_r[2][:6]])
-        tar_vel = jac.dot(dq.T)
+    def get_vel_from_dq(self, dq, cur_jac):
+        tar_vel = cur_jac.dot(dq.T)
         return tar_vel
 
     def apply_action(self, a):
@@ -292,35 +292,37 @@ class ShadowHandVel:
         # TODO: a is already scaled, how much to scale? decide in Env.
 
         self.act = np.array(a)
+        v_a_w = self.act[:6] / self._timestep
 
-        root_v_a = self.act[:6] * 240    # TODO: timestep 240 Hz
+        jac = self.get_cur_jac()
+        v_e_w = self.get_vel_from_dq(self.dq_e_w, jac)
 
-        root_v_e = self.get_tar_vel_from_tar_dq(self.dq_e_w)    # TODO: add this to obs
+        cur_lv_w, cur_av_w = self.get_palm_vel()
+        cur_v_w = np.array(list(cur_lv_w)+list(cur_av_w))
 
-        cur_lv, cur_av = self.get_palm_vel()
-        cur_v = np.array(list(cur_lv)+list(cur_av))
+        tar_v_w = self.erp * (v_a_w + v_e_w) + (1.0-self.erp) * cur_v_w
+        tar_v_w /= self.damping_ratio
 
-        tar_root_v = self.erp * (root_v_a + root_v_e) + (1.0-self.erp) * cur_v
-
-        tar_w_dq = self.get_tar_dq_from_tar_vel(tar_root_v)
+        tar_dq_w = self.get_dq_from_vel(tar_v_w, jac)
+        # print(tar_dq_w)
         if self.act_noise:
-            tar_w_dq += self.np_random.uniform(low=-0.05, high=0.05, size=len(tar_w_dq))
+            tar_dq_w += self.np_random.uniform(low=-0.05, high=0.05, size=len(tar_dq_w))
 
         p.setJointMotorControlArray(
             bodyIndex=self.handId,
             jointIndices=range(6),      # 0:6
             controlMode=p.VELOCITY_CONTROL,
-            targetVelocities=list(tar_w_dq),
-            forces=[10000.0]*6)        # TODO: wrist force limit?
+            targetVelocities=list(tar_dq_w),
+            forces=[self.maxForce*30]*6)        # TODO: wrist force limit?
 
         # update q_e
-        self.dq_e_w = (self.dq_e_w + self.get_tar_dq_from_tar_vel(root_v_a)) * (1-self.erp)
+        self.dq_e_w = (self.dq_e_w + self.get_dq_from_vel(v_a_w, jac)) * (1-self.erp)
 
-        dq_a_f = self.act[6:] * 240
-
+        dq_a_f = self.act[6:] / self._timestep
         _, cur_dq_f = self.get_fingers_q_dq()
-
         tar_dq_f = self.erp * (dq_a_f + self.dq_e_f) + (1.0-self.erp) * cur_dq_f
+        tar_dq_f /= self.damping_ratio
+        # print(tar_dq_f)
         if self.act_noise:
             tar_dq_f += self.np_random.uniform(low=-0.1, high=0.1, size=len(tar_dq_f))
 
@@ -329,7 +331,7 @@ class ShadowHandVel:
             jointIndices=self.activeDofs,
             controlMode=p.VELOCITY_CONTROL,
             targetVelocities=tar_dq_f,
-            forces=[1000.0]*len(tar_dq_f))
+            forces=[self.maxForce]*len(tar_dq_f))
 
         # update q_e
         self.dq_e_f = (self.dq_e_f + dq_a_f) * (1-self.erp)
@@ -354,7 +356,7 @@ if __name__ == "__main__":
         # cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'), [0,0,0.2], useFixedBase=0)
         # p.changeDynamics(cylinderId, -1, lateralFriction=2.0, spinningFriction=1.0)
 
-        a = ShadowHandVel()
+        a = ShadowHandVel(act_noise=False)
         a.np_random = aaa
         a.reset()
 
@@ -387,10 +389,10 @@ if __name__ == "__main__":
             # # pos, orn = a.get_palm_pos_orn()
             # # print("palm pos/orn", pos, p.getEulerFromQuaternion(orn))
             # print("palm vel", a.get_palm_vel())
-            # print("palm joint vel", a.get_wrist_q_dq()[1])
+            print("palm joint vel", a.get_wrist_q_dq()[1])
             # print("tar_fin_vel", act[6:]*240)
             # # print("fin_q", a.get_fingers_q_dq()[0])
-            # print("fin_vel", a.get_fingers_q_dq()[1])
+            print("fin_vel", a.get_fingers_q_dq()[1])
             #
             print("last wrist torque", a.get_wrist_last_torque())
             print("last finger torque", a.get_fingers_last_torque())

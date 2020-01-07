@@ -264,6 +264,23 @@ python main.py --env-name "ShadowHandGraspBulletEnv-v1" --algo ppo --use-gae --l
 python main.py --env-name "ShadowHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0102_14 --seed 5014
 python main.py --env-name "ShadowHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0102_15 --seed 5015
 
+1/6 21:40
+# frameskip 1, cyl vel pen, maxForce 200/6000, add dq_e to obs, remove last act from obs
+# cylinder mass 2.5
+# 0.1/0.4 frameskip 1 seems pretty energetic, why?
+# divide tar_dq by 2
+# mass 0.1, inertia 0.1, erp 0.1 (0.4 slower, why?), tar_dq/=2.0, wrist pen
+python main.py --env-name "ShadowHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0102_16 --seed 5016
+python main.py --env-name "ShadowHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0102_17 --seed 5017
+
+# iter 0 seems not energetic enough...
+# but if delete tar_dq/=2.0, way too energetic...
+# /=1.5, similar to 2.0
+# /=1.3, seems fine
+python main.py --env-name "ShadowHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0102_18 --seed 5018
+python main.py --env-name "ShadowHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0102_19 --seed 5019
+
+
 
 # copy header
 # copy folder

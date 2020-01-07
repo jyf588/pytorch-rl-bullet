@@ -16,7 +16,7 @@ class ShadowHandGraspEnvVelC(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=True,
+                 renders=False,
                  collect_final_state=False,
                  init_noise=True,
                  act_noise=False):
@@ -38,7 +38,7 @@ class ShadowHandGraspEnvVelC(gym.Env):
         # TODO: tune this is not principled
         self.action_scale = np.array([0.004] * 3 + [0.004] * 3 + [0.008] * 17)
 
-        self.frameSkip = 4
+        self.frameSkip = 1
 
         self.cylinderInitPos = [-0.0, -0.0, 0.101]    # TODO 0.02 # initOri is identity      # 0.2/2
 
@@ -97,17 +97,21 @@ class ShadowHandGraspEnvVelC(gym.Env):
         reward = 3.0 * self.frameSkip
         for _ in range(self.frameSkip):
             p.stepSimulation()
+            # print("t", self.timer)
+            # print("last wrist torque", self.robot.get_wrist_last_torque())
+            # print("last finger torque", self.robot.get_fingers_last_torque())
             clPos, _ = p.getBasePositionAndOrientation(self.cylinderId)
             for i in range(self.robot.endEffectorId + 1, p.getNumJoints(self.robot.handId)):
                 cps = p.getContactPoints(self.cylinderId, self.robot.handId, -1, i)
                 if len(cps) > 0:
                     reward += 5.0  # the more links in contact, the better
-            # clVels = p.getBaseVelocity(self.cylinderId)
-            # clLinV = np.array(clVels[0])
-            # clAngV = np.array(clVels[1])
-            # reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.5
+            clVels = p.getBaseVelocity(self.cylinderId)
+            clLinV = np.array(clVels[0])
+            clAngV = np.array(clVels[1])
+            reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.5
+            reward += -self.robot.get_wrist_torque_pen()
             if clPos[2] < -0.0 and self.timer > 300:  # object dropped, do not penalize dropping when 0 gravity
-                reward += -16.
+                reward += -13.
             if self.renders:
                 time.sleep(self._timeStep)
 
