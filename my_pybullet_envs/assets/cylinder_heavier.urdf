@@ -16,8 +16,9 @@
       <contact_coefficients mu="3.0" />
     </collision>
     <inertial>
-      <mass value="10.0"/>
+      <mass value="5.0"/>
       <inertia ixx="0.04" ixy="0.0" ixz="0.0" iyy="0.04" iyz="0.0" izz="0.0018"/>
+<!--       <inertia ixx="4" ixy="0.0" ixz="0.0" iyy="4" iyz="0.0" izz="1.8"/>-->
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </inertial>
   </link>

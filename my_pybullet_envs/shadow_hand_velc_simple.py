@@ -27,7 +27,7 @@ class ShadowHandVel:
         self.act_noise = act_noise
         self._timestep = timestep
 
-        self.erp = 0.2      # TODO
+        self.erp = 0.4      # TODO
 
         self.handId = \
             p.loadURDF(os.path.join(currentdir,
@@ -69,9 +69,9 @@ class ShadowHandVel:
         for i in range(self.endEffectorId + 1, p.getNumJoints(self.handId)):       # add palm aux & 6 root joints
             dyn = p.getDynamicsInfo(self.handId, i)
             mass = dyn[0]
-            # mass = mass / 100.
+            mass = mass / 10.
             lid = dyn[2]
-            # lid = (lid[0] / 10., lid[1] / 10., lid[2] / 10.,)       # TODO
+            lid = (lid[0] / 100., lid[1] / 100., lid[2] / 100.,)       # TODO
             total_m += mass
             p.changeDynamics(self.handId, i, mass=mass)
             p.changeDynamics(self.handId, i, localInertiaDiagonal=lid)
@@ -93,6 +93,9 @@ class ShadowHandVel:
         self.n_dofs = 6 + len(self.activeDofs)      # exclude fixed joints for IK/Jac
         self.act = np.zeros(self.n_dofs)            # dummy, action dim
 
+        self.dq_e_w = np.zeros(6)
+        self.dq_e_f = np.zeros(len(self.activeDofs))
+
         # p.enableJointForceTorqueSensor(self.handId, self.endEffectorId + 1, True)
 
     def reset(self):
@@ -100,6 +103,8 @@ class ShadowHandVel:
         # TODO: bullet env reset pos with added noise but velocity to zero always.
 
         self.lastAct = None
+        self.dq_e_w = np.zeros(6)
+        self.dq_e_f = np.zeros(len(self.activeDofs))
 
         good_init = False
         while not good_init:
@@ -272,18 +277,32 @@ class ShadowHandVel:
         if len(residue) > 0 and np.abs(residue) > 0.01: print("warning!!Jac inv")
         return tar_dq
 
+    def get_tar_vel_from_tar_dq(self, dq):
+        wq, _ = self.get_wrist_q_dq()
+        [jac_t, jac_r] = p.calculateJacobian(self.handId, self.endEffectorId, [0] * 3,
+                                             list(wq)+list(self.get_fingers_q_dq()[0]),
+                                             [0.] * self.n_dofs, [0.] * self.n_dofs)
+        jac = np.array([jac_t[0][:6], jac_t[1][:6], jac_t[2][:6],
+                        jac_r[0][:6], jac_r[1][:6], jac_r[2][:6]])
+        tar_vel = jac.dot(dq.T)
+        return tar_vel
+
     def apply_action(self, a):
 
         # TODO: a is already scaled, how much to scale? decide in Env.
 
         self.act = np.array(a)
 
-        root_v = self.act[:6] * 240    # TODO: timestep 240 Hz
+        root_v_a = self.act[:6] * 240    # TODO: timestep 240 Hz
+
+        root_v_e = self.get_tar_vel_from_tar_dq(self.dq_e_w)    # TODO: add this to obs
+
         cur_lv, cur_av = self.get_palm_vel()
         cur_v = np.array(list(cur_lv)+list(cur_av))
-        root_v = self.erp * root_v + (1.0-self.erp) * cur_v
 
-        tar_w_dq = self.get_tar_dq_from_tar_vel(root_v)
+        tar_root_v = self.erp * (root_v_a + root_v_e) + (1.0-self.erp) * cur_v
+
+        tar_w_dq = self.get_tar_dq_from_tar_vel(tar_root_v)
         if self.act_noise:
             tar_w_dq += self.np_random.uniform(low=-0.05, high=0.05, size=len(tar_w_dq))
 
@@ -294,18 +313,26 @@ class ShadowHandVel:
             targetVelocities=list(tar_w_dq),
             forces=[10000.0]*6)        # TODO: wrist force limit?
 
-        f_v = self.act[6:] * 240
+        # update q_e
+        self.dq_e_w = (self.dq_e_w + self.get_tar_dq_from_tar_vel(root_v_a)) * (1-self.erp)
+
+        dq_a_f = self.act[6:] * 240
+
+        _, cur_dq_f = self.get_fingers_q_dq()
+
+        tar_dq_f = self.erp * (dq_a_f + self.dq_e_f) + (1.0-self.erp) * cur_dq_f
         if self.act_noise:
-            f_v += self.np_random.uniform(low=-0.1, high=0.1, size=len(f_v))
-        _, cur_f_v = self.get_fingers_q_dq()
-        f_v = self.erp * f_v + (1.0-self.erp) * cur_f_v
+            tar_dq_f += self.np_random.uniform(low=-0.1, high=0.1, size=len(tar_dq_f))
 
         p.setJointMotorControlArray(
             bodyIndex=self.handId,
             jointIndices=self.activeDofs,
             controlMode=p.VELOCITY_CONTROL,
-            targetVelocities=f_v,
-            forces=[1000.0]*len(f_v))
+            targetVelocities=tar_dq_f,
+            forces=[1000.0]*len(tar_dq_f))
+
+        # update q_e
+        self.dq_e_f = (self.dq_e_f + dq_a_f) * (1-self.erp)
 
 
 if __name__ == "__main__":
@@ -313,7 +340,7 @@ if __name__ == "__main__":
 
     p.setTimeStep(1. / 240.)
 
-    # p.setPhysicsEngineParameter(numSolverIterations=10000000, solverResidualThreshold=1e-8)
+    p.setPhysicsEngineParameter(numSolverIterations=200)        # TODO
 
     aaa, seed = gym.utils.seeding.np_random(101)
     np.random.seed(101)
