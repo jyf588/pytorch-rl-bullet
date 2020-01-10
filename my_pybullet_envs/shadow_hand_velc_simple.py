@@ -28,7 +28,7 @@ class ShadowHandVel:
         self._timestep = timestep
 
         self.erp = 0.1      # TODO
-        self.damping_ratio = 1.3    # TODO: / dr, 1.0 no damping
+        self.damping_ratio = 1.0    # TODO: / dr, 1.0 no damping
 
         self.handId = \
             p.loadURDF(os.path.join(currentdir,
@@ -85,7 +85,7 @@ class ShadowHandVel:
 
         # print("total hand Mass:", total_m)
 
-        self.maxForce = 200.
+        self.maxForce = 100.
 
         self.include_redun_body_pos = False
 
@@ -218,8 +218,8 @@ class ShadowHandVel:
 
     def get_wrist_torque_pen(self):
         w_tau = self.get_wrist_last_torque()
-        w_tau = np.abs(w_tau) / 10000
-        return np.sum(w_tau)    # TODO: max pen = 6 if 10000
+        w_tau = np.abs(w_tau) / 1000
+        return np.sum(w_tau)    # TODO: max pen = 6 if 1000
 
     def get_fingers_last_torque(self):
         joints_state = p.getJointStates(self.handId, self.activeDofs)
@@ -313,10 +313,10 @@ class ShadowHandVel:
             jointIndices=range(6),      # 0:6
             controlMode=p.VELOCITY_CONTROL,
             targetVelocities=list(tar_dq_w),
-            forces=[self.maxForce*30]*6)        # TODO: wrist force limit?
+            forces=[self.maxForce*10]*6)        # TODO: wrist force limit?
 
         # update q_e
-        self.dq_e_w = (self.dq_e_w + self.get_dq_from_vel(v_a_w, jac)) * (1-self.erp)
+        self.dq_e_w = (self.dq_e_w + self.get_dq_from_vel(v_a_w, jac)) * (1-self.erp) / 1.25    # TODO
 
         dq_a_f = self.act[6:] / self._timestep
         _, cur_dq_f = self.get_fingers_q_dq()
@@ -334,7 +334,7 @@ class ShadowHandVel:
             forces=[self.maxForce]*len(tar_dq_f))
 
         # update q_e
-        self.dq_e_f = (self.dq_e_f + dq_a_f) * (1-self.erp)
+        self.dq_e_f = (self.dq_e_f + dq_a_f) * (1-self.erp) / 1.25  # TODO
 
 
 if __name__ == "__main__":

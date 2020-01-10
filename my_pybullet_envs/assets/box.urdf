@@ -1,22 +1,22 @@
 <?xml version="1.0" ?>
-<robot name="tabletop">
+<robot name="urdf_robot">
   <link name="baseLink">
     <visual>
       <geometry>
-        <box size="0.6 1.2 0.1"/>
+        <box size="0.08 0.08 0.18"/>
       </geometry>
-      <origin rpy="0 0 0" xyz="0.0 0 -0.05"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <material name="black"/>
     </visual>
     <collision>
       <geometry>
-        <box size="0.6 1.2 0.1"/>
+         <box size="0.08 0.08 0.18"/>
       </geometry>
-      <origin rpy="0 0 0" xyz="0.0 0 -0.05"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <contact_coefficients mu="3.0" />
     </collision>
     <inertial>
-      <mass value="5.0"/>
+      <mass value="2.0"/>
       <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001"/>
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </inertial>

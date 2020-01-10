@@ -16,7 +16,7 @@ class ShadowHandGraspEnvVelC(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=False,
+                 renders=True,
                  collect_final_state=False,
                  init_noise=True,
                  act_noise=False):
@@ -36,9 +36,9 @@ class ShadowHandGraspEnvVelC(gym.Env):
         self.robot = None
 
         # TODO: tune this is not principled
-        self.action_scale = np.array([0.004] * 3 + [0.004] * 3 + [0.008] * 17)
+        self.action_scale = np.array([0.001] * 3 + [0.0015] * 3 + [0.004] * 17)
 
-        self.frameSkip = 1
+        self.frameSkip = 4
 
         self.cylinderInitPos = [-0.0, -0.0, 0.101]    # TODO 0.02 # initOri is identity      # 0.2/2
 
@@ -73,7 +73,8 @@ class ShadowHandGraspEnvVelC(gym.Env):
         if self.init_noise:
             cyInit += np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
 
-        self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder_heavier.urdf'), cyInit, useFixedBase=0)
+        self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder_heavier.urdf'),
+                                     cyInit, useFixedBase=0)
         self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'), [0, 0, 0], useFixedBase=1)
         p.changeDynamics(self.cylinderId, -1, lateralFriction=3.0, spinningFriction=1.0)
         p.changeDynamics(self.floorId, -1, lateralFriction=3.0, spinningFriction=1.0)
@@ -87,15 +88,16 @@ class ShadowHandGraspEnvVelC(gym.Env):
         self.robot.reset()      # call at last to prevent collision at init
 
     def step(self, action):
-        if action is not None:
-            action = np.clip(np.array(action), -1., 1)     # TODO: action could go beyond [-1,1]
-            # action = np.array(action)
-            self.act = action
-            # print(self.act[:3])
-            self.robot.apply_action(self.act * self.action_scale)
 
         reward = 3.0 * self.frameSkip
         for _ in range(self.frameSkip):
+            if action is not None:
+                # action = np.clip(np.array(action), -1., 1)  # TODO: action could go beyond [-1,1]
+                # action = np.array(action)
+                self.act = action
+                # print(self.act[:3])
+                self.robot.apply_action(self.act * self.action_scale)
+
             p.stepSimulation()
             # print("t", self.timer)
             # print("last wrist torque", self.robot.get_wrist_last_torque())
@@ -109,15 +111,11 @@ class ShadowHandGraspEnvVelC(gym.Env):
             clLinV = np.array(clVels[0])
             clAngV = np.array(clVels[1])
             reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.5
-            reward += -self.robot.get_wrist_torque_pen()
+            # reward += -self.robot.get_wrist_torque_pen()
             if clPos[2] < -0.0 and self.timer > 300:  # object dropped, do not penalize dropping when 0 gravity
                 reward += -13.
             if self.renders:
                 time.sleep(self._timeStep)
-
-            # print(self.timer)
-            # print(self.robot.get_wrist_last_torque())
-            # print(self.robot.get_fingers_last_torque())
 
             self.timer += 1
             if self.timer > 300 and not self.collect_final_state:
