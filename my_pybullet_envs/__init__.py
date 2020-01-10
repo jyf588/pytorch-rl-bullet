@@ -8,7 +8,9 @@ from .inmoov_shadow_hand_grasp_env import InmoovShadowHandGraspEnv
 from .inmoov_shadow_hand_grasp_env_tmp import InmoovShadowHandGraspEnvTmp
 from .shadow_hand_place_env import ShadowHandPlaceEnv
 from .shadow_hand_grasp_env_velc import ShadowHandGraspEnvVelC
+# from .shadow_hand_grasp_env_pc_simple import ShadowHandGraspEnvPC
 # from .inmoov_shadow_hand_demo_fixed_grasp_env import InmoovShadowHandDemoFixedGraspEnv
+from .inmoov_shadow_grasp_env_v2 import InmoovShadowHandGraspEnvNew
 
 
 def register(id, *args, **kvargs):
@@ -39,6 +41,12 @@ register(
 )
 
 register(
+    id='InmoovHandGraspBulletEnv-v1',
+    entry_point='my_pybullet_envs:InmoovShadowHandGraspEnvNew',
+    max_episode_steps=400,
+)
+
+register(
     id='ShadowHandGraspBulletEnv-v0',
     entry_point='my_pybullet_envs:ShadowHandGraspEnv',
     max_episode_steps=400,
@@ -47,8 +55,14 @@ register(
 register(
     id='ShadowHandGraspBulletEnv-v1',
     entry_point='my_pybullet_envs:ShadowHandGraspEnvVelC',
-    max_episode_steps=400,
+    max_episode_steps=100,
 )
+
+# register(
+#     id='ShadowHandGraspBulletEnv-v2',
+#     entry_point='my_pybullet_envs:ShadowHandGraspEnvPC',
+#     max_episode_steps=400,
+# )
 
 register(
     id='ShadowHandPlaceBulletEnv-v0',
