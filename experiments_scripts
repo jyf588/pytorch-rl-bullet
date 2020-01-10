@@ -361,11 +361,24 @@ python main.py --env-name "ShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --l
 python main.py --env-name "ShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1208_box_7 --seed 2107
 #both violates physcis. object too light?
 
+1/9 22:32
 # inmoov new fixed
 python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_0 --seed 6000
 python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_1 --seed 6001
 # looking good
 
+# obj noise 2cm added
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_2 --seed 6002  # fails
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_3 --seed 6003
+
+1/9 23:15
+# UP 20cm*20cm, no cyl noise first
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_4_up --seed 6004
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_5_up --seed 6005 # stoped
+
+1/10 00:26 add cylinder noise
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_6_up --seed 6006
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_7_up --seed 6007
 
 
 

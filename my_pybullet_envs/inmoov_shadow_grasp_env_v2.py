@@ -17,10 +17,12 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=False,
-                 init_noise=True):
+                 renders=True,
+                 init_noise=True,
+                 up=True):
         self.renders = renders
         self.init_noise = init_noise
+        self.up = up
 
         self._timeStep = 1. / 240.
         if self.renders:
@@ -39,12 +41,10 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
 
         self.frameSkip = 1
 
-        self.cylinderInitPos = [0, 0, 0.101]    # TODO: fixed for now.
-        self.robotInitPalmPos = [-0.18, 0.105, 0.11]    # TODO: fixed as well.
+        self.tx = None
+        self.ty = None
 
         self.sim_setup()
-
-        # self.seed()    # TODO
 
         action_dim = len(self.action_scale)
         self.act = self.action_scale * 0.0
@@ -66,8 +66,17 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         if self.np_random is None:
             self.seed(0)    # used once temporarily, will be overwritten outside by env
 
+        self.cylinderInitPos = [0, 0, 0.101]
+        self.robotInitPalmPos = [-0.18, 0.105, 0.11]
+
+        if self.up:
+            self.tx = self.np_random.uniform(low=0, high=0.2)
+            self.ty = self.np_random.uniform(low=-0.2, high=0.0)
+            self.cylinderInitPos = np.array(self.cylinderInitPos) + np.array([self.tx, self.ty, 0])
+            self.robotInitPalmPos = np.array(self.robotInitPalmPos) + np.array([self.tx, self.ty, 0])
+
         cyInit = np.array(self.cylinderInitPos)
-        if self.init_noise:           # TODO
+        if self.init_noise:
             cyInit += np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
 
         self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder_heavier.urdf'),
@@ -82,7 +91,7 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         if self.np_random is not None:
             self.robot.np_random = self.np_random
 
-        self.robot.reset(self.robotInitPalmPos + [1.8, -1.57, 0])
+        self.robot.reset(list(self.robotInitPalmPos) + [1.8, -1.57, 0])
 
     def step(self, action):
         # action is in -1,1
@@ -98,7 +107,7 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         clPos, _ = p.getBasePositionAndOrientation(self.cylinderId)
         handPos, handQuat = self.robot.get_link_pos_quat(self.robot.ee_id)
 
-        dist = np.linalg.norm(np.array(handPos) - self.robotInitPalmPos - np.array(clPos))
+        dist = np.linalg.norm(np.array(handPos) - np.array(self.robotInitPalmPos) - np.array(clPos))
         if dist > 1: dist = 1
         if dist < 0.1: dist = 0.1
 
@@ -136,8 +145,6 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         return self.getExtendedObservation(), reward, False, {}
 
     def getExtendedObservation(self):
-        # TODO: odd
-        # https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/gym/pybullet_envs/bullet/kukaGymEnv.py#L132
         self.observation = self.robot.get_robot_observation()
 
         # clPos, clOrn = p.getBasePositionAndOrientation(self.cylinderId)
@@ -162,12 +169,18 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
             else:
                 curContact.extend([-1.0])
         self.observation.extend(curContact)
+
+        if self.up:
+            xy = np.array(self.cylinderInitPos)[:2]
+            self.observation.extend(list(xy + self.np_random.uniform(low=-0.01, high=0.01, size=2)))
+            self.observation.extend(list(xy + self.np_random.uniform(low=-0.01, high=0.01, size=2)))
+            self.observation.extend(list(xy + self.np_random.uniform(low=-0.01, high=0.01, size=2)))
+
         # if self.lastContact is not None:
         #     self.observation.extend(self.lastContact)
         # else:   # first step
         #     self.observation.extend(curContact)
         # self.lastContact = curContact.copy()
-
 
         # print("obv", self.observation)
         # print("max", np.max(np.abs(np.array(self.observation))))

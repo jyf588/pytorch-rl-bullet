@@ -38,10 +38,10 @@
 # self.fin_zerodofs = [8, 13, 18, 24]
 
 # turn off damping done.
-# arm mass inertia /100
-# finger mass inertia *10
-# there are some 0 mass links
-#  TODO: <joint name="rh_LFJ5" type="fixed"> done
+# arm mass inertia /100 done
+# finger mass inertia *10 done
+# there are some 0 mass links no more
+#  <joint name="rh_LFJ5" type="fixed"> done
 #     <parent link="rh_palm"/>
 #     <child link="rh_lfmetacarpal"/>
 # v2_2 urdf
@@ -82,6 +82,9 @@ class InmoovShadowNew:
 
         self.ee_id = 7      # link 7 is palm
 
+        self.maxForce = 200.    # TODO
+        self.np_random = None   # seeding inited outside in Env
+
         self.arm_id = p.loadURDF(os.path.join(currentdir,
                                              "assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand_v2_2.urdf"),
                                  list(self.base_init_pos), p.getQuaternionFromEuler(list(self.base_init_euler)),
@@ -90,8 +93,6 @@ class InmoovShadowNew:
                                  useFixedBase=1)
 
         # self.print_all_joints_info()
-
-        # print(self.get_link_pos_quat(0)[0])
 
         for i in range(-1, p.getNumJoints(self.arm_id)):
             p.changeDynamics(self.arm_id, i, jointDamping=0.0, linearDamping=0.0, angularDamping=0.0)
@@ -106,9 +107,6 @@ class InmoovShadowNew:
         self.ll = np.array([p.getJointInfo(self.arm_id, i)[8] for i in range(p.getNumJoints(self.arm_id))])
         self.ul = np.array([p.getJointInfo(self.arm_id, i)[9] for i in range(p.getNumJoints(self.arm_id))])
 
-        self.maxForce = 200.    # TODO
-        self.include_redun_body_pos = False
-        self.np_random = None   # seeding inited outside in Env
         # p.stepSimulation()
         # input("press enter")
 
@@ -132,7 +130,7 @@ class InmoovShadowNew:
 
     def perturb(self, arr, r=0.02):
         r = np.abs(r)
-        return np.copy(arr + self.np_random.uniform(low=-r, high=r, size=len(arr)))
+        return np.copy(np.array(arr) + self.np_random.uniform(low=-r, high=r, size=len(arr)))
 
     def reset(self, wx):
         # reset according to wrist 6D pos
@@ -282,8 +280,8 @@ if __name__ == "__main__":
         arm.np_random, seed = gym.utils.seeding.np_random(0)
         # arm.reset([-0.18, 0.105, 0.13, 1.8, -1.57, 0]) # obj [0,0,0]
         # arm.reset([0.02, 0.105, 0.13, 1.8, -1.57, 0]) # obj [0.2, 0, 0]
-        # arm.reset([0.02, 0.105-0.2, 0.13, 1.8, -1.57, 0]) # obj [0.2, -0.2, 0]
-        arm.reset([-0.18, 0.105 - 0.2, 0.13, 1.8, -1.57, 0])  # obj [0, -0.2, 0]
+        arm.reset([0.02, 0.105-0.2, 0.13, 1.8, -1.57, 0]) # obj [0.2, -0.2, 0]
+        # arm.reset([-0.18, 0.105 - 0.2, 0.13, 1.8, -1.57, 0])  # obj [0, -0.2, 0]
 
         print("init", arm.get_robot_observation())
         ls = p.getLinkState(arm.arm_id, arm.ee_id)
