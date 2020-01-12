@@ -363,6 +363,7 @@ python main.py --env-name "ShadowHandGraspBulletEnv-v0" --algo ppo --use-gae --l
 
 1/9 22:32
 # inmoov new fixed
+# obj mass 2.0
 python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_0 --seed 6000
 python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_1 --seed 6001
 # looking good
@@ -379,6 +380,80 @@ python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --l
 1/10 00:26 add cylinder noise
 python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_6_up --seed 6006
 python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_7_up --seed 6007
+
+1/10 10:53
+# max finger force 100, max arm force 600
+# reward shaping to match shadow grasp
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_8_up --seed 6008
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_9_up --seed 6009
+
+1/10 13:57
+# change reward back
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_10_up --seed 6010
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_11_up --seed 6011
+
+1/10 16:16
+# box,
+# almost old reward with tip pen. old mas force
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_0_up --seed 6100
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_1_up --seed 6101
+
+1/10 17:59
+# box again,
+# reward change back to reward thumb more.
+# tip pen & contact: both should be that thumb is 4X more important
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_2_up --seed 6102
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_3_up --seed 6103
+
+1/10 20:21
+# (30, b'rh_THJ4', 0) 0.0 1.2217304764  -> 2.0        # +1 outward
+# (32, b'rh_THJ2', 0) -0.698131700798 0.698131700798 -> 1.22 # same as below +1 flex
+# self.init_fin_q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [-0.4, 1.7, -0.0, 0.5, 0.0])
+# fin con reward 2.5/12.5
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_4_up --seed 6104
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_5_up --seed 6105
+
+1/10 21:33
+# self.robotInitPalmPos = [-0.18, 0.105, 0.10] -> [-0.11, 0.07, 0.10] easy start pos
+# drop pen -13
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_6_up --seed 6106
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_7_up --seed 6107
+
+1/10 23:51
+# try per finger contact reward
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_8_up --seed 6108
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_9_up --seed 6109
+
+1/11 11:31
+# replace the distal collision geoms
+# try onl reward distal and middle
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_10_up --seed 6110
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_11_up --seed 6111
+1/11 13:26
+# try again with distal / thumb reward larger than others
+# make obj heavier 3.5kg
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_12_up --seed 6112
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_13_up --seed 6113
+
+
+1/11 15:30
+# go back to per finger contact reward, (but add a little if tip in contact)
+# obj mass does not seem to matter, keep 3.5kg now.
+# frameskip = 3
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_14_up --seed 6114
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_15_up --seed 6115
+
+1/11 17:25
+# maybe should add finger dq back to obs
+# turn off cylinder noise for now
+# self.robotInitPalmPos = [-0.18, 0.095, 0.10], fin init restore.
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_16_up --seed 6116
+1/11 19:33
+# delete dq
+# modify palm dist reward a bit
+# apply same action for each frameskip
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_17_up --seed 6117
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_18_up --seed 6118
 
 
 

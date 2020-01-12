@@ -27,10 +27,10 @@
 # (26, b'rh_LFJ2', 0) 0.0 1.57079632679
 # (27, b'rh_LFJ1', 0) 0.0 1.57079632679
 # (28, b'rh_LFtip', 4) 0.0 -1.0
-# (29, b'rh_THJ5', 0) -1.0471975512 1.0471975512
-# (30, b'rh_THJ4', 0) 0.0 1.2217304764
-# (31, b'rh_THJ3', 0) -0.209439510239 0.209439510239
-# (32, b'rh_THJ2', 0) -0.698131700798 0.698131700798
+# (29, b'rh_THJ5', 0) -1.0471975512 1.0471975512    # -1 upward
+# (30, b'rh_THJ4', 0) 0.0 1.2217304764  -> 2.0        # +1 outward
+# (31, b'rh_THJ3', 0) -0.209439510239 0.209439510239    # -1 upward
+# (32, b'rh_THJ2', 0) -0.698131700798 0.698131700798 -> 1.22 # same as below +1 flex
 # (33, b'rh_THJ1', 0) 0.0 1.57079632679
 # (34, b'rh_thtip', 4) 0.0 -1.0
 # armdof [0, 1, 2, 3, 4, 6, 7]
@@ -76,7 +76,8 @@ class InmoovShadowNew:
         self.fin_zerodofs = [8, 13, 18, 24]
         self.fin_tips = [12, 17, 22, 28, 34]
         self.all_findofs = list(np.sort(self.fin_actdofs+self.fin_zerodofs))
-        self.init_fin_q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.0])
+        # self.init_fin_q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.0])
+        self.init_fin_q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [-0.4, 1.7, -0.0, 0.5, 0.0])  # TODO
         self.tar_arm_q = np.zeros(len(self.arm_dofs))       # dummy
         self.tar_fin_q = np.zeros(len(self.fin_actdofs))
 
@@ -166,6 +167,7 @@ class InmoovShadowNew:
         while not good_init:
             if self.init_noise:
                 init_arm_q = self.perturb(sp, r=0.002)
+                # init_arm_q = self.perturb(sp, r=0.02)
                 init_fin_q = self.perturb(self.init_fin_q, r=0.02)
             else:
                 init_arm_q = np.array(sp)

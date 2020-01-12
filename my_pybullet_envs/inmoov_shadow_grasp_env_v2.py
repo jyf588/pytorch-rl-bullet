@@ -37,12 +37,13 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         self.timer = 0
 
         # TODO: tune this is not principled
-        self.action_scale = np.array([0.004] * 7 + [0.01] * 17)  # shadow hand is 22-5=17dof
-
-        self.frameSkip = 1
+        self.frameSkip = 3
+        self.action_scale = np.array([0.003 * self.frameSkip] * 7 + [0.007 * self.frameSkip] * 17)  # shadow hand is 22-5=17dof
 
         self.tx = None
         self.ty = None
+
+        self.isBox = True
 
         self.sim_setup()
 
@@ -67,7 +68,10 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
             self.seed(0)    # used once temporarily, will be overwritten outside by env
 
         self.cylinderInitPos = [0, 0, 0.101]
-        self.robotInitPalmPos = [-0.18, 0.105, 0.11]
+        if self.isBox:      # TODO
+            self.robotInitPalmPos = [-0.11, 0.07, 0.10]
+        else:
+            self.robotInitPalmPos = [-0.18, 0.105, 0.11]
 
         if self.up:
             self.tx = self.np_random.uniform(low=0, high=0.2)
@@ -79,8 +83,13 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         if self.init_noise:
             cyInit += np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
 
-        self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder_heavier.urdf'),
-                                     cyInit, useFixedBase=0)
+        if self.isBox:
+            self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/box.urdf'),
+                                         cyInit, useFixedBase=0)
+        else:
+            self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
+                                         cyInit, useFixedBase=0)
+
         self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'),
                                   [0, 0, 0], useFixedBase=1)
         p.changeDynamics(self.cylinderId, -1, lateralFriction=1.0)
@@ -102,6 +111,9 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
 
         for _ in range(self.frameSkip):
             p.stepSimulation()
+            if self.renders:
+                time.sleep(self._timeStep)
+            self.timer += 1
 
         # rewards is height of target object
         clPos, _ = p.getBasePositionAndOrientation(self.cylinderId)
@@ -114,16 +126,45 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         reward = 3.0
         reward += -dist * 3.0
 
-        for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
-            cps = p.getContactPoints(self.cylinderId, self.robot.arm_id, -1, i)
-            if len(cps) > 0:
-                # print(len(cps))
-                reward += 5.0   # the more links in contact, the better
+        # for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
+        #     cps = p.getContactPoints(self.cylinderId, self.robot.arm_id, -1, i)
+        #     if len(cps) > 0:
+        #         # print(len(cps))
+        #         reward += 5.0   # the more links in contact, the better
 
-            # if i > 0 and i not in self.robot.activeDofs and i not in self.robot.lockDofs:   # i in [4,9,14,20,26]
-            #     tipPos = p.getLinkState(self.robot.handId, i)[0]
-            #     # print(tipPos)
-            #     reward += -np.minimum(np.linalg.norm(np.array(tipPos) - np.array(clPos)), 0.5) * 1.0
+        # cps = p.getContactPoints(self.cylinderId, self.robot.arm_id, -1, self.robot.ee_id)    # palm
+        # if len(cps) > 0: reward += 4.0
+        # for dof in np.copy(self.robot.fin_actdofs)[[0,1, 3,4, 6,7, 9,10]]:
+        #     cps = p.getContactPoints(self.cylinderId, self.robot.arm_id, -1, dof)
+        #     if len(cps) > 0:  reward += 2.0
+        # for dof in np.copy(self.robot.fin_actdofs)[[2, 5, 8, 11]]:
+        #     cps = p.getContactPoints(self.cylinderId, self.robot.arm_id, -1, dof)
+        #     if len(cps) > 0:  reward += 3.5
+        # for dof in self.robot.fin_actdofs[12:16]:         # thumb
+        #     cps = p.getContactPoints(self.cylinderId, self.robot.arm_id, -1, dof)
+        #     if len(cps) > 0:  reward += 10.0
+        # cps = p.getContactPoints(self.cylinderId, self.robot.arm_id, -1, self.robot.fin_actdofs[16])    # thumb tip
+        # if len(cps) > 0:  reward += 17.5
+
+        cps = p.getContactPoints(self.cylinderId, self.robot.arm_id, -1, self.robot.ee_id)    # palm
+        if len(cps) > 0: reward += 5.0
+        f_bp = [0, 3, 6, 9, 12, 17]     # 3*4+5
+        for ind_f in range(5):
+            con = False
+            # try onl reward distal and middle
+            # for dof in self.robot.fin_actdofs[f_bp[ind_f]:f_bp[ind_f+1]]:
+            for dof in self.robot.fin_actdofs[(f_bp[ind_f + 1] - 2):f_bp[ind_f + 1]]:
+                cps = p.getContactPoints(self.cylinderId, self.robot.arm_id, -1, dof)
+                if len(cps) > 0:  con = True
+            if con:  reward += 5.0
+            if con and ind_f == 4: reward += 20.0        # reward thumb even more
+
+        for i in self.robot.fin_tips[:4]:
+            tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
+            reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.4)  # 4 finger tips
+
+        tip_pos = p.getLinkState(self.robot.arm_id, self.robot.fin_tips[4])[0]      # thumb tip
+        reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 2.5)
 
         clVels = p.getBaseVelocity(self.cylinderId)
         clLinV = np.array(clVels[0])
@@ -131,12 +172,8 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.2
 
         if clPos[2] < -0.0 and self.timer > 300: # object dropped, do not penalize dropping when 0 gravity
-            reward += -9.
+            reward += -15.
 
-        if self.renders:
-            time.sleep(self._timeStep)
-
-        self.timer += 1
         if self.timer > 300:
             p.setCollisionFilterPair(self.cylinderId, self.floorId, -1, -1, enableCollision=0)
             for i in range(-1, p.getNumJoints(self.robot.arm_id)):

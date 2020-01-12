@@ -43,7 +43,7 @@ register(
 register(
     id='InmoovHandGraspBulletEnv-v1',
     entry_point='my_pybullet_envs:InmoovShadowHandGraspEnvNew',
-    max_episode_steps=400,
+    max_episode_steps=134,
 )
 
 register(
