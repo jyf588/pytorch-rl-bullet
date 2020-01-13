@@ -60,6 +60,7 @@ import os
 import inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 
+
 class InmoovShadowNew:
     def __init__(self,
                  init_noise=True,
@@ -76,8 +77,7 @@ class InmoovShadowNew:
         self.fin_zerodofs = [8, 13, 18, 24]
         self.fin_tips = [12, 17, 22, 28, 34]
         self.all_findofs = list(np.sort(self.fin_actdofs+self.fin_zerodofs))
-        # self.init_fin_q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.0])
-        self.init_fin_q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [-0.4, 1.7, -0.0, 0.5, 0.0])  # TODO
+        self.init_fin_q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.3, 0.1, 0.5, 0.0])
         self.tar_arm_q = np.zeros(len(self.arm_dofs))       # dummy
         self.tar_fin_q = np.zeros(len(self.fin_actdofs))
 
@@ -108,6 +108,8 @@ class InmoovShadowNew:
         self.ll = np.array([p.getJointInfo(self.arm_id, i)[8] for i in range(p.getNumJoints(self.arm_id))])
         self.ul = np.array([p.getJointInfo(self.arm_id, i)[9] for i in range(p.getNumJoints(self.arm_id))])
 
+        p.enableJointForceTorqueSensor(self.arm_id, self.ee_id, 1)
+
         # p.stepSimulation()
         # input("press enter")
 
@@ -133,11 +135,10 @@ class InmoovShadowNew:
         r = np.abs(r)
         return np.copy(np.array(arr) + self.np_random.uniform(low=-r, high=r, size=len(arr)))
 
-    def reset(self, wx):
+    def reset(self, w_pos, w_quat, all_fin_q=None, tar_act_q=None):
         # reset according to wrist 6D pos
-        wx_trans = list(wx[:3])
-        wx_euler = list(wx[3:])
-        wx_quat = p.getQuaternionFromEuler(wx_euler)
+        wx_trans = list(w_pos)
+        wx_quat = list(w_quat)
         closeEnough = False
         sp = [-0.44, 0.00, -0.5, -1.8, -0.44, -0.488, -0.8] + [0.0]*len(self.all_findofs)   # dummy init guess IK
         ll = self.ll[self.arm_dofs+self.all_findofs]
@@ -160,35 +161,44 @@ class InmoovShadowNew:
             wx_now = p.getLinkState(self.arm_id, self.ee_id)[4]
             dist = np.linalg.norm(np.array(wx_now) - np.array(wx_trans))
             # print("dist=", dist)
-            if dist < 2e-3: closeEnough = True
+            if dist < 1e-3: closeEnough = True
             iter += 1
 
-        good_init = False
-        while not good_init:
-            if self.init_noise:
-                init_arm_q = self.perturb(sp, r=0.002)
-                # init_arm_q = self.perturb(sp, r=0.02)
-                init_fin_q = self.perturb(self.init_fin_q, r=0.02)
-            else:
-                init_arm_q = np.array(sp)
-                init_fin_q = np.array(self.init_fin_q)
+        if all_fin_q is None or tar_act_q is None:       # normal reset for grasping
+            good_init = False
+            while not good_init:
+                if self.init_noise:
+                    init_arm_q = self.perturb(sp, r=0.002)
+                    # init_arm_q = self.perturb(sp, r=0.02)
+                    init_fin_q = self.perturb(self.init_fin_q, r=0.02)
+                else:
+                    init_arm_q = np.array(sp)
+                    init_fin_q = np.array(self.init_fin_q)
 
+                for ind in range(len(self.arm_dofs)):
+                    p.resetJointState(self.arm_id, self.arm_dofs[ind], init_arm_q[ind], 0.0)
+                for ind in range(len(self.fin_actdofs)):
+                    p.resetJointState(self.arm_id, self.fin_actdofs[ind], init_fin_q[ind], 0.0)
+                for ind in range(len(self.fin_zerodofs)):
+                    p.resetJointState(self.arm_id, self.fin_zerodofs[ind], 0.0, 0.0)
+
+                self.tar_arm_q = init_arm_q
+                self.tar_fin_q = init_fin_q
+
+                cps = p.getContactPoints(bodyA=self.arm_id)
+                # for cp in cps:
+                #     print(cp)
+                #     input("penter")
+                # print(cps[0][6])
+                if len(cps) == 0: good_init = True   # TODO: init hand last and make sure it does not colllide with env
+        else:                                           # reset for placing, no noise, no collision checking
             for ind in range(len(self.arm_dofs)):
-                p.resetJointState(self.arm_id, self.arm_dofs[ind], init_arm_q[ind], 0.0)
-            for ind in range(len(self.fin_actdofs)):
-                p.resetJointState(self.arm_id, self.fin_actdofs[ind], init_fin_q[ind], 0.0)
-            for ind in range(len(self.fin_zerodofs)):
-                p.resetJointState(self.arm_id, self.fin_zerodofs[ind], 0.0, 0.0)
+                p.resetJointState(self.arm_id, self.arm_dofs[ind], sp[ind], 0.0)
+            for ind in range(len(self.all_findofs)):
+                p.resetJointState(self.arm_id, self.all_findofs[ind], all_fin_q[ind], 0.0)
+            self.tar_arm_q = sp
+            self.tar_fin_q = np.array(tar_act_q)
 
-            self.tar_arm_q = init_arm_q
-            self.tar_fin_q = init_fin_q
-
-            cps = p.getContactPoints(bodyA=self.arm_id)
-            # for cp in cps:
-            #     print(cp)
-            #     input("penter")
-            # print(cps[0][6])
-            if len(cps) == 0: good_init = True   # TODO: init hand last and make sure it does not colllide with env
         # input("after reset")
 
     def get_robot_observation(self):
@@ -262,6 +272,16 @@ class InmoovShadowNew:
         newLinVel = p.getLinkState(self.arm_id, l_id, computeForwardKinematics=1, computeLinkVelocity=1)[6]
         newAngVel = p.getLinkState(self.arm_id, l_id, computeForwardKinematics=1, computeLinkVelocity=1)[7]
         return newLinVel, newAngVel
+
+    def get_wrist_wrench(self):
+        # TODO: do not know if moments include those produced by force
+        joint_reaction = list(p.getJointState(self.arm_id, self.ee_id)[2])
+        joint_reaction[3] = p.getJointState(self.arm_id, self.ee_id)[3]     # TODO: rot axis 1,0,0
+        _, p_quat = self.get_link_pos_quat(self.ee_id)
+        # transform to world coord
+        f_xyz, _ = p.multiplyTransforms([0, 0, 0], p_quat, joint_reaction[:3], [0, 0, 0, 1])
+        m_xyz, _ = p.multiplyTransforms([0, 0, 0], p_quat, joint_reaction[3:], [0, 0, 0, 1])
+        return list(f_xyz)+list(m_xyz)
 
 
 if __name__ == "__main__":

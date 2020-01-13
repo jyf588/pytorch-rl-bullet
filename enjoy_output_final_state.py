@@ -34,10 +34,19 @@ parser.add_argument(
     help='directory to save agent logs (default: ./trained_models/)')
 parser.add_argument(
     '--non-det',
-    action='store_true',
-    default=False,
-    help='whether to use a non-deterministic policy')
+    type=int,
+    default=1,
+    help='whether to use a non-deterministic policy, 1 true 0 false')
+parser.add_argument(
+    '--iter',
+    type=int,
+    default=-1,
+    help='which iter pi to test')
 args = parser.parse_args()
+
+# TODO
+is_cuda = True
+device = 'cuda' if is_cuda else 'cpu'
 
 args.det = not args.non_det
 
@@ -47,7 +56,7 @@ env = make_vec_envs(
     1,
     None,
     None,
-    device='cuda',
+    device=device,
     allow_early_resets=False)
 
 # dont know why there are so many wrappers in make_vec_envs...
@@ -61,8 +70,15 @@ robot = env_core.robot
 # print(render_func)
 
 # We need to use the same statistics for normalization as used in training
-actor_critic, ob_rms = \
-            torch.load(os.path.join(args.load_dir, args.env_name + ".pt"))
+if args.iter >= 0:
+    path = os.path.join(args.load_dir, args.env_name + "_" + str(args.iter) + ".pt")
+else:
+    path = os.path.join(args.load_dir, args.env_name + ".pt")
+
+if is_cuda:
+    actor_critic, ob_rms = torch.load(path)
+else:
+    actor_critic, ob_rms = torch.load(path, map_location='cpu')
 
 vec_norm = get_vec_normalize(env)
 if vec_norm is not None:
@@ -93,7 +109,7 @@ reward_total = 0
 timer = 0
 
 finish = False
-save_qs = []
+
 while not finish:
     with torch.no_grad():
         value, action, _, recurrent_hidden_states = actor_critic.act(
@@ -105,45 +121,17 @@ while not finish:
 
     reward_total += reward
 
-    if not done and timer >= 380 and reward_total > 18000:   # TODO
-        # if timer == 380:
+    # print(reward_total)
+    # if 95 <= timer <= 101:
+    #     input("press enter")
+
+    if not done and 95 <= timer <= 101 and reward_total > 3500:   # TODO: timer/r, need to change if Pi different
+        # if 95 <= timer <= 101:
         #     input("press enter")
-        save_q = []
+        env_core.append_final_state()
+        print(len(env_core.final_states))
 
-        # pos = p.getLinkState(robot.robotId, robot.endEffectorId)[0]
-        # orn = p.getLinkState(robot.robotId, robot.endEffectorId)[1]
-        # print(pos, orn)
-        #
-        # localpos = p.getLinkState(robot.robotId, robot.endEffectorId)[2]
-        # localorn = p.getLinkState(robot.robotId, robot.endEffectorId)[3]
-        # print(localpos, localorn)
-        #
-        pos, orn = p.getBasePositionAndOrientation(robot.handId)
-        # x,r = p.multiplyTransforms(pos, orn, localpos, localorn)
-        # print(x,r)
-
-        linVel, angVel = p.getBaseVelocity(robot.handId)
-        save_q.extend(pos)
-        save_q.extend(p.getEulerFromQuaternion(orn))
-        save_q.extend(linVel)
-        save_q.extend(angVel)
-        # print(save_q)
-        save_q.extend(list(robot.get_raw_state_fingers(includeVel=False)))
-        # print(save_q)
-
-        clPos, clOrn = p.getBasePositionAndOrientation(env_core.cylinderId)
-        save_q.extend(clPos)
-        save_q.extend(p.getEulerFromQuaternion(clOrn))
-        clVels = p.getBaseVelocity(env_core.cylinderId)
-        save_q.extend(clVels[0])
-        save_q.extend(clVels[1])
-        # print(save_q)
-
-        save_qs.append(save_q)
-
-        print(len(save_qs))
-
-        if len(save_qs) > 60000:
+        if len(env_core.final_states) > 20000:      # TODO: length
             finish = True
 
     if done:
@@ -164,5 +152,8 @@ while not finish:
     #     render_func('human')
     # p.getCameraImage()
 
-with open('final_states_1226_from_fixed.pickle', 'wb') as handle:
-    pickle.dump(save_qs, handle, protocol=pickle.HIGHEST_PROTOCOL)
+with open('final_states_0112_box.pickle', 'wb') as handle:      # TODO: box
+    o_pos_pf_ave, o_quat_pf_ave = env_core.calc_average_obj_in_palm()
+    stored_info = {'init_states': env_core.final_states, 'ave_obj_pos_in_palm': o_pos_pf_ave,
+                   'ave_obj_quat_in_palm': o_quat_pf_ave}
+    pickle.dump(stored_info, handle, protocol=pickle.HIGHEST_PROTOCOL)

@@ -17,7 +17,7 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=True,
+                 renders=False,
                  init_noise=True,
                  up=True):
         self.renders = renders
@@ -36,9 +36,11 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         self.viewer = None
         self.timer = 0
 
+        self.final_states = []  # wont be cleared unless call clear function
+
         # TODO: tune this is not principled
         self.frameSkip = 3
-        self.action_scale = np.array([0.003 * self.frameSkip] * 7 + [0.007 * self.frameSkip] * 17)  # shadow hand is 22-5=17dof
+        self.action_scale = np.array([0.004] * 7 + [0.008] * 17)  # shadow hand is 22-5=17dof
 
         self.tx = None
         self.ty = None
@@ -68,10 +70,7 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
             self.seed(0)    # used once temporarily, will be overwritten outside by env
 
         self.cylinderInitPos = [0, 0, 0.101]
-        if self.isBox:      # TODO
-            self.robotInitPalmPos = [-0.11, 0.07, 0.10]
-        else:
-            self.robotInitPalmPos = [-0.18, 0.105, 0.11]
+        self.robotInitPalmPos = [-0.18, 0.095, 0.10]    # TODO
 
         if self.up:
             self.tx = self.np_random.uniform(low=0, high=0.2)
@@ -100,31 +99,32 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         if self.np_random is not None:
             self.robot.np_random = self.np_random
 
-        self.robot.reset(list(self.robotInitPalmPos) + [1.8, -1.57, 0])
+        self.robot.reset(list(self.robotInitPalmPos), p.getQuaternionFromEuler([1.8, -1.57, 0]))
 
     def step(self, action):
-        # action is in -1,1
-        if action is not None:
-            # action = np.clip(np.array(action), -1, 1)   # TODO
-            self.act = action
-            self.robot.apply_action(self.act * self.action_scale)
-
         for _ in range(self.frameSkip):
+            # action is in -1,1
+            if action is not None:
+                self.act = action
+                self.robot.apply_action(self.act * self.action_scale)
             p.stepSimulation()
             if self.renders:
                 time.sleep(self._timeStep)
             self.timer += 1
 
+        reward = 3.0
+
         # rewards is height of target object
         clPos, _ = p.getBasePositionAndOrientation(self.cylinderId)
-        handPos, handQuat = self.robot.get_link_pos_quat(self.robot.ee_id)
+        palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
+        dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(clPos)), 0.5)
+        reward += -dist * 2.0
 
-        dist = np.linalg.norm(np.array(handPos) - np.array(self.robotInitPalmPos) - np.array(clPos))
-        if dist > 1: dist = 1
-        if dist < 0.1: dist = 0.1
-
-        reward = 3.0
-        reward += -dist * 3.0
+        for i in self.robot.fin_tips[:4]:
+            tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
+            reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.5)  # 4 finger tips
+        tip_pos = p.getLinkState(self.robot.arm_id, self.robot.fin_tips[4])[0]      # thumb tip
+        reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.5) * 5.0
 
         # for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
         #     cps = p.getContactPoints(self.cylinderId, self.robot.arm_id, -1, i)
@@ -153,18 +153,12 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
             con = False
             # try onl reward distal and middle
             # for dof in self.robot.fin_actdofs[f_bp[ind_f]:f_bp[ind_f+1]]:
-            for dof in self.robot.fin_actdofs[(f_bp[ind_f + 1] - 2):f_bp[ind_f + 1]]:
+            # for dof in self.robot.fin_actdofs[(f_bp[ind_f + 1] - 2):f_bp[ind_f + 1]]:
+            for dof in self.robot.fin_actdofs[(f_bp[ind_f + 1] - 3):f_bp[ind_f + 1]]:
                 cps = p.getContactPoints(self.cylinderId, self.robot.arm_id, -1, dof)
                 if len(cps) > 0:  con = True
             if con:  reward += 5.0
             if con and ind_f == 4: reward += 20.0        # reward thumb even more
-
-        for i in self.robot.fin_tips[:4]:
-            tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
-            reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.4)  # 4 finger tips
-
-        tip_pos = p.getLinkState(self.robot.arm_id, self.robot.fin_tips[4])[0]      # thumb tip
-        reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 2.5)
 
         clVels = p.getBaseVelocity(self.cylinderId)
         clLinV = np.array(clVels[0])
@@ -224,6 +218,40 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         # print("min", np.min(np.abs(np.array(self.observation))))
 
         return self.observation
+
+    def append_final_state(self):
+        # output obj in palm frame (no need to output palm frame in world)
+        # output finger q's, finger tar q's.
+        # velocity will be assumed to be zero at the end of transporting phase
+        # return a dict.
+        obj_pos, obj_quat = p.getBasePositionAndOrientation(self.cylinderId)      # w2o
+        hand_pos, hand_quat = self.robot.get_link_pos_quat(self.robot.ee_id)    # w2p
+        inv_h_p, inv_h_q = p.invertTransform(hand_pos, hand_quat)       # p2w
+        o_p_hf, o_q_hf = p.multiplyTransforms(inv_h_p, inv_h_q, obj_pos, obj_quat)  # p2w*w2o
+
+        fin_q, _ = self.robot.get_q_dq(self.robot.all_findofs)
+
+        state = {'obj_pos_in_palm': o_p_hf, 'obj_quat_in_palm': o_q_hf,
+                 'all_fin_q': fin_q, 'fin_tar_q': self.robot.tar_fin_q}
+        # print(state)
+        # print(self.robot.get_joints_last_tau(self.robot.all_findofs))
+        # self.robot.get_wrist_wrench()
+        self.final_states.append(state)
+
+    def clear_final_states(self):
+        self.final_states = []
+
+    def calc_average_obj_in_palm(self):
+        count = len(self.final_states)
+        o_pos_hf_sum = np.array([0., 0, 0])
+        o_quat_hf_sum = np.array([0., 0, 0, 0])
+        for dict in self.final_states:
+            o_pos_hf_sum += np.array(dict['obj_pos_in_palm'])
+            o_quat_hf_sum += np.array(dict['obj_quat_in_palm'])
+        o_pos_hf_sum /= count
+        o_quat_hf_sum /= count      # rough estimate of quat average
+        o_quat_hf_sum /= np.linalg.norm(o_quat_hf_sum)      # normalize quat
+        return list(o_pos_hf_sum), list(o_quat_hf_sum)
 
     def seed(self, seed=None):
         self.np_random, seed = gym.utils.seeding.np_random(seed)

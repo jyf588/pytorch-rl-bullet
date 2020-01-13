@@ -200,6 +200,7 @@ class ShadowHandPlaceEnv(gym.Env):
 
         # TODO: add contact wrench info, getConstraintState? MOst of the force are used to combat own gravity
         cf = np.array(p.getConstraintState(self.robot.cid))
+        # print(cf)
         cf[:3] /= (self.robot.maxForce * 5)
         cf[3:] /= (self.robot.maxForce * 1)     # just in case there is not state normalization in ppo
         # TODO: would like to see cf increase as obj touch floor,
@@ -261,7 +262,8 @@ class ShadowHandPlaceEnv(gym.Env):
             # save_q[-11] = 0
 
             print(save_q[3:6])
-            self.robot.reset_to_q(save_q[:-12], needCorrection=False)
+            # self.robot.reset_to_q(save_q[:-12], needCorrection=False)
+            self.robot.reset_to_q(save_q[:-12])
 
             cyInit = save_q[-12:-9]
             cyOri = save_q[-9:-6]

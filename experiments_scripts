@@ -455,7 +455,42 @@ python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --l
 python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_17_up --seed 6117
 python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_18_up --seed 6118
 
+# turn on box init noise
+# [0.0, 1.3, 0.1, 0.5, 0.0
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_19_up --seed 6119
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1210_box_arm_20_up --seed 6120  # better
 
+
+1/11 11:41
+# same setting, but try cylinder.
+# [0.0, 1.0, 0.1, 0.5, 0.0
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_12_up --seed 6012  # seems a bit better
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_13_up --seed 6013
+
+# try start at higher 0.12 m
+# [0.0, 1.3, 0.1, 0.5, 0.0
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_14_up --seed 6014
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_15_up --seed 6015
+
+1/12 12:36
+# try start at higher 0.12 m
+# [0.0, 1.0, 0.1, 0.5, 0.0
+# mu 1.0
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_16_up --seed 6016
+# kind of also works...
+
+# try start at higher 0.12 m
+# [0.0, 1.0, 0.1, 0.5, 0.0
+# mu 3.0
+# for dof in self.robot.fin_actdofs[(f_bp[ind_f + 1] - 3):f_bp[ind_f + 1]]:
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_1209_arm_17_up --seed 6017
+# funny, use of the zeroDofs...
+
+
+# current diffs in cyl and box poilicies:
+# box [0.0, 1.3, 0.1, 0.5, 0.0](_box_arm_20_up), cylinder [0.0, 1.0, 0.1, 0.5, 0.0](_arm_12/16/17_up)
+# box [-0.18, 0.095, 0.10](_box_arm_20_up), cylinder [-0.18, 0.095, 0.12] (_arm_16/17_up)
+# self.robot.fin_actdofs[(f_bp[ind_f + 1] - 3):f_bp[ind_f + 1]], BOX 2
 
 # copy header
 # copy folder
