@@ -42,12 +42,14 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=True,
+                 renders=False,
                  init_noise=True,
-                 up=True):
+                 up=True,
+                 is_box=False):
         self.renders = renders
         self.init_noise = init_noise        # TODO: bottom object noise
         self.up = up
+        self.isBox = is_box
 
         self._timeStep = 1. / 240.
         if self.renders:
@@ -67,14 +69,13 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
         self.ty = None
         self.tz = None
         self.desired_obj_pos_final = None
-        self.isBox = True
 
         self.saved_file = None
         if self.isBox:
             with open(os.path.join(currentdir, 'assets/place_init_dist/final_states_0112_box.pickle'), 'rb') as handle:
                 self.saved_file = pickle.load(handle)
         else:
-            with open(os.path.join(currentdir, 'assets/place_init_dist/final_states_xxx.pickle'), 'rb') as handle:
+            with open(os.path.join(currentdir, 'assets/place_init_dist/final_states_0112_cyl.pickle'), 'rb') as handle:
                 self.saved_file = pickle.load(handle)
         assert self.saved_file is not None
         self.o_pos_pf_ave = self.saved_file['ave_obj_pos_in_palm']
@@ -233,10 +234,16 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
             for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
                 cps = p.getContactPoints(self.obj_id, self.robot.arm_id, -1, i)
                 if len(cps) == 0:
-                    reward += 0.7   # the fewer links in contact, the better
+                    reward += 0.5   # the fewer links in contact, the better
             palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
             dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(clPos)), 0.3)
             reward += dist * 10.0
+            # rewards is height of target object
+            for i in self.robot.fin_tips[:4]:
+                tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
+                reward += np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.25)  # 4 finger tips
+            tip_pos = p.getLinkState(self.robot.arm_id, self.robot.fin_tips[4])[0]  # thumb tip
+            reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.25) * 5.0
 
         # succeed = False
         obs = self.getExtendedObservation()     # call last obs before test period
@@ -244,11 +251,13 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
             # this is slightly different from mountain car's sparse reward,
             # where you are only rewarded when reaching a certain state
             # this is saying you must be at certain state at certain time (after test)
-            for i in range(-1, p.getNumJoints(self.robot.arm_id)):
-                p.setCollisionFilterPair(self.obj_id, self.robot.arm_id, -1, i, enableCollision=0)
-                p.setCollisionFilterPair(self.bottom_obj_id, self.robot.arm_id, -1, i, enableCollision=0)
-            for _ in range(300):
-                # self.robot.apply_action(np.array([-0.01]+[-0.0]+[0.0]*5+[-0.005]*17))
+            # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
+            #     p.setCollisionFilterPair(self.obj_id, self.robot.arm_id, -1, i, enableCollision=0)
+            #     p.setCollisionFilterPair(self.bottom_obj_id, self.robot.arm_id, -1, i, enableCollision=0)
+            for test_t in range(300):
+                open_up_q = np.array([0.2, 0.2, 0.2] * 4 + [-0.4, 1.9, -0.0, 0.5, 0.0])
+                devi = open_up_q - self.robot.get_q_dq(self.robot.fin_actdofs)[0]
+                self.robot.apply_action(np.array([0.0]*7+list(devi/150.)))
                 p.stepSimulation()
                 if self.renders:
                     time.sleep(self._timeStep)

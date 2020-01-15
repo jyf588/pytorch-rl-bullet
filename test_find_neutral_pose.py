@@ -49,6 +49,7 @@ class InmoovArmObj:
         # init_arm_q = [-0.44, 0.00, -0.5, -1.8, -0.44, -0.488]
         # init_arm_q = [-0.4, -0.7, 0.5, -1.2, -0.5, 0.0]
         init_arm_q = [0] * 6
+        # init_arm_q = [0] * 7
         for ind in range(len(self.arm_dofs)):
             p.resetJointState(self.arm_id, self.arm_dofs[ind], init_arm_q[ind], 0.0)
 
@@ -235,12 +236,42 @@ class InmoovArmObj:
 
         print(jac.dot(d_test_q - test_q))
 
+    def solve_palm_IK(self, w_pos, w_quat):
+        # reset according to wrist 6D pos
+        wx_trans = list(w_pos)
+        wx_quat = list(w_quat)
+        closeEnough = False
+        sp = [-0.44, 0.00, -0.5, -1.8, -0.44, -0.488] # dummy init guess IK
+        ll = self.ll[self.arm_dofs]
+        ul = self.ul[self.arm_dofs]
+        jr = ul - ll
+        iter = 0
+        while not closeEnough and iter < 2000:
+            for ind in range(len(self.arm_dofs)):
+                p.resetJointState(self.arm_id, self.arm_dofs[ind], sp[ind])
+
+            jointPoses = p.calculateInverseKinematics(self.arm_id, self.ee_id-1, wx_trans, wx_quat,
+                                                      lowerLimits=ll.tolist(), upperLimits=ul.tolist(),
+                                                      jointRanges=jr.tolist(),
+                                                      restPoses=sp)
+            # jointPoses = p.calculateInverseKinematics(self.arm_id, self.ee_id, wx_trans, wx_quat)
+
+            sp = np.array(jointPoses)[range(6)].tolist()
+            # print(sp)
+
+            wx_now = p.getLinkState(self.arm_id, self.ee_id-1)[4]
+            dist = np.linalg.norm(np.array(wx_now) - np.array(wx_trans))
+            print("dist=", dist)
+            if dist < 1e-5: closeEnough = True
+            iter += 1
+        print(self.get_link_pos_quat(self.ee_id))
+        print(self.get_link_pos_quat(self.ee_id-1))
 
 
 hz = 240.0
 dt = 1.0 / hz
 
-p.connect(p.DIRECT)
+p.connect(p.GUI)
 p.resetSimulation()
 # p.setPhysicsEngineParameter(numSolverIterations=200)
 
@@ -248,9 +279,17 @@ p.setGravity(0, 0, 0)
 p.setTimeStep(dt)
 p.setRealTimeSimulation(0)
 
-a = InmoovArmObj()
-# input("press enter")
+floorId = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/plane.urdf'),
+                          [0, 0, 0], useFixedBase=1)
 
+a = InmoovArmObj()
+
+a.solve_palm_IK([-0.18, 0.095, 0.11], p.getQuaternionFromEuler([1.8, -1.57, 0]))
+# from IK old reset
+# ((-0.17977985739707947, 0.09488461911678314, 0.11017470806837082), (0.5541251301765442, -0.4393734335899353, 0.5536625981330872, 0.43972036242485046))
+
+
+input("press enter")
 # a.compare_jac_two_point_fin_diff([-0.4, -0.7, 0.5, -1.2, -0.5, 0.0])
 
 # a.compare_jac_fin_diff([-0.44, 0.00, -0.5, -1.8, -0.44, -0.488])
@@ -271,6 +310,8 @@ for ind in range(1000):
     tar = list([np.random.uniform(low=-0.3, high=0.5), np.random.uniform(low=-0.3, high=0.8)])
 
     residue = a.calc_IK_two_points(tar + [0.] + tar)
+    input("press enter")
+
     # a.calc_IK(tar + [0., 0, 0])
     # input("press enter")
 

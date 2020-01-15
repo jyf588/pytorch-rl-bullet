@@ -102,7 +102,7 @@ class InmoovShadowNew:
         self.scale_mass_inertia(self.ee_id, p.getNumJoints(self.arm_id), 10.0)
 
         for i in range(self.ee_id, p.getNumJoints(self.arm_id)):
-            p.changeDynamics(self.arm_id, i, lateralFriction=3.0)
+            p.changeDynamics(self.arm_id, i, lateralFriction=1.5)
 
         # use np for multi-indexing
         self.ll = np.array([p.getJointInfo(self.arm_id, i)[8] for i in range(p.getNumJoints(self.arm_id))])
@@ -145,6 +145,23 @@ class InmoovShadowNew:
 
     # sp = list(self.sample_uniform_arm_q()) + [0.0]*len(self.all_findofs)
     # print(sp)
+
+    def reset_using_comfortable(self, arm_q, ):
+        if self.init_noise:
+            init_arm_q = self.perturb(arm_q, r=0.002)
+            init_fin_q = self.perturb(self.init_fin_q, r=0.02)
+        else:
+            init_arm_q = np.copy(arm_q)
+            init_fin_q = np.array(self.init_fin_q)
+
+        for ind in range(len(self.arm_dofs)):
+            p.resetJointState(self.arm_id, self.arm_dofs[ind], init_arm_q[ind], 0.0)
+        for ind in range(len(self.fin_actdofs)):
+            p.resetJointState(self.arm_id, self.fin_actdofs[ind], init_fin_q[ind], 0.0)
+        for ind in range(len(self.fin_zerodofs)):
+            p.resetJointState(self.arm_id, self.fin_zerodofs[ind], 0.0, 0.0)
+        self.tar_arm_q = init_arm_q
+        self.tar_fin_q = init_fin_q
 
     def reset(self, w_pos, w_quat, all_fin_q=None, tar_act_q=None):
         # reset according to wrist 6D pos
@@ -293,7 +310,6 @@ class InmoovShadowNew:
             controlMode=p.POSITION_CONTROL,
             targetPositions=[0.0]*len(self.fin_zerodofs),
             forces=[self.maxForce / 4.0] * len(self.fin_zerodofs))
-
 
     def get_robot_observation_dim(self):
         return len(self.get_robot_observation())
