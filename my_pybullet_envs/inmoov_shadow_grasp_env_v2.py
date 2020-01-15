@@ -12,17 +12,23 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 
 # episode length 400
 
+# TODO: txyz will be given by vision module. tz is zero for grasping, obj frame at bottom.
+
 
 class InmoovShadowHandGraspEnvNew(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=False,
+                 renders=True,
                  init_noise=True,
-                 up=True):
+                 up=True,
+                 is_box=True,
+                 small=True):
         self.renders = renders
         self.init_noise = init_noise
         self.up = up
+        self.isBox = is_box
+        self.small = small
 
         self._timeStep = 1. / 240.
         if self.renders:
@@ -44,8 +50,6 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
 
         self.tx = None
         self.ty = None
-
-        self.isBox = True
 
         self.sim_setup()
 
@@ -69,12 +73,18 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         if self.np_random is None:
             self.seed(0)    # used once temporarily, will be overwritten outside by env
 
-        self.cylinderInitPos = [0, 0, 0.101]
-        self.robotInitPalmPos = [-0.18, 0.095, 0.10]    # TODO
+        if self.small:
+            self.cylinderInitPos = [0, 0, 0.071]
+            self.robotInitPalmPos = [-0.18, 0.095, 0.075]
+        else:
+            self.cylinderInitPos = [0, 0, 0.101]
+            self.robotInitPalmPos = [-0.18, 0.095, 0.11]
 
         if self.up:
             self.tx = self.np_random.uniform(low=0, high=0.2)
             self.ty = self.np_random.uniform(low=-0.2, high=0.0)
+            # self.tx = 0.18
+            # self.ty = -0.18
             self.cylinderInitPos = np.array(self.cylinderInitPos) + np.array([self.tx, self.ty, 0])
             self.robotInitPalmPos = np.array(self.robotInitPalmPos) + np.array([self.tx, self.ty, 0])
 
@@ -83,11 +93,19 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
             cyInit += np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
 
         if self.isBox:
-            self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/box.urdf'),
-                                         cyInit, useFixedBase=0)
+            if self.small:
+                self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/box_small.urdf'),
+                                             cyInit, useFixedBase=0)
+            else:
+                self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/box.urdf'),
+                                             cyInit, useFixedBase=0)
         else:
-            self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
-                                         cyInit, useFixedBase=0)
+            if self.small:
+                self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cyl_small.urdf'),
+                                             cyInit, useFixedBase=0)
+            else:
+                self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
+                                             cyInit, useFixedBase=0)
 
         self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'),
                                   [0, 0, 0], useFixedBase=1)
@@ -100,6 +118,7 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
             self.robot.np_random = self.np_random
 
         self.robot.reset(list(self.robotInitPalmPos), p.getQuaternionFromEuler([1.8, -1.57, 0]))
+        # print(self.robot.get_link_pos_quat(self.robot.ee_id))
 
     def step(self, action):
         for _ in range(self.frameSkip):

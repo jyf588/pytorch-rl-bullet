@@ -1,0 +1,24 @@
+<?xml version="1.0" ?>
+<robot name="urdf_robot">
+  <link name="baseLink">
+    <visual>
+      <geometry>
+        <cylinder length="0.14" radius="0.04"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder length="0.14" radius="0.04"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <contact_coefficients mu="3.0" />
+    </collision>
+    <inertial>
+      <mass value="3.5"/>
+      <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+    </inertial>
+  </link>
+</robot>

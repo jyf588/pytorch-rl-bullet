@@ -77,7 +77,7 @@ class InmoovShadowNew:
         self.fin_zerodofs = [8, 13, 18, 24]
         self.fin_tips = [12, 17, 22, 28, 34]
         self.all_findofs = list(np.sort(self.fin_actdofs+self.fin_zerodofs))
-        self.init_fin_q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.3, 0.1, 0.5, 0.0])
+        self.init_fin_q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.0])
         self.tar_arm_q = np.zeros(len(self.arm_dofs))       # dummy
         self.tar_fin_q = np.zeros(len(self.fin_actdofs))
 
@@ -135,6 +135,17 @@ class InmoovShadowNew:
         r = np.abs(r)
         return np.copy(np.array(arr) + self.np_random.uniform(low=-r, high=r, size=len(arr)))
 
+    def sample_uniform_arm_q(self):
+        ll = self.ll[self.arm_dofs]
+        ul = self.ul[self.arm_dofs]
+        q = [0.0] * (len(ll))
+        for ind in range(len(ll)):
+            q[ind] = self.np_random.uniform(low=ll[ind], high=ul[ind])
+        return q
+
+    # sp = list(self.sample_uniform_arm_q()) + [0.0]*len(self.all_findofs)
+    # print(sp)
+
     def reset(self, w_pos, w_quat, all_fin_q=None, tar_act_q=None):
         # reset according to wrist 6D pos
         wx_trans = list(w_pos)
@@ -175,12 +186,32 @@ class InmoovShadowNew:
                     init_arm_q = np.array(sp)
                     init_fin_q = np.array(self.init_fin_q)
 
+             #        print(init_arm_q)
+             #        # a = np.array([-4.86301483e-01,   2.86628535e-02,  -6.06658747e-01,
+             #        #                 -1.79659565e+00,  -4.58104018e-01,  -4.52796297e-01,
+             #        #                 -9.81747704e-02])
+             # #        a = np.array([-2.00762591e-01,  -2.22514814e-01,  -8.57366233e-01,
+             # # -1.82811687e+00,   3.95210725e-02,  -5.54310898e-01,
+             # # -4.90873852e-01])
+             #        a = np.array([-7.00274638e-01,  -5.39582786e-01,  -1.05399470e+00,
+             # -1.06178242e+00,   2.52445040e-02,  -3.46439478e-01,
+             # -4.90873852e-01])
+             #        print(a)
+             #        print("norm diff", (init_arm_q-a)/np.linalg.norm(init_arm_q-a))
+             #        # # input("press enter")
+             #        init_arm_q = a
+
                 for ind in range(len(self.arm_dofs)):
                     p.resetJointState(self.arm_id, self.arm_dofs[ind], init_arm_q[ind], 0.0)
                 for ind in range(len(self.fin_actdofs)):
                     p.resetJointState(self.arm_id, self.fin_actdofs[ind], init_fin_q[ind], 0.0)
                 for ind in range(len(self.fin_zerodofs)):
                     p.resetJointState(self.arm_id, self.fin_zerodofs[ind], 0.0, 0.0)
+
+                # # jac = self.get_cur_jac()
+                # # import scipy
+                # # print("null space", scipy.linalg.null_space(jac).T)
+                # input("press enter")
 
                 self.tar_arm_q = init_arm_q
                 self.tar_fin_q = init_fin_q
@@ -200,6 +231,17 @@ class InmoovShadowNew:
             self.tar_fin_q = np.array(tar_act_q)
 
         # input("after reset")
+
+    def get_cur_jac(self):
+        wq, _ = self.get_q_dq(self.arm_dofs)
+        n_dofs = len(self.arm_dofs+self.all_findofs)
+        n_arm_dofs = len(self.arm_dofs)
+        [jac_t, jac_r] = p.calculateJacobian(self.arm_id, self.ee_id, [0] * 3,
+                                             list(wq)+list(self.get_q_dq(self.all_findofs)[0]),
+                                             [0.] * n_dofs, [0.] * n_dofs)
+        jac = np.array([jac_t[0][:n_arm_dofs], jac_t[1][:n_arm_dofs], jac_t[2][:n_arm_dofs],
+                        jac_r[0][:n_arm_dofs], jac_r[1][:n_arm_dofs], jac_r[2][:n_arm_dofs]])
+        return jac
 
     def get_robot_observation(self):
         obs = []
@@ -245,6 +287,13 @@ class InmoovShadowNew:
             controlMode=p.POSITION_CONTROL,
             targetPositions=list(self.tar_fin_q),
             forces=[self.maxForce] * len(self.tar_fin_q))
+        p.setJointMotorControlArray(
+            bodyIndex=self.arm_id,
+            jointIndices=self.fin_zerodofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=[0.0]*len(self.fin_zerodofs),
+            forces=[self.maxForce / 4.0] * len(self.fin_zerodofs))
+
 
     def get_robot_observation_dim(self):
         return len(self.get_robot_observation())
