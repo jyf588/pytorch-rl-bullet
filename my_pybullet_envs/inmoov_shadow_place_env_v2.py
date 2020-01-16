@@ -292,12 +292,26 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
         #
         # # print("wf", cf)
 
+        # curContact = []
+        # for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
+        #     cps = p.getContactPoints(self.obj_id, self.robot.arm_id, -1, i)
+        #     if len(cps) > 0:
+        #         curContact.extend([1.0])
+        #         # print("touch!!!")
+        #     else:
+        #         curContact.extend([-1.0])
+        # self.observation.extend(curContact)
+
         curContact = []
         for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
-            cps = p.getContactPoints(self.obj_id, self.robot.arm_id, -1, i)
-            if len(cps) > 0:
+            cps = p.getContactPoints(bodyA=self.robot.arm_id, linkIndexA=i)
+            con_this_link = False
+            for cp in cps:
+                if cp[1] != cp[2]:      # not self-collision of the robot
+                    con_this_link = True
+                    break
+            if con_this_link:
                 curContact.extend([1.0])
-                # print("touch!!!")
             else:
                 curContact.extend([-1.0])
         self.observation.extend(curContact)

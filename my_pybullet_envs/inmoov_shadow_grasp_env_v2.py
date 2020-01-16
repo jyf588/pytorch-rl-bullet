@@ -119,10 +119,10 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=True,
+                 renders=False,
                  init_noise=True,
                  up=True,
-                 is_box=True,
+                 is_box=False,
                  small=False,
                  using_comfortable=True):
         self.renders = renders
@@ -176,10 +176,13 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         while arm_q is None:
             self.tx = self.np_random.uniform(low=0, high=0.25)
             self.ty = self.np_random.uniform(low=-0.1, high=0.5)
+            # self.tx = 0.1
+            # self.ty = 0.0
             cyl_init_pos = [0, 0, 0.101]
             cyl_init_pos = np.array(cyl_init_pos) + np.array([self.tx, self.ty, 0])
 
             arm_q = self.sess.get_most_comfortable_q(self.tx, self.ty)
+        # print(arm_q)
         return arm_q, cyl_init_pos
 
     def get_reset_poses_old(self):
@@ -245,7 +248,7 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
             self.robot.np_random = self.np_random
 
         if self.using_comfortable:
-            self.robot.reset_using_comfortable(arm_q)
+            self.robot.reset_with_certain_arm_q(arm_q)
         else:
             self.robot.reset(list(init_palm_pos), init_palm_quat)       # reset at last to test collision
 
@@ -363,13 +366,27 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
 
         curContact = []
         for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
-            cps = p.getContactPoints(self.cylinderId, self.robot.arm_id, -1, i)
-            if len(cps) > 0:
+            cps = p.getContactPoints(bodyA=self.robot.arm_id, linkIndexA=i)
+            con_this_link = False
+            for cp in cps:
+                if cp[1] != cp[2]:      # not self-collision of the robot
+                    con_this_link = True
+                    break
+            if con_this_link:
                 curContact.extend([1.0])
-                # print("touch!!!")
             else:
                 curContact.extend([-1.0])
         self.observation.extend(curContact)
+
+        # curContact = []
+        # for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
+        #     cps = p.getContactPoints(self.cylinderId, self.robot.arm_id, -1, i)
+        #     if len(cps) > 0:
+        #         curContact.extend([1.0])
+        #         # print("touch!!!")
+        #     else:
+        #         curContact.extend([-1.0])
+        # self.observation.extend(curContact)
 
         if self.up:
             xy = np.array([self.tx, self.ty])

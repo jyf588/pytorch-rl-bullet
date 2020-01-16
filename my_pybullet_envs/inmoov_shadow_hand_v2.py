@@ -89,6 +89,7 @@ class InmoovShadowNew:
         self.arm_id = p.loadURDF(os.path.join(currentdir,
                                              "assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand_v2_2.urdf"),
                                  list(self.base_init_pos), p.getQuaternionFromEuler(list(self.base_init_euler)),
+                                 # flags=p.URDF_USE_INERTIA_FROM_FILE,        # TODO
                                  flags=p.URDF_USE_SELF_COLLISION | p.URDF_USE_INERTIA_FROM_FILE
                                        | p.URDF_USE_SELF_COLLISION_EXCLUDE_ALL_PARENTS,
                                  useFixedBase=1)
@@ -102,7 +103,7 @@ class InmoovShadowNew:
         self.scale_mass_inertia(self.ee_id, p.getNumJoints(self.arm_id), 10.0)
 
         for i in range(self.ee_id, p.getNumJoints(self.arm_id)):
-            p.changeDynamics(self.arm_id, i, lateralFriction=1.5)
+            p.changeDynamics(self.arm_id, i, lateralFriction=2.5)       # TODO
 
         # use np for multi-indexing
         self.ll = np.array([p.getJointInfo(self.arm_id, i)[8] for i in range(p.getNumJoints(self.arm_id))])
@@ -146,7 +147,7 @@ class InmoovShadowNew:
     # sp = list(self.sample_uniform_arm_q()) + [0.0]*len(self.all_findofs)
     # print(sp)
 
-    def reset_using_comfortable(self, arm_q, ):
+    def reset_with_certain_arm_q(self, arm_q):
         if self.init_noise:
             init_arm_q = self.perturb(arm_q, r=0.002)
             init_fin_q = self.perturb(self.init_fin_q, r=0.02)
@@ -266,11 +267,11 @@ class InmoovShadowNew:
         links = [self.ee_id] + self.fin_tips
         for link in links:
             pos, orn = self.get_link_pos_quat(link)
-            linVel, angVel = self.get_link_v_w(link)
+            # linVel, angVel = self.get_link_v_w(link)
             obs.extend(pos)
             obs.extend(orn)
-            obs.extend(linVel)
-            obs.extend(angVel)
+            # obs.extend(linVel)
+            # obs.extend(angVel)
 
         a_q, a_dq = self.get_q_dq(self.arm_dofs)
         # print("arm q", a_q)
