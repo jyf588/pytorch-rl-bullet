@@ -203,7 +203,7 @@ parser.add_argument(
     help='environment to train on (default: PongNoFrameskip-v4)')
 parser.add_argument(
     '--load-dir',
-    default='./trained_models_0114_cyl_l_2/ppo/',    # TODO
+    default='./trained_models_0114_box_l_4/ppo/',    # TODO
     help='directory to save agent logs (default: ./trained_models/)')
 parser.add_argument(
     '--non-det',
@@ -252,8 +252,8 @@ ty = 0.0
 # a_ty = ty
 a_tx = tx + np.random.uniform(low=-0.01, high=0.01)
 a_ty = ty + np.random.uniform(low=-0.01, high=0.01)
-oid1 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/cylinder.urdf'), [a_tx, a_ty, 0.1], useFixedBase=0)   # tar obj
-# oid1 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/box.urdf'), [a_tx, a_ty, 0.1], useFixedBase=0)   # tar obj
+# oid1 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/cylinder.urdf'), [a_tx, a_ty, 0.1], useFixedBase=0)   # tar obj
+oid1 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/box.urdf'), [a_tx, a_ty, 0.1], useFixedBase=0)   # tar obj
 # oid2 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/box.urdf'), [0.1, 0.2, 0.1], useFixedBase=0)
 # oid3 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/cylinder.urdf'), [0.2, -0.15, 0.1], useFixedBase=0)
 env_core.assign_estimated_obj_pos(tx, ty)
@@ -341,7 +341,7 @@ print("init obs", obs)
 # print("diff", obs - obs_old)
 
 
-for i in range(100):
+for i in range(200):
     with torch.no_grad():
         value, action, _, recurrent_hidden_states = actor_critic.act(
             obs, recurrent_hidden_states, masks, deterministic=args.det)
@@ -352,9 +352,9 @@ for i in range(100):
     control_steps += 1
 
 # if control_steps >= 100:  # done grasping
-for _ in range(1000):
-    p.stepSimulation()
-    time.sleep(ts)
+# for _ in range(1000):
+#     p.stepSimulation()
+#     time.sleep(ts)
 
 masks.fill_(0.0 if done else 1.0)
 

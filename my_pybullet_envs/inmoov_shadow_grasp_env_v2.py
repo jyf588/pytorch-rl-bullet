@@ -119,10 +119,10 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=False,
+                 renders=True,
                  init_noise=True,
                  up=True,
-                 is_box=False,
+                 is_box=True,
                  small=False,
                  using_comfortable=True):
         self.renders = renders
