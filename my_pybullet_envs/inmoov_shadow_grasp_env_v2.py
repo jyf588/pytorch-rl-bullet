@@ -103,14 +103,16 @@ class ImaginaryArmObjSession:
             wq = np.clip(wq, self.ll[self.arm_dofs], self.ul[self.arm_dofs])    # clip to jl
             self.reset(wq)
             it += 1
-        return wq, np.linalg.norm(deviation)
+        _, quat = self.get_link_pos_quat(self.ee_id)
+        return wq, np.linalg.norm(deviation), quat
 
-    def get_most_comfortable_q(self, tar_x, tar_y):
+    def get_most_comfortable_q_and_refangle(self, tar_x, tar_y):
         tar = [tar_x, tar_y, 0, tar_x, tar_y]
-        q, residue = self.calc_IK_two_points(tar)
+        q, residue, quat = self.calc_IK_two_points(tar)
+        angle = p.getEulerFromQuaternion(quat)
         self.reset()
         if residue < 1e-3:
-            return list(q) + [0.]
+            return list(q) + [0.], angle
         else:
             return None
 
@@ -122,8 +124,8 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
                  renders=True,
                  init_noise=True,
                  up=True,
-                 is_box=True,
-                 small=False,
+                 is_box=False,
+                 small=True,
                  using_comfortable=True):
         self.renders = renders
         self.init_noise = init_noise
@@ -171,17 +173,20 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
 
         self.sess = ImaginaryArmObjSession()
 
+        if self.small:
+            cyl_init_pos = [0, 0, 0.071]
+        else:
+            cyl_init_pos = [0, 0, 0.101]
+
         arm_q = None
-        cyl_init_pos = None
         while arm_q is None:
             self.tx = self.np_random.uniform(low=0, high=0.25)
             self.ty = self.np_random.uniform(low=-0.1, high=0.5)
             # self.tx = 0.1
             # self.ty = 0.0
-            cyl_init_pos = [0, 0, 0.101]
             cyl_init_pos = np.array(cyl_init_pos) + np.array([self.tx, self.ty, 0])
 
-            arm_q = self.sess.get_most_comfortable_q(self.tx, self.ty)
+            arm_q, _ = self.sess.get_most_comfortable_q_and_refangle(self.tx, self.ty)
         # print(arm_q)
         return arm_q, cyl_init_pos
 
@@ -237,8 +242,10 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
                 self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
                                              cyl_init_pos, useFixedBase=0)
 
-        self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'),
-                                  [0, 0, 0], useFixedBase=1)
+        # self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'),
+        #                           [0, 0, 0], useFixedBase=1)
+        self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.25, 0.1, 0.0],
+                              useFixedBase=1)  # TODO
         p.changeDynamics(self.cylinderId, -1, lateralFriction=1.0)
         p.changeDynamics(self.floorId, -1, lateralFriction=1.0)
 
@@ -251,6 +258,18 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
             self.robot.reset_with_certain_arm_q(arm_q)
         else:
             self.robot.reset(list(init_palm_pos), init_palm_quat)       # reset at last to test collision
+        #
+        # tmp_id = p.loadURDF(os.path.join(currentdir,
+        #                     "assets/inmoov_ros/inmoov_description/robots/inmoov_arm_v2_2_reaching_BB.urdf"),
+        #                          [-0.30, 0.348, 0.272], p.getQuaternionFromEuler([0,0,0]),
+        #                          # flags=p.URDF_USE_INERTIA_FROM_FILE,        # TODO
+        #                          flags=p.URDF_USE_SELF_COLLISION | p.URDF_USE_INERTIA_FROM_FILE
+        #                                | p.URDF_USE_SELF_COLLISION_EXCLUDE_ALL_PARENTS,
+        #                          useFixedBase=1)
+        # arm_dofs = [0, 1, 2, 3, 4, 6, 7]
+        # for ind in range(len(arm_dofs)):
+        #     p.resetJointState(tmp_id, arm_dofs[ind], arm_q[ind], 0.0)
+        # input("press enter")
 
         self.timer = 0
         self.lastContact = None
@@ -292,6 +311,7 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
         dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(clPos)), 0.5)
         reward += -dist * 2.0
+        reward += -np.minimum(np.linalg.norm(np.array([self.tx, self.ty, 0.1]) - np.array(clPos)), 0.4) * 4.0
 
         for i in self.robot.fin_tips[:4]:
             tip_pos = p.getLinkState(self.robot.arm_id, i)[0]

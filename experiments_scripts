@@ -585,7 +585,16 @@ box large, mu = 2,
 python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0114_box_l_4 --seed 8104    # better
 python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0114_box_l_5 --seed 8105
 
-box small, mu=2,
+cyl large, mu =2.
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0114_cyl_l_6 --seed 8006
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0114_cyl_l_7 --seed 8007
+cyl large, mu = 1.7, pen cylinder pos from init pos - xyz
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0114_cyl_l_8 --seed 8008
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0114_cyl_l_9 --seed 8009
+
+cyl small, mu=1.7, add collision to forearm, just use [-0.18, 0.095, 0.11] for small object starting point.
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0114_cyl_s_0 --seed 8010
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0114_cyl_s_1 --seed 8011
 
 
 # try a larger/open wider init finger pose.

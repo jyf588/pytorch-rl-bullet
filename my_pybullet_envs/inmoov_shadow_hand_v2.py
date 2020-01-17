@@ -103,7 +103,7 @@ class InmoovShadowNew:
         self.scale_mass_inertia(self.ee_id, p.getNumJoints(self.arm_id), 10.0)
 
         for i in range(self.ee_id, p.getNumJoints(self.arm_id)):
-            p.changeDynamics(self.arm_id, i, lateralFriction=2.0)       # TODO
+            p.changeDynamics(self.arm_id, i, lateralFriction=1.7)       # TODO
 
         # use np for multi-indexing
         self.ll = np.array([p.getJointInfo(self.arm_id, i)[8] for i in range(p.getNumJoints(self.arm_id))])
