@@ -1,4 +1,6 @@
 from .inmoov_shadow_hand_v2 import InmoovShadowNew
+from .inmoov_arm_obj_imaginary_sessions import ImaginaryArmObjSession
+from .inmoov_arm_obj_imaginary_sessions import ImaginaryArmObjSessionFlexWrist
 
 import pybullet as p
 import pybullet_utils.bullet_client as bc
@@ -15,124 +17,26 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 
 # TODO: txyz will be given by vision module. tz is zero for grasping, obj frame at bottom.
 
-class ImaginaryArmObjSession:
-    # (0, b'r_shoulder_out_joint', 0) -1.57079632679 1.57079632679
-    # (1, b'r_shoulder_lift_joint', 0) -1.57079632679 1.57079632679
-    # (2, b'r_upper_arm_roll_joint', 0) -1.57079632679 1.57079632679
-    # (3, b'r_elbow_flex_joint', 0) -3.14159265359 0.0
-    # (4, b'r_elbow_roll_joint', 0) -1.57079632679 1.57079632679
-    # (5, b'r_wrist_roll_joint', 4) 0.0 -1.0
-    # (6, b'rh_WRJ2', 0) -1.0471975512 1.0471975512
-    # (7, b'rh_WRJ1', 4) 0.0 -1.0
-    # (8, b'rh_obj_j', 4) 0.0 -1.0
-
-    def __init__(self,
-                 base_init_pos=np.array([-0.30, 0.348, 0.272])):    # TODO: hard coded here
-
-        self.sim = bc.BulletClient(connection_mode=p.DIRECT)   # this is always session 1
-        # print(self.sim2._client)
-        self.sim.resetSimulation()
-        hz = 240.0
-        dt = 1.0 / hz
-        self.sim.setGravity(0, 0, 0)
-        self.sim.setTimeStep(dt)
-        self.sim.setRealTimeSimulation(0)
-
-        self.base_init_pos = base_init_pos
-        self.base_init_euler = np.array([0, 0, 0])
-
-        self.arm_id = self.sim.loadURDF(os.path.join(currentdir,
-                    "assets/inmoov_ros/inmoov_description/robots/inmoov_arm_v2_2_obj.urdf"),
-                    list(self.base_init_pos), p.getQuaternionFromEuler(list(self.base_init_euler)),
-                    flags=p.URDF_USE_INERTIA_FROM_FILE, useFixedBase=1)
-
-        self.arm_dofs = [0, 1, 2, 3, 4, 6]
-        self.ee_id = 8
-        self.IK_iters = 1000
-
-        self.reset()
-
-        self.ll = np.array([self.sim.getJointInfo(self.arm_id, i)[8] for i in range(self.sim.getNumJoints(self.arm_id))])
-        self.ul = np.array([self.sim.getJointInfo(self.arm_id, i)[9] for i in range(self.sim.getNumJoints(self.arm_id))])
-
-    # def __del__(self):
-    #     self.sim.disconnect()
-
-    def reset(self, init_arm_q=np.array([0] * 6)):
-        for ind in range(len(self.arm_dofs)):
-            self.sim.resetJointState(self.arm_id, self.arm_dofs[ind], init_arm_q[ind], 0.0)
-
-    def get_link_pos_quat(self, l_id):
-        newPos = self.sim.getLinkState(self.arm_id, l_id)[4]
-        newOrn = self.sim.getLinkState(self.arm_id, l_id)[5]
-        return newPos, newOrn
-
-    def get_q_dq(self, dofs):
-        joints_state = self.sim.getJointStates(self.arm_id, dofs)
-        joints_q = np.array(joints_state)[:, [0]]
-        joints_q = np.hstack(joints_q.flatten())
-        joints_dq = np.array(joints_state)[:, [1]]
-        joints_dq = np.hstack(joints_dq.flatten())
-        return joints_q, joints_dq
-
-    def get_cur_q_and_jac_two_points(self):
-        wq, _ = self.get_q_dq(self.arm_dofs)
-        n_dofs = len(self.arm_dofs)
-        [jac_t, _] = self.sim.calculateJacobian(self.arm_id, self.ee_id, [0] * 3,
-                                         list(wq),
-                                         [0.] * n_dofs, [0.] * n_dofs)
-        [jac_t_z, _] = self.sim.calculateJacobian(self.arm_id, self.ee_id+1, [0, 0, 0],
-                                         list(wq),
-                                         [0.] * n_dofs, [0.] * n_dofs)
-        jac = np.array([jac_t[0][:n_dofs], jac_t[1][:n_dofs], jac_t[2][:n_dofs],
-                        jac_t_z[0][:n_dofs], jac_t_z[1][:n_dofs]])
-        return wq, jac
-
-    def calc_IK_two_points(self, tar_5d):
-        deviation = 1e30    # dummy
-        wq = None
-        it = 0
-        while it < self.IK_iters and np.linalg.norm(deviation) > 1e-3:
-            pos, _ = self.get_link_pos_quat(self.ee_id)
-            pos_z, _ = self.get_link_pos_quat(self.ee_id + 1)
-            deviation = np.array(list(pos)+list(pos_z[:2])) - tar_5d
-
-            wq, jac = self.get_cur_q_and_jac_two_points()
-            step, residue, _, _ = np.linalg.lstsq(jac, deviation, 1e-4)
-            wq = wq - 0.01 * step
-            wq = np.clip(wq, self.ll[self.arm_dofs], self.ul[self.arm_dofs])    # clip to jl
-            self.reset(wq)
-            it += 1
-        _, quat = self.get_link_pos_quat(self.ee_id)
-        return wq, np.linalg.norm(deviation), quat
-
-    def get_most_comfortable_q_and_refangle(self, tar_x, tar_y):
-        tar = [tar_x, tar_y, 0, tar_x, tar_y]
-        q, residue, quat = self.calc_IK_two_points(tar)
-        angle = p.getEulerFromQuaternion(quat)
-        self.reset()
-        if residue < 1e-3:
-            return list(q) + [0.], angle
-        else:
-            return None
-
 
 class InmoovShadowHandGraspEnvNew(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=True,
+                 renders=False,
                  init_noise=True,
                  up=True,
                  is_box=False,
-                 small=True,
-                 using_comfortable=True):
+                 small=False,
+                 using_comfortable=True,
+                 using_comfortable_range=True):
         self.renders = renders
         self.init_noise = init_noise
         self.up = up
         self.isBox = is_box
         self.small = small
         self.using_comfortable = using_comfortable
+        self.using_comfortable_range = using_comfortable_range
+        self.vary_angle_range = 0.6
 
         self._timeStep = 1. / 240.
         if self.renders:
@@ -171,22 +75,43 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         assert self.up
         # TODO: only handles large object now
 
-        self.sess = ImaginaryArmObjSession()
-
-        if self.small:
-            cyl_init_pos = [0, 0, 0.071]
-        else:
-            cyl_init_pos = [0, 0, 0.101]
-
+        sess = ImaginaryArmObjSession()
+        cyl_init_pos = None
         arm_q = None
         while arm_q is None:
+            if self.small:
+                cyl_init_pos = [0, 0, 0.071]
+            else:
+                cyl_init_pos = [0, 0, 0.101]
             self.tx = self.np_random.uniform(low=0, high=0.25)
             self.ty = self.np_random.uniform(low=-0.1, high=0.5)
             # self.tx = 0.1
             # self.ty = 0.0
             cyl_init_pos = np.array(cyl_init_pos) + np.array([self.tx, self.ty, 0])
 
-            arm_q, _ = self.sess.get_most_comfortable_q_and_refangle(self.tx, self.ty)
+            arm_q, _ = sess.get_most_comfortable_q_and_refangle(self.tx, self.ty)
+        # print(arm_q)
+        return arm_q, cyl_init_pos
+
+    def get_reset_poses_comfortable_range(self):
+        assert self.up
+        assert self.using_comfortable
+
+        sess = ImaginaryArmObjSessionFlexWrist()
+        cyl_init_pos = None
+        arm_q = None
+        while arm_q is None:
+            if self.small:
+                cyl_init_pos = [0, 0, 0.071]
+            else:
+                cyl_init_pos = [0, 0, 0.101]
+            self.tx = self.np_random.uniform(low=0, high=0.25)
+            self.ty = self.np_random.uniform(low=-0.1, high=0.5)
+            # self.tx = 0.1
+            # self.ty = 0.0
+            cyl_init_pos = np.array(cyl_init_pos) + np.array([self.tx, self.ty, 0])
+            vary_angle = self.np_random.uniform(low=-self.vary_angle_range, high=self.vary_angle_range)
+            arm_q = sess.sample_one_comfortable_q(self.tx, self.ty, vary_angle)
         # print(arm_q)
         return arm_q, cyl_init_pos
 
@@ -219,7 +144,10 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
             self.seed(0)    # used once temporarily, will be overwritten outside by env
 
         if self.using_comfortable:
-            arm_q, cyl_init_pos = self.get_reset_poses_comfortable()
+            if self.using_comfortable_range:
+                arm_q, cyl_init_pos = self.get_reset_poses_comfortable_range()
+            else:
+                arm_q, cyl_init_pos = self.get_reset_poses_comfortable()
         else:
             init_palm_pos, init_palm_quat, cyl_init_pos = self.get_reset_poses_old()
 
