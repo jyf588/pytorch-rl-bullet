@@ -26,6 +26,7 @@
 from .inmoov_shadow_hand_v2 import InmoovShadowNew
 from .inmoov_arm_obj_imaginary_sessions import ImaginaryArmObjSession
 from .inmoov_arm_obj_imaginary_sessions import ImaginaryArmObjSessionFlexWrist
+from .inmoov_arm_obj_imaginary_sessions import URDFWriter
 
 import pybullet as p
 import time
@@ -48,14 +49,16 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
                  renders=False,
                  init_noise=True,
                  up=True,
-                 is_box=True,
+                 is_box=False,
+                 is_small=True,
                  using_comfortable=True):
         self.renders = renders
         self.init_noise = init_noise        # bottom object noise
         self.up = up
+        self.is_small = is_small
         self.isBox = is_box
         self.using_comfortable = using_comfortable
-        self.grasp_pi_name = '0114_box_l_4'     # see experiment scripts
+        self.grasp_pi_name = '0114_cyl_s_1'     # see experiment scripts, used to locate fin state pickle&create URDF
 
         self._timeStep = 1. / 240.
         if self.renders:
@@ -76,17 +79,28 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
         self.tz = None
         self.desired_obj_pos_final = None
 
+        self.btm_height = 0.18  # TODO: also need to cover put on floor later. / assume large cyl for now.
+        self.start_height = 0.16         # TODO: 0.16 enough clearance? 0.13 small
+
+        self.obs_noise = 1e-3
+
         self.saved_file = None
 
         with open(os.path.join(currentdir, 'assets/place_init_dist/final_states_'+self.grasp_pi_name+'.pickle'), 'rb') as handle:
             self.saved_file = pickle.load(handle)
 
         assert self.saved_file is not None
-        if not using_comfortable:
-            self.o_pos_pf_ave = self.saved_file['ave_obj_pos_in_palm']
+        self.init_states = self.saved_file['init_states']  # a list of dicts
+        self.o_pos_pf_ave = self.saved_file['ave_obj_pos_in_palm']
+        if using_comfortable:
+            o_quat_pf_ave_ri = self.saved_file['ave_obj_quat_in_palm_rot_ivr']
+            writer = URDFWriter()
+            new_file = 'inmoov_arm_v2_2_obj_placing_' + self.grasp_pi_name + '.urdf'
+            writer.add_obj(self.o_pos_pf_ave, o_quat_pf_ave_ri, new_file)
+            pass
+        else:
             self.o_quat_pf_ave = self.saved_file['ave_obj_quat_in_palm']
             self.o_quat_pf_ave /= np.linalg.norm(self.o_quat_pf_ave)        # in case not normalized
-        self.init_states = self.saved_file['init_states']  # a list of dicts
 
         # print(self.o_pos_pf_ave)
         # print(self.o_quat_pf_ave)
@@ -111,21 +125,18 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
 
         arm_q = None
         while arm_q is None:
-            self.tz = 0.2  # TODO: also need to cover put on floor later. / assume large cyl for now.
+            self.tz = self.btm_height
             if self.up:
                 self.tx = self.np_random.uniform(low=0, high=0.25)
                 self.ty = self.np_random.uniform(low=-0.1, high=0.5)
             else:
                 self.tx = 0.0
                 self.ty = 0.0
-            desired_obj_pos = [self.tx, self.ty, 0.16 + self.tz]
-            # desired_obj_pos = [self.tx, self.ty, 0.16]      # TODO
-            self.desired_obj_pos_final = [self.tx, self.ty, 0.09 + self.tz]     # TODO
+            desired_obj_pos = [self.tx, self.ty, self.start_height + self.tz]
 
             arm_q, _ = sess.get_most_comfortable_q_and_refangle_xz(desired_obj_pos[0],
                                                                    desired_obj_pos[1],
                                                                    desired_obj_pos[2])
-
         p_pos, p_quat = sess.get_link_pos_quat(sess.ee_id-1)
 
         init_state = self.sample_init_state()
@@ -139,7 +150,7 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
         return arm_q, o_pos, o_quat, all_fin_q_init, tar_fin_q_init
 
     def get_reset_poses_old(self):
-        self.tz = 0.2  # TODO: also need to cover put on floor later. / assume large cyl for now.
+        self.tz = self.btm_height
         if self.up:
             self.tx = self.np_random.uniform(low=0, high=0.2)
             self.ty = self.np_random.uniform(low=-0.2, high=0.0)
@@ -147,14 +158,12 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
             self.tx = 0.0
             self.ty = 0.0
 
-        desired_obj_pos = [self.tx, self.ty, 0.16+self.tz]        # TODO: 0.16 enough clearance? 0.13 small
+        desired_obj_pos = [self.tx, self.ty, self.start_height + self.tz]
         if self.isBox:
             # TODO: tmp fixed for BOX. Maybe we feed both dop and doq (a theta range) to planning?
             desired_obj_quat = p.getQuaternionFromEuler([0, 0, -1.57])
-            self.desired_obj_pos_final = [self.tx, self.ty, 0.09+self.tz]       # TODO: for reward calc., diff if size diff
         else:
             desired_obj_quat = p.getQuaternionFromEuler([0, 0, 0])
-            self.desired_obj_pos_final = [self.tx, self.ty, 0.10+self.tz]
 
         p_pos_of_ave, p_quat_of_ave = p.invertTransform(self.o_pos_pf_ave, self.o_quat_pf_ave)
         p_pos, p_quat = p.multiplyTransforms(desired_obj_pos, desired_obj_quat,
@@ -189,17 +198,25 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
             p_pos, p_quat, o_pos, o_quat, all_fin_q_init, tar_fin_q_init = self.get_reset_poses_old()
 
         btm_xyz = np.array([self.tx, self.ty, self.tz/2.0])
-        if self.init_noise:
-            btm_xyz += np.append(self.np_random.uniform(low=-0.01, high=0.01, size=2), 0)
+        # if self.init_noise:
+        #     btm_xyz += np.append(self.np_random.uniform(low=-0.01, high=0.01, size=2), 0)
         self.bottom_obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
                                         btm_xyz, useFixedBase=0)
 
         if self.isBox:
-            self.obj_id = p.loadURDF(os.path.join(currentdir, 'assets/box.urdf'),
-                                     o_pos, o_quat, useFixedBase=0)
+            if self.is_small:
+                self.obj_id = p.loadURDF(os.path.join(currentdir, 'assets/box_small.urdf'),
+                                             o_pos, o_quat, useFixedBase=0)
+            else:
+                self.obj_id = p.loadURDF(os.path.join(currentdir, 'assets/box.urdf'),
+                                             o_pos, o_quat, useFixedBase=0)
         else:
-            self.obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
-                                     o_pos, o_quat, useFixedBase=0)
+            if self.is_small:
+                self.obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cyl_small.urdf'),
+                                             o_pos, o_quat, useFixedBase=0)
+            else:
+                self.obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
+                                             o_pos, o_quat, useFixedBase=0)
         self.obj_mass = p.getDynamicsInfo(self.obj_id, -1)[0]
 
         self.robot = InmoovShadowNew(init_noise=False, timestep=self._timeStep)
@@ -247,7 +264,8 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
         rotMetric = np.array(z_axis).dot(np.array([0, 0, 1]))
 
         # enlarge 0.15 -> 0.45
-        xyzMetric = 1 - (np.minimum(np.linalg.norm(np.array(self.desired_obj_pos_final) - np.array(clPos)), 0.45) / 0.15)
+        desired_obj_pos_final = [self.tx, self.ty, 0.08 + self.tz]
+        xyzMetric = 1 - (np.minimum(np.linalg.norm(np.array(desired_obj_pos_final) - np.array(clPos)), 0.45) / 0.10)
         linV_R = np.linalg.norm(clLinV)
         angV_R = np.linalg.norm(clAngV)
         velMetric = 1 - np.minimum(linV_R + angV_R / 2.0, 5.0) / 5.0
@@ -262,10 +280,10 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
             total_nf += cp[9]
         if np.abs(total_nf) > (self.obj_mass*9.):       # mg
             meaningful_c = True
-            reward += 5.0
+            # reward += 5.0
         else:
             meaningful_c = False
-            reward += np.abs(total_nf) / 10.
+            # reward += np.abs(total_nf) / 10.
 
         btm_vels = p.getBaseVelocity(self.bottom_obj_id)
         btm_linv = np.array(btm_vels[0])
@@ -280,15 +298,14 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
                 cps = p.getContactPoints(self.obj_id, self.robot.arm_id, -1, i)
                 if len(cps) == 0:
                     reward += 0.5   # the fewer links in contact, the better
-            palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
-            dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(clPos)), 0.3)
-            reward += dist * 10.0
-            # rewards is height of target object
-            for i in self.robot.fin_tips[:4]:
-                tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
-                reward += np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.25)  # 4 finger tips
-            tip_pos = p.getLinkState(self.robot.arm_id, self.robot.fin_tips[4])[0]  # thumb tip
-            reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.25) * 5.0
+            # palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
+            # dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(clPos)), 0.3)
+            # reward += dist * 10.0
+            # for i in self.robot.fin_tips[:4]:
+            #     tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
+            #     reward += np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.25)  # 4 finger tips
+            # tip_pos = p.getLinkState(self.robot.arm_id, self.robot.fin_tips[4])[0]  # thumb tip
+            # reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.25) * 5.0
 
         # succeed = False
         obs = self.getExtendedObservation()     # call last obs before test period
@@ -296,9 +313,9 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
             # this is slightly different from mountain car's sparse reward,
             # where you are only rewarded when reaching a certain state
             # this is saying you must be at certain state at certain time (after test)
-            # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
-            #     p.setCollisionFilterPair(self.obj_id, self.robot.arm_id, -1, i, enableCollision=0)
-            #     p.setCollisionFilterPair(self.bottom_obj_id, self.robot.arm_id, -1, i, enableCollision=0)
+            for i in range(-1, p.getNumJoints(self.robot.arm_id)):
+                p.setCollisionFilterPair(self.obj_id, self.robot.arm_id, -1, i, enableCollision=0)
+                p.setCollisionFilterPair(self.bottom_obj_id, self.robot.arm_id, -1, i, enableCollision=0)
             for test_t in range(300):
                 open_up_q = np.array([0.2, 0.2, 0.2] * 4 + [-0.4, 1.9, -0.0, 0.5, 0.0])
                 devi = open_up_q - self.robot.get_q_dq(self.robot.fin_actdofs)[0]
@@ -307,23 +324,26 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
                 if self.renders:
                     time.sleep(self._timeStep)
             clPosNow, _ = p.getBasePositionAndOrientation(self.obj_id)
-            dist = np.linalg.norm(np.array(self.desired_obj_pos_final) - np.array(clPosNow))
-            if dist < 0.05:
+            # dist = np.linalg.norm(np.array(self.desired_obj_pos_final) - np.array(clPosNow))
+            if clPosNow[2] > self.tz:
                 # succeed = True
                 reward += 2000
+                # print("good")
+            # else:
+            #     print("bad")
 
         return obs, reward, False, {}
 
     def getExtendedObservation(self):
         self.observation = self.robot.get_robot_observation()
 
-        # clPos, clOrn = p.getBasePositionAndOrientation(self.cylinderId)
+        clPos, clOrn = p.getBasePositionAndOrientation(self.obj_id)
         # clPos = np.array(clPos)
-        # clOrnMat = p.getMatrixFromQuaternion(clOrn)
+        clOrnMat = p.getMatrixFromQuaternion(clOrn)
         # clOrnMat = np.array(clOrnMat)
         #
-        # self.observation.extend(list(clPos))
-        # # self.observation.extend(list(clOrnMat))
+        self.observation.extend(list(clPos))
+        self.observation.extend(list(clOrnMat))
         # self.observation.extend(list(clOrn))
         #
         # clVels = p.getBaseVelocity(self.cylinderId)
@@ -337,35 +357,35 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
         #
         # # print("wf", cf)
 
-        # curContact = []
-        # for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
-        #     cps = p.getContactPoints(self.obj_id, self.robot.arm_id, -1, i)
-        #     if len(cps) > 0:
-        #         curContact.extend([1.0])
-        #         # print("touch!!!")
-        #     else:
-        #         curContact.extend([-1.0])
-        # self.observation.extend(curContact)
-
         curContact = []
         for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
-            cps = p.getContactPoints(bodyA=self.robot.arm_id, linkIndexA=i)
-            con_this_link = False
-            for cp in cps:
-                if cp[1] != cp[2]:      # not self-collision of the robot
-                    con_this_link = True
-                    break
-            if con_this_link:
+            cps = p.getContactPoints(self.obj_id, self.robot.arm_id, -1, i)
+            if len(cps) > 0:
                 curContact.extend([1.0])
+                # print("touch!!!")
             else:
                 curContact.extend([-1.0])
         self.observation.extend(curContact)
 
+        # curContact = []
+        # for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
+        #     cps = p.getContactPoints(bodyA=self.robot.arm_id, linkIndexA=i)
+        #     con_this_link = False
+        #     for cp in cps:
+        #         if cp[1] != cp[2]:      # not self-collision of the robot
+        #             con_this_link = True
+        #             break
+        #     if con_this_link:
+        #         curContact.extend([1.0])
+        #     else:
+        #         curContact.extend([-1.0])
+        # self.observation.extend(curContact)
+
         if self.up:
             xy = np.array([self.tx, self.ty])   # TODO: tx, ty wrt world origin
-            self.observation.extend(list(xy + self.np_random.uniform(low=-0.005, high=0.005, size=2)))
-            self.observation.extend(list(xy + self.np_random.uniform(low=-0.005, high=0.005, size=2)))
-            self.observation.extend(list(xy + self.np_random.uniform(low=-0.005, high=0.005, size=2)))
+            self.observation.extend(list(xy + self.np_random.uniform(low=-self.obs_noise, high=-self.obs_noise, size=2)))
+            self.observation.extend(list(xy + self.np_random.uniform(low=-self.obs_noise, high=-self.obs_noise, size=2)))
+            self.observation.extend(list(xy + self.np_random.uniform(low=-self.obs_noise, high=-self.obs_noise, size=2)))
 
         # if self.lastContact is not None:
         #     self.observation.extend(self.lastContact)

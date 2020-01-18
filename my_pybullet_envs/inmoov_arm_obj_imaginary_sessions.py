@@ -369,28 +369,120 @@ class ImaginaryArmObjSessionFlexWrist:
         pass
 
 
+obj_urdf = """
+
+<link name="obj">
+    <visual>
+      <geometry>
+<!--          shape does not matter-->
+        <box size="0.08 0.08 0.20"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0.0"/>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+<!--          shape does not matter-->
+        <box size="0.08 0.08 0.20"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0.0"/>
+    </collision>
+    <inertial>
+      <mass value="3.5"/>
+      <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001"/>
+      <origin rpy="0 0 0" xyz="0 0 0.1"/>
+    </inertial>
+  </link>
+
+  <joint name="rh_obj_j" type="fixed">
+    <parent link="rh_palm"/>
+    <child link="obj"/>
+<!--  quat  [%f, %f, %f, %f]-->
+    <origin rpy="%f %f %f" xyz="%f %f %f"/>
+  </joint>
+
+  <link name="obj_z">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="1"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
+    </inertial>
+  </link>>
+  <joint name="rh_obj_j_z" type="fixed">
+    <parent link="obj"/>
+    <child link="obj_z"/>
+    <origin rpy="0 0 0" xyz="0 0 0.1"/>
+  </joint>    
+    
+"""
+
+class URDFWriter():
+    def __init__(self,
+                 base_path="assets/inmoov_ros/inmoov_description/robots/imaginary_IK_robots"):
+        self.base_path = os.path.join(currentdir, base_path)
+        return
+
+    def add_obj(self, trans, quat, new_file,
+                base_file="inmoov_arm_v2_2_base.urdf",
+                ):
+        path_name_new = os.path.join(self.base_path, new_file)
+        path_name = os.path.join(self.base_path, base_file)
+        with open(path_name, 'r') as content_file:
+            content = content_file.read()
+            last_enter = content.rfind('\n')
+            content_body = content[:last_enter]
+            content_tail = content[last_enter:]
+            euler = p.getEulerFromQuaternion(quat)
+            insert = obj_urdf % (quat[0], quat[1], quat[2], quat[3],
+                                 euler[0], euler[1], euler[2],
+                                 trans[0], trans[1], trans[2])
+            content_new = content_body + insert + content_tail
+
+            if os.path.isfile(path_name_new):
+                with open(path_name_new, 'r+') as existing_file:
+                    exist_content = existing_file.read()
+                    if exist_content != content_new:
+                        existing_file.seek(0)
+                        existing_file.write(content_new)
+                        existing_file.truncate()
+            else:
+                with open(path_name_new, "w") as new_file:
+                    new_file.write(content_new)
+        return
+
+
 if __name__ == "__main__":
     hz = 240.0
     dt = 1.0 / hz
+    # # test 1
+    writer = URDFWriter()
+    trans = [0.007118853168487986, -0.06573216456627234, 0.08361430814391192]
+    quat = [-0.12210281795880247, 0.5224276497343117, 0.07589733783405209, 0.8404759644090405]
 
-    while True:
-        grasp_pi_name = '0114_box_l_4'
-        filename = 'inmoov_arm_v2_2_obj_placing_' + grasp_pi_name + '.urdf'
+    grasp_pi_name = '0114_box_l_4_new'      # also used to locate fin state pickle
+    new_file = 'inmoov_arm_v2_2_obj_placing_'+grasp_pi_name+'.urdf'
+    writer.add_obj(trans, quat, new_file)
 
-        tar = list([np.random.uniform(low=-0.3, high=0.5), np.random.uniform(low=-0.3, high=0.8)])
-        # tar = [0.1, 0]
+    # # test 2
+    # while True:
+    #     grasp_pi_name = '0114_box_l_4'
+    #     filename = 'inmoov_arm_v2_2_obj_placing_' + grasp_pi_name + '.urdf'
+    #
+    #     tar = list([np.random.uniform(low=-0.3, high=0.5), np.random.uniform(low=-0.3, high=0.8)])
+    #     # tar = [0.1, 0]
+    #
+    #     tmp = ImaginaryArmObjSession(filename=filename)
+    #     q_c, angle = tmp.get_most_comfortable_q_and_refangle_xz(tar[0], tar[1], 0.36)
+    #     print(q_c)
+    #     print(angle)
+    #
+    #
+    #     if q_c is not None:
+    #         input("press enter")
+    #
+    #     del tmp
 
-        tmp = ImaginaryArmObjSession(filename=filename)
-        q_c, angle = tmp.get_most_comfortable_q_and_refangle_xz(tar[0], tar[1], 0.36)
-        print(q_c)
-        print(angle)
-
-
-        if q_c is not None:
-            input("press enter")
-
-        del tmp
-
+    # # test 3
     # tar = list([np.random.uniform(low=-0.3, high=0.5), np.random.uniform(low=-0.3, high=0.8)])
     # tar = [0.1, 0]
     #

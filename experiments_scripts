@@ -626,8 +626,24 @@ python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --l
 box large placing comfortable pose init trial
 python main.py --env-name "InmoovHandPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0117_placing_box_l_0 --seed 9000
 python main.py --env-name "InmoovHandPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0117_placing_box_l_1 --seed 9001
+going back to old obs, old init range, new cutoff 45~55, 6cm cylinder.
+python main.py --env-name "InmoovHandPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0117_placing_box_l_2 --seed 9002
+python main.py --env-name "InmoovHandPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0117_placing_box_l_3 --seed 9003
 
 
+comfortable, with obj info 6D
+python main.py --env-name "InmoovHandPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0117_placing_box_l_4 --seed 9004
+python main.py --env-name "InmoovHandPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0117_placing_box_l_5 --seed 9005
+
+
+1/18 12:50 cyl small placing
+python main.py --env-name "InmoovHandPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0117_placing_cyl_s_0 --seed 9100
+python main.py --env-name "InmoovHandPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0117_placing_cyl_s_1 --seed 9101
+
+
+
+# even larger frame skip?
+# train from grasping?
 
 # try curriculum learning ......
 
