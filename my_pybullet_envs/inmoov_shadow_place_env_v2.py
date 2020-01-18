@@ -20,9 +20,12 @@
 # during transporting keep the same tar pose as action.
 
 # TODO: should we assume we have a policy that can "weld" the object?
+# TODO: small objs
 
 
 from .inmoov_shadow_hand_v2 import InmoovShadowNew
+from .inmoov_arm_obj_imaginary_sessions import ImaginaryArmObjSession
+from .inmoov_arm_obj_imaginary_sessions import ImaginaryArmObjSessionFlexWrist
 
 import pybullet as p
 import time
@@ -45,11 +48,14 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
                  renders=False,
                  init_noise=True,
                  up=True,
-                 is_box=False):
+                 is_box=True,
+                 using_comfortable=True):
         self.renders = renders
-        self.init_noise = init_noise        # TODO: bottom object noise
+        self.init_noise = init_noise        # bottom object noise
         self.up = up
         self.isBox = is_box
+        self.using_comfortable = using_comfortable
+        self.grasp_pi_name = '0114_box_l_4'     # see experiment scripts
 
         self._timeStep = 1. / 240.
         if self.renders:
@@ -71,16 +77,15 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
         self.desired_obj_pos_final = None
 
         self.saved_file = None
-        if self.isBox:
-            with open(os.path.join(currentdir, 'assets/place_init_dist/final_states_0112_box.pickle'), 'rb') as handle:
-                self.saved_file = pickle.load(handle)
-        else:
-            with open(os.path.join(currentdir, 'assets/place_init_dist/final_states_0112_cyl.pickle'), 'rb') as handle:
-                self.saved_file = pickle.load(handle)
+
+        with open(os.path.join(currentdir, 'assets/place_init_dist/final_states_'+self.grasp_pi_name+'.pickle'), 'rb') as handle:
+            self.saved_file = pickle.load(handle)
+
         assert self.saved_file is not None
-        self.o_pos_pf_ave = self.saved_file['ave_obj_pos_in_palm']
-        self.o_quat_pf_ave = self.saved_file['ave_obj_quat_in_palm']
-        self.o_quat_pf_ave /= np.linalg.norm(self.o_quat_pf_ave)        # in case not normalized
+        if not using_comfortable:
+            self.o_pos_pf_ave = self.saved_file['ave_obj_pos_in_palm']
+            self.o_quat_pf_ave = self.saved_file['ave_obj_quat_in_palm']
+            self.o_quat_pf_ave /= np.linalg.norm(self.o_quat_pf_ave)        # in case not normalized
         self.init_states = self.saved_file['init_states']  # a list of dicts
 
         # print(self.o_pos_pf_ave)
@@ -99,7 +104,41 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
         #
         # input("press enter")
 
-    def get_reset_poses(self):
+    def get_reset_poses_comfortable(self):
+        # return arm_q, & o_pos, o_quat, all_fin_q_init, tar_fin_q_init
+        assert self.up
+        sess = ImaginaryArmObjSession(filename='inmoov_arm_v2_2_obj_placing_'+self.grasp_pi_name+'.urdf')
+
+        arm_q = None
+        while arm_q is None:
+            self.tz = 0.2  # TODO: also need to cover put on floor later. / assume large cyl for now.
+            if self.up:
+                self.tx = self.np_random.uniform(low=0, high=0.25)
+                self.ty = self.np_random.uniform(low=-0.1, high=0.5)
+            else:
+                self.tx = 0.0
+                self.ty = 0.0
+            desired_obj_pos = [self.tx, self.ty, 0.16 + self.tz]
+            # desired_obj_pos = [self.tx, self.ty, 0.16]      # TODO
+            self.desired_obj_pos_final = [self.tx, self.ty, 0.09 + self.tz]     # TODO
+
+            arm_q, _ = sess.get_most_comfortable_q_and_refangle_xz(desired_obj_pos[0],
+                                                                   desired_obj_pos[1],
+                                                                   desired_obj_pos[2])
+
+        p_pos, p_quat = sess.get_link_pos_quat(sess.ee_id-1)
+
+        init_state = self.sample_init_state()
+        o_pos_pf = init_state['obj_pos_in_palm']
+        o_quat_pf = init_state['obj_quat_in_palm']
+        all_fin_q_init = init_state['all_fin_q']
+        tar_fin_q_init = init_state['fin_tar_q']
+
+        o_pos, o_quat = p.multiplyTransforms(p_pos, p_quat, o_pos_pf, o_quat_pf)
+
+        return arm_q, o_pos, o_quat, all_fin_q_init, tar_fin_q_init
+
+    def get_reset_poses_old(self):
         self.tz = 0.2  # TODO: also need to cover put on floor later. / assume large cyl for now.
         if self.up:
             self.tx = self.np_random.uniform(low=0, high=0.2)
@@ -144,7 +183,10 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
         self.floor_id = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'),
                                    [0, 0, 0], useFixedBase=1)
 
-        p_pos, p_quat, o_pos, o_quat, all_fin_q_init, tar_fin_q_init = self.get_reset_poses()
+        if self.using_comfortable:
+            arm_q, o_pos, o_quat, all_fin_q_init, tar_fin_q_init = self.get_reset_poses_comfortable()
+        else:
+            p_pos, p_quat, o_pos, o_quat, all_fin_q_init, tar_fin_q_init = self.get_reset_poses_old()
 
         btm_xyz = np.array([self.tx, self.ty, self.tz/2.0])
         if self.init_noise:
@@ -163,7 +205,10 @@ class InmoovShadowHandPlaceEnvNew(gym.Env):
         self.robot = InmoovShadowNew(init_noise=False, timestep=self._timeStep)
         if self.np_random is not None:
             self.robot.np_random = self.np_random
-        self.robot.reset(p_pos, p_quat, all_fin_q_init, tar_fin_q_init)
+        if self.using_comfortable:
+            self.robot.reset_with_certain_arm_q_finger_states(arm_q, all_fin_q_init, tar_fin_q_init)
+        else:
+            self.robot.reset(p_pos, p_quat, all_fin_q_init, tar_fin_q_init)
 
         p.changeDynamics(self.obj_id, -1, lateralFriction=1.0)
         p.changeDynamics(self.bottom_obj_id, -1, lateralFriction=1.0)

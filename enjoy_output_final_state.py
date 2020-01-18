@@ -125,17 +125,19 @@ while not finish:
     # if 95 <= timer <= 101:
     #     input("press enter")
 
-    if not done and 95 <= timer <= 101 and reward_total > 3500:   # TODO: timer/r, need to change if Pi different
-        # if 95 <= timer <= 101:
-        #     input("press enter")
+    if not done and 45 <= timer <= 55:   # TODO: timer/r, need to change if Pi different
+        # input("press enter")
         env_core.append_final_state()
         print(len(env_core.final_states))
 
-        if len(env_core.final_states) > 20000:      # TODO: length
+        if len(env_core.final_states) > 30000:      # TODO: length
             finish = True
 
     if done:
         print("tr:", reward_total)
+        if reward_total < 4000:     # TODO: timer/r, need to change if Pi different
+            for i in range(0, 11):
+                env_core.final_states.pop()
         reward_total = 0.
         timer = 0
 
@@ -152,8 +154,11 @@ while not finish:
     #     render_func('human')
     # p.getCameraImage()
 
-with open('final_states_0112_box.pickle', 'wb') as handle:      # TODO: box
-    o_pos_pf_ave, o_quat_pf_ave = env_core.calc_average_obj_in_palm()
+with open('final_states_0114_box_l_4_new.pickle', 'wb') as handle:      # TODO: change name
+    o_pos_pf_ave, o_quat_pf_ave_ri = env_core.calc_average_obj_in_palm_rot_invariant()
+    _, o_quat_pf_ave = env_core.calc_average_obj_in_palm()
+    print(o_pos_pf_ave, o_quat_pf_ave_ri)
     stored_info = {'init_states': env_core.final_states, 'ave_obj_pos_in_palm': o_pos_pf_ave,
+                   'ave_obj_quat_in_palm_rot_ivr': o_quat_pf_ave_ri,
                    'ave_obj_quat_in_palm': o_quat_pf_ave}
     pickle.dump(stored_info, handle, protocol=pickle.HIGHEST_PROTOCOL)

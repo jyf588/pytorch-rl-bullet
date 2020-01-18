@@ -22,7 +22,8 @@ class ImaginaryArmObjSession:
     # (8, b'rh_obj_j', 4) 0.0 -1.0
 
     def __init__(self,
-                 base_init_pos=np.array([-0.30, 0.348, 0.272])):    # TODO: hard coded here
+                 base_init_pos=np.array([-0.30, 0.348, 0.272]),
+                 filename='inmoov_arm_v2_2_obj.urdf'):
 
         self.sim = bc.BulletClient(connection_mode=p.DIRECT)   # this is always session 1
         # print(self.sim2._client)
@@ -34,10 +35,11 @@ class ImaginaryArmObjSession:
         self.base_init_euler = np.array([0, 0, 0])
 
         self.arm_id = self.sim.loadURDF(os.path.join(currentdir,
-                    "assets/inmoov_ros/inmoov_description/robots/inmoov_arm_v2_2_obj.urdf"),
+                    "assets/inmoov_ros/inmoov_description/robots/imaginary_IK_robots/"+filename),
                     list(self.base_init_pos), p.getQuaternionFromEuler(list(self.base_init_euler)),
                     flags=p.URDF_USE_INERTIA_FROM_FILE, useFixedBase=1)
 
+        # self.arm_dofs = [0, 1, 2, 3, 4, 6, 7]
         self.arm_dofs = [0, 1, 2, 3, 4, 6]
         self.ee_id = 8
         self.IK_iters = 1000
@@ -47,7 +49,7 @@ class ImaginaryArmObjSession:
         self.ll = np.array([self.sim.getJointInfo(self.arm_id, i)[8] for i in range(self.sim.getNumJoints(self.arm_id))])
         self.ul = np.array([self.sim.getJointInfo(self.arm_id, i)[9] for i in range(self.sim.getNumJoints(self.arm_id))])
 
-    def __del__(self):
+    def __del__(self):        # TODO
         self.sim.disconnect()
 
     def reset(self, init_arm_q=np.array([0] * 6)):
@@ -98,11 +100,55 @@ class ImaginaryArmObjSession:
         _, quat = self.get_link_pos_quat(self.ee_id)
         return wq, np.linalg.norm(deviation), quat
 
-    def get_most_comfortable_q_and_refangle(self, tar_x, tar_y):
-        tar = [tar_x, tar_y, 0, tar_x, tar_y]
+    def get_cur_q_and_jac_two_points_xz(self):
+        wq, _ = self.get_q_dq(self.arm_dofs)
+        n_dofs = len(self.arm_dofs)
+        [jac_t, _] = self.sim.calculateJacobian(self.arm_id, self.ee_id, [0] * 3,
+                                         list(wq),
+                                         [0.] * n_dofs, [0.] * n_dofs)
+        [jac_t_z, _] = self.sim.calculateJacobian(self.arm_id, self.ee_id+1, [0, 0, 0],
+                                         list(wq),
+                                         [0.] * n_dofs, [0.] * n_dofs)
+        jac = np.array([jac_t[0][:n_dofs], jac_t[1][:n_dofs], jac_t[2][:n_dofs],
+                        jac_t_z[0][:n_dofs], jac_t_z[2][:n_dofs]])
+        return wq, jac
+
+    def calc_IK_two_points_xz(self, tar_5d):
+        # tar_5d now is com xyz, (0,0,1) x and (0,0,0.1) z
+        # we want (0,0,0.1)z to be at comz+0.1
+        deviation = 1e30    # dummy
+        wq = None
+        it = 0
+        while it < self.IK_iters and np.linalg.norm(deviation) > 1e-3:
+            pos, _ = self.get_link_pos_quat(self.ee_id)
+            pos_z, _ = self.get_link_pos_quat(self.ee_id + 1)
+
+            deviation = np.array(list(pos)+list([pos_z[0]])+list([pos_z[2]])) - tar_5d    #
+
+            wq, jac = self.get_cur_q_and_jac_two_points_xz()
+            step, residue, _, _ = np.linalg.lstsq(jac, deviation, 1e-4)
+            wq = wq - 0.01 * step
+            wq = np.clip(wq, self.ll[self.arm_dofs], self.ul[self.arm_dofs])    # clip to jl
+            self.reset(wq)
+            it += 1
+        _, quat = self.get_link_pos_quat(self.ee_id)
+        return wq, np.linalg.norm(deviation), quat
+
+    def get_most_comfortable_q_and_refangle(self, tar_x, tar_y, tar_z=0.):
+        tar = [tar_x, tar_y, tar_z, tar_x, tar_y]
         q, residue, quat = self.calc_IK_two_points(tar)
         angle = p.getEulerFromQuaternion(quat)
-        self.reset()
+        # self.reset()
+        if residue < 1e-3:
+            return list(q) + [0.], angle[2]     # the first two will be zero.
+        else:
+            return None, None
+
+    def get_most_comfortable_q_and_refangle_xz(self, tar_x, tar_y, tar_z=0.):
+        tar = [tar_x, tar_y, tar_z, tar_x, tar_z+0.1]
+        q, residue, quat = self.calc_IK_two_points_xz(tar)
+        angle = p.getEulerFromQuaternion(quat)
+        # self.reset()
         if residue < 1e-3:
             return list(q) + [0.], angle[2]     # the first two will be zero.
         else:
@@ -125,7 +171,8 @@ class ImaginaryArmObjSessionFlexWrist:
     # (8, b'rh_obj_j', 4) 0.0 -1.0
 
     def __init__(self,
-                 base_init_pos=np.array([-0.30, 0.348, 0.272])):    # TODO: hard coded here
+                 base_init_pos=np.array([-0.30, 0.348, 0.272]),
+                 filename='inmoov_arm_v2_2_obj_flexwrist.urdf'):    # TODO: hard coded here
 
         self.sim = bc.BulletClient(connection_mode=p.DIRECT)   # this is always session > 0, init after main session.
         # print(self.sim2._client)
@@ -137,7 +184,7 @@ class ImaginaryArmObjSessionFlexWrist:
         self.base_init_euler = np.array([0, 0, 0])
 
         self.arm_id = self.sim.loadURDF(os.path.join(currentdir,
-                    "assets/inmoov_ros/inmoov_description/robots/inmoov_arm_v2_2_obj_flexwrist.urdf"),
+                    "assets/inmoov_ros/inmoov_description/robots/imaginary_IK_robots/"+filename),
                     list(self.base_init_pos), p.getQuaternionFromEuler(list(self.base_init_euler)),
                     flags=p.URDF_USE_INERTIA_FROM_FILE, useFixedBase=1)
 
@@ -326,6 +373,24 @@ if __name__ == "__main__":
     hz = 240.0
     dt = 1.0 / hz
 
+    while True:
+        grasp_pi_name = '0114_box_l_4'
+        filename = 'inmoov_arm_v2_2_obj_placing_' + grasp_pi_name + '.urdf'
+
+        tar = list([np.random.uniform(low=-0.3, high=0.5), np.random.uniform(low=-0.3, high=0.8)])
+        # tar = [0.1, 0]
+
+        tmp = ImaginaryArmObjSession(filename=filename)
+        q_c, angle = tmp.get_most_comfortable_q_and_refangle_xz(tar[0], tar[1], 0.36)
+        print(q_c)
+        print(angle)
+
+
+        if q_c is not None:
+            input("press enter")
+
+        del tmp
+
     # tar = list([np.random.uniform(low=-0.3, high=0.5), np.random.uniform(low=-0.3, high=0.8)])
     # tar = [0.1, 0]
     #
@@ -340,58 +405,58 @@ if __name__ == "__main__":
     # print(q)
     # input("press enter")
 
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots()
-    ax.axis('equal')
-    ax.set_xlim(0.8, -0.3)
-    ax.set_ylim(-0.3, 0.5)
-
-    X = []
-    Y = []
-    U = []
-    V = []
-    tmp = ImaginaryArmObjSession()
-    a = ImaginaryArmObjSessionFlexWrist()
-    hist = []
-
-    for ind in range(1000):
-        tar = list([np.random.uniform(low=-0.3, high=0.5), np.random.uniform(low=-0.3, high=0.8)])
-
-        q_c, angle = tmp.get_most_comfortable_q_and_refangle(tar[0], tar[1])
-        if q_c is not None:
-            # print(q_c)
-            # print(angle)
-
-            for ind in range(-2, 3):
-                # angle_t = angle + ind * 0.3
-                angle_t = angle + np.random.uniform(-0.6, 0.6)
-
-                tar_quat = p.getQuaternionFromEuler([0, 0, angle_t])
-                q, residue = a.solve_6D_IK_Bullet(tar+[0.0], tar_quat, q_c)
-
-                # print("residue", residue)
-                # input("press enter")
-
-                if residue < 1e-3:
-                    hist.append(q[6])
-
-                    X.append(tar[0])
-                    Y.append(tar[1])
-                    _, quat = a.get_link_pos_quat(a.ee_id)
-                    x_rot, _ = p.multiplyTransforms([0, 0, 0], quat, [0.1, 0, 0], [0, 0, 0, 1])
-                    U.append([x_rot[0]])
-                    V.append([x_rot[1]])
-
-        tmp.reset()
-        a.reset()
-
-    fig2, axis2 = plt.subplots()
-    n, bins, patches = axis2.hist(hist, 10, facecolor='blue', alpha=0.5)
-
-    q = ax.quiver(Y, X, V, U, angles='xy', headwidth=0.5)
-    plt.show()
-
-    p.disconnect()
+    # import matplotlib.pyplot as plt
+    # fig, ax = plt.subplots()
+    # ax.axis('equal')
+    # ax.set_xlim(0.8, -0.3)
+    # ax.set_ylim(-0.3, 0.5)
+    #
+    # X = []
+    # Y = []
+    # U = []
+    # V = []
+    # tmp = ImaginaryArmObjSession()
+    # a = ImaginaryArmObjSessionFlexWrist()
+    # hist = []
+    #
+    # for ind in range(1000):
+    #     tar = list([np.random.uniform(low=-0.3, high=0.5), np.random.uniform(low=-0.3, high=0.8)])
+    #
+    #     q_c, angle = tmp.get_most_comfortable_q_and_refangle(tar[0], tar[1])
+    #     if q_c is not None:
+    #         # print(q_c)
+    #         # print(angle)
+    #
+    #         for ind in range(-2, 3):
+    #             # angle_t = angle + ind * 0.3
+    #             angle_t = angle + np.random.uniform(-0.6, 0.6)
+    #
+    #             tar_quat = p.getQuaternionFromEuler([0, 0, angle_t])
+    #             q, residue = a.solve_6D_IK_Bullet(tar+[0.0], tar_quat, q_c)
+    #
+    #             # print("residue", residue)
+    #             # input("press enter")
+    #
+    #             if residue < 1e-3:
+    #                 hist.append(q[6])
+    #
+    #                 X.append(tar[0])
+    #                 Y.append(tar[1])
+    #                 _, quat = a.get_link_pos_quat(a.ee_id)
+    #                 x_rot, _ = p.multiplyTransforms([0, 0, 0], quat, [0.1, 0, 0], [0, 0, 0, 1])
+    #                 U.append([x_rot[0]])
+    #                 V.append([x_rot[1]])
+    #
+    #     tmp.reset()
+    #     a.reset()
+    #
+    # fig2, axis2 = plt.subplots()
+    # n, bins, patches = axis2.hist(hist, 10, facecolor='blue', alpha=0.5)
+    #
+    # q = ax.quiver(Y, X, V, U, angles='xy', headwidth=0.5)
+    # plt.show()
+    #
+    # p.disconnect()
 
 
 # how to sample delta_angle during train and test

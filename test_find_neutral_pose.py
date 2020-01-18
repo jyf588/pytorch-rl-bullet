@@ -11,6 +11,9 @@ import os
 import inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 
+# TODO: do a anaylsis if using both xyz as constraint: looks a little bit better.
+# TODO: think what to do with the shrinkage of work space during placing.
+
 # (0, b'r_shoulder_out_joint', 0) -1.57079632679 1.57079632679
 # (1, b'r_shoulder_lift_joint', 0) -1.57079632679 1.57079632679
 # (2, b'r_upper_arm_roll_joint', 0) -1.57079632679 1.57079632679
@@ -26,13 +29,16 @@ class InmoovArmObj:
         self.base_init_pos = np.array([-0.30, 0.348, 0.272])
         self.base_init_euler = np.array([0,0,0])
 
+        path = "my_pybullet_envs/assets/inmoov_ros/inmoov_description/robots/imaginary_IK_robots/inmoov_arm_v2_2_obj_placing_0114_box_l_4.urdf"
+        # path = "my_pybullet_envs/assets/inmoov_ros/inmoov_description/robots/imaginary_IK_robots/inmoov_arm_v2_2_obj.urdf"
+
         self.arm_id = p.loadURDF(os.path.join(currentdir,
-                                             "my_pybullet_envs/assets/inmoov_ros/inmoov_description/robots/inmoov_arm_v2_2_obj.urdf"),
+                                             path),
                                  list(self.base_init_pos), p.getQuaternionFromEuler(list(self.base_init_euler)),
                                  flags=p.URDF_USE_SELF_COLLISION | p.URDF_USE_INERTIA_FROM_FILE
                                        | p.URDF_USE_SELF_COLLISION_EXCLUDE_ALL_PARENTS, useFixedBase=1)
         self.print_all_joints_info()
-        # self.arm_dofs = [0, 1, 2, 3, 4, 6, 7]
+        # self.arm_dofs = [0, 1, 2, 3, 4, 6, 7]   # TODO
         self.arm_dofs = [0, 1, 2, 3, 4, 6]
 
         self.reset()
@@ -44,12 +50,7 @@ class InmoovArmObj:
         self.ll = np.array([p.getJointInfo(self.arm_id, i)[8] for i in range(p.getNumJoints(self.arm_id))])
         self.ul = np.array([p.getJointInfo(self.arm_id, i)[9] for i in range(p.getNumJoints(self.arm_id))])
 
-    def reset(self):
-        # init_arm_q = [-0.44, 0.00, -0.5, -1.8, -0.44, -0.488, -0.8]
-        # init_arm_q = [-0.44, 0.00, -0.5, -1.8, -0.44, -0.488]
-        # init_arm_q = [-0.4, -0.7, 0.5, -1.2, -0.5, 0.0]
-        init_arm_q = [0] * 6
-        # init_arm_q = [0] * 7
+    def reset(self, init_arm_q=np.array([0] * 6)):  # TODO
         for ind in range(len(self.arm_dofs)):
             p.resetJointState(self.arm_id, self.arm_dofs[ind], init_arm_q[ind], 0.0)
 
@@ -168,6 +169,75 @@ class InmoovArmObj:
             # TODO: clip to joint limit.
         return np.linalg.norm(deviation)
 
+    def get_cur_q_and_jac_two_points_xz(self):
+        wq, _ = self.get_q_dq(self.arm_dofs)
+        n_dofs = len(self.arm_dofs)
+        [jac_t, _] = p.calculateJacobian(self.arm_id, self.ee_id, [0] * 3,
+                                         list(wq),
+                                         [0.] * n_dofs, [0.] * n_dofs)
+        [jac_t_z, _] = p.calculateJacobian(self.arm_id, self.ee_id+1, [0, 0, 0],
+                                         list(wq),
+                                         [0.] * n_dofs, [0.] * n_dofs)
+        jac = np.array([jac_t[0][:n_dofs], jac_t[1][:n_dofs], jac_t[2][:n_dofs],
+                        jac_t_z[0][:n_dofs], jac_t_z[2][:n_dofs]])
+        return wq, jac
+
+    def calc_IK_two_points_xz(self, tar_5d):
+        # tar_5d now is com xyz, (0,0,1) x and (0,0,0.1) z
+        # we want (0,0,0.1)z to be at comz+0.1
+        deviation = 1e30    # dummy
+        wq = None
+        it = 0
+        # while it < 1000 and np.linalg.norm(deviation) > 1e-3:
+        while it < 1000:
+            pos, _ = self.get_link_pos_quat(self.ee_id)
+            pos_z, _ = self.get_link_pos_quat(self.ee_id + 1)
+
+            deviation = np.array(list(pos)+list([pos_z[0]])+list([pos_z[2]])) - tar_5d    #
+
+            wq, jac = self.get_cur_q_and_jac_two_points_xz()
+            step, residue, _, _ = np.linalg.lstsq(jac, deviation, 1e-4)
+            wq = wq - 0.01 * step
+            wq = np.clip(wq, self.ll[self.arm_dofs], self.ul[self.arm_dofs])    # clip to jl
+            self.reset(wq)
+            it += 1
+        _, quat = self.get_link_pos_quat(self.ee_id)
+        return wq, np.linalg.norm(deviation), quat
+
+    def get_cur_q_and_jac_two_points_xyz(self):
+        wq, _ = self.get_q_dq(self.arm_dofs)
+        n_dofs = len(self.arm_dofs)
+        [jac_t, _] = p.calculateJacobian(self.arm_id, self.ee_id, [0] * 3,
+                                         list(wq),
+                                         [0.] * n_dofs, [0.] * n_dofs)
+        [jac_t_z, _] = p.calculateJacobian(self.arm_id, self.ee_id+1, [0, 0, 0],
+                                         list(wq),
+                                         [0.] * n_dofs, [0.] * n_dofs)
+        jac = np.array([jac_t[0][:n_dofs], jac_t[1][:n_dofs], jac_t[2][:n_dofs],
+                        jac_t_z[0][:n_dofs], jac_t_z[1][:n_dofs], jac_t_z[2][:n_dofs]])
+        return wq, jac
+
+    def calc_IK_two_points_xyz(self, tar_6d):
+        # tar_5d now is com xyz, (0,0,1) xyz
+        deviation = 1e30    # dummy
+        wq = None
+        it = 0
+        # while it < 1000 and np.linalg.norm(deviation) > 1e-3:
+        while it < 1000:
+            pos, _ = self.get_link_pos_quat(self.ee_id)
+            pos_z, _ = self.get_link_pos_quat(self.ee_id + 1)
+
+            deviation = np.array(list(pos)+list(pos_z)) - tar_6d    #
+
+            wq, jac = self.get_cur_q_and_jac_two_points_xyz()
+            step, residue, _, _ = np.linalg.lstsq(jac, deviation, 1e-4)
+            wq = wq - 0.01 * step
+            wq = np.clip(wq, self.ll[self.arm_dofs], self.ul[self.arm_dofs])    # clip to jl
+            self.reset(wq)
+            it += 1
+        _, quat = self.get_link_pos_quat(self.ee_id)
+        return wq, np.linalg.norm(deviation), quat
+
     def compare_jac_fin_diff(self, test_q):
         perturb = np.random.uniform(low=-1, high=1, size=len(self.arm_dofs))
 
@@ -271,7 +341,7 @@ class InmoovArmObj:
 hz = 240.0
 dt = 1.0 / hz
 
-p.connect(p.GUI)
+p.connect(p.DIRECT)
 p.resetSimulation()
 # p.setPhysicsEngineParameter(numSolverIterations=200)
 
@@ -284,7 +354,7 @@ floorId = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/plane.urd
 
 a = InmoovArmObj()
 
-a.solve_palm_IK([-0.18, 0.095, 0.11], p.getQuaternionFromEuler([1.8, -1.57, 0]))
+# a.solve_palm_IK([-0.18, 0.095, 0.11], p.getQuaternionFromEuler([1.8, -1.57, 0]))
 # from IK old reset
 # ((-0.17977985739707947, 0.09488461911678314, 0.11017470806837082), (0.5541251301765442, -0.4393734335899353, 0.5536625981330872, 0.43972036242485046))
 
@@ -309,8 +379,14 @@ V = []
 for ind in range(1000):
     tar = list([np.random.uniform(low=-0.3, high=0.5), np.random.uniform(low=-0.3, high=0.8)])
 
-    residue = a.calc_IK_two_points(tar + [0.] + tar)
-    input("press enter")
+    # residue = a.calc_IK_two_points(tar + [0.] + tar)
+    # residue = a.calc_IK_two_points(tar + [0.36] + tar)
+
+    # _, residue, _ = a.calc_IK_two_points_xz(tar + [0.] + [tar[0], 0.1])
+    # _, residue, _ = a.calc_IK_two_points_xz(tar + [0.36] + [tar[0], 0.36+0.1])
+    _, residue, _ = a.calc_IK_two_points_xyz(tar + [0.36] + tar + [0.36 + 0.1])
+    print(residue)
+    # input("press enter")
 
     # a.calc_IK(tar + [0., 0, 0])
     # input("press enter")

@@ -100,10 +100,10 @@ class InmoovShadowNew:
             p.changeDynamics(self.arm_id, i, jointDamping=0.0, linearDamping=0.0, angularDamping=0.0)
 
         self.scale_mass_inertia(-1, self.ee_id, 0.01)
-        self.scale_mass_inertia(self.ee_id, p.getNumJoints(self.arm_id), 10.0)
+        self.scale_mass_inertia(self.ee_id, p.getNumJoints(self.arm_id), 5.0)   # TODO 5.0
 
         for i in range(self.ee_id, p.getNumJoints(self.arm_id)):
-            p.changeDynamics(self.arm_id, i, lateralFriction=1.7)       # TODO
+            p.changeDynamics(self.arm_id, i, lateralFriction=1.6)       # TODO 1.6
 
         # use np for multi-indexing
         self.ll = np.array([p.getJointInfo(self.arm_id, i)[8] for i in range(p.getNumJoints(self.arm_id))])
@@ -164,6 +164,14 @@ class InmoovShadowNew:
         self.tar_arm_q = init_arm_q
         self.tar_fin_q = init_fin_q
 
+    def reset_with_certain_arm_q_finger_states(self, arm_q, all_fin_q=None, tar_act_q=None):
+        for ind in range(len(self.arm_dofs)):
+            p.resetJointState(self.arm_id, self.arm_dofs[ind], arm_q[ind], 0.0)
+        for ind in range(len(self.all_findofs)):
+            p.resetJointState(self.arm_id, self.all_findofs[ind], all_fin_q[ind], 0.0)
+        self.tar_arm_q = arm_q
+        self.tar_fin_q = np.array(tar_act_q)
+
     def reset(self, w_pos, w_quat, all_fin_q=None, tar_act_q=None):
         # reset according to wrist 6D pos
         wx_trans = list(w_pos)
@@ -196,58 +204,16 @@ class InmoovShadowNew:
         if all_fin_q is None or tar_act_q is None:       # normal reset for grasping
             good_init = False
             while not good_init:
-                if self.init_noise:
-                    init_arm_q = self.perturb(sp, r=0.002)
-                    # init_arm_q = self.perturb(sp, r=0.02)
-                    init_fin_q = self.perturb(self.init_fin_q, r=0.02)
-                else:
-                    init_arm_q = np.array(sp)
-                    init_fin_q = np.array(self.init_fin_q)
-
-             #        print(init_arm_q)
-             #        # a = np.array([-4.86301483e-01,   2.86628535e-02,  -6.06658747e-01,
-             #        #                 -1.79659565e+00,  -4.58104018e-01,  -4.52796297e-01,
-             #        #                 -9.81747704e-02])
-             # #        a = np.array([-2.00762591e-01,  -2.22514814e-01,  -8.57366233e-01,
-             # # -1.82811687e+00,   3.95210725e-02,  -5.54310898e-01,
-             # # -4.90873852e-01])
-             #        a = np.array([-7.00274638e-01,  -5.39582786e-01,  -1.05399470e+00,
-             # -1.06178242e+00,   2.52445040e-02,  -3.46439478e-01,
-             # -4.90873852e-01])
-             #        print(a)
-             #        print("norm diff", (init_arm_q-a)/np.linalg.norm(init_arm_q-a))
-             #        # # input("press enter")
-             #        init_arm_q = a
-
-                for ind in range(len(self.arm_dofs)):
-                    p.resetJointState(self.arm_id, self.arm_dofs[ind], init_arm_q[ind], 0.0)
-                for ind in range(len(self.fin_actdofs)):
-                    p.resetJointState(self.arm_id, self.fin_actdofs[ind], init_fin_q[ind], 0.0)
-                for ind in range(len(self.fin_zerodofs)):
-                    p.resetJointState(self.arm_id, self.fin_zerodofs[ind], 0.0, 0.0)
-
-                # # jac = self.get_cur_jac()
-                # # import scipy
-                # # print("null space", scipy.linalg.null_space(jac).T)
-                # input("press enter")
-
-                self.tar_arm_q = init_arm_q
-                self.tar_fin_q = init_fin_q
-
+                self.reset_with_certain_arm_q(sp)
                 cps = p.getContactPoints(bodyA=self.arm_id)
                 # for cp in cps:
                 #     print(cp)
                 #     input("penter")
                 # print(cps[0][6])
                 if len(cps) == 0: good_init = True   # TODO: init hand last and make sure it does not colllide with env
-        else:                                           # reset for placing, no noise, no collision checking
-            for ind in range(len(self.arm_dofs)):
-                p.resetJointState(self.arm_id, self.arm_dofs[ind], sp[ind], 0.0)
-            for ind in range(len(self.all_findofs)):
-                p.resetJointState(self.arm_id, self.all_findofs[ind], all_fin_q[ind], 0.0)
-            self.tar_arm_q = sp
-            self.tar_fin_q = np.array(tar_act_q)
-
+        else:
+            # reset for placing, no noise, no collision checking
+            self.reset_with_certain_arm_q_finger_states(sp, all_fin_q, tar_act_q)
         # input("after reset")
 
     def get_cur_jac(self):

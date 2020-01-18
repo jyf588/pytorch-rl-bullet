@@ -22,7 +22,7 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=False,
+                 renders=True,
                  init_noise=True,
                  up=True,
                  is_box=False,
@@ -73,7 +73,6 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         # return/ sample one arm_q (or palm 6D, later), est. obj init,
         # during testing, another central Bullet session will be calc a bunch of arm_q given a obj init pos
         assert self.up
-        # TODO: only handles large object now
 
         sess = ImaginaryArmObjSession()
         cyl_init_pos = None
@@ -82,7 +81,7 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
             if self.small:
                 cyl_init_pos = [0, 0, 0.071]
             else:
-                cyl_init_pos = [0, 0, 0.101]
+                cyl_init_pos = [0, 0, 0.091]
             self.tx = self.np_random.uniform(low=0, high=0.25)
             self.ty = self.np_random.uniform(low=-0.1, high=0.5)
             # self.tx = 0.1
@@ -104,9 +103,9 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
             if self.small:
                 cyl_init_pos = [0, 0, 0.071]
             else:
-                cyl_init_pos = [0, 0, 0.101]
+                cyl_init_pos = [0, 0, 0.091]
             self.tx = self.np_random.uniform(low=0, high=0.25)
-            self.ty = self.np_random.uniform(low=-0.1, high=0.5)
+            self.ty = self.np_random.uniform(low=-0.1, high=0.5)    # TODO 0.6?
             # self.tx = 0.1
             # self.ty = 0.0
             cyl_init_pos = np.array(cyl_init_pos) + np.array([self.tx, self.ty, 0])
@@ -122,7 +121,7 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
             cyl_init_pos = [0, 0, 0.071]
             init_palm_pos = [-0.18, 0.095, 0.075]   # absorbed by imaginary session
         else:
-            cyl_init_pos = [0, 0, 0.101]
+            cyl_init_pos = [0, 0, 0.091]
             init_palm_pos = [-0.18, 0.095, 0.11]
 
         if self.up:
@@ -291,8 +290,8 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
 
         if self.timer > 300:
             p.setCollisionFilterPair(self.cylinderId, self.floorId, -1, -1, enableCollision=0)
-            for i in range(-1, p.getNumJoints(self.robot.arm_id)):
-                p.setCollisionFilterPair(self.floorId, self.robot.arm_id, -1, i, enableCollision=0)
+            # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
+            #     p.setCollisionFilterPair(self.floorId, self.robot.arm_id, -1, i, enableCollision=0)
 
         return self.getExtendedObservation(), reward, False, {}
 
@@ -387,6 +386,29 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         o_quat_hf_sum /= count      # rough estimate of quat average
         o_quat_hf_sum /= np.linalg.norm(o_quat_hf_sum)      # normalize quat
         return list(o_pos_hf_sum), list(o_quat_hf_sum)
+
+    def calc_average_obj_in_palm_rot_invariant(self):
+        count = len(self.final_states)
+        o_pos_hf_sum = np.array([0., 0, 0])
+        o_unitz_hf_sum = np.array([0., 0, 0])
+        for dict in self.final_states:
+            o_pos_hf_sum += np.array(dict['obj_pos_in_palm'])
+            unitz_hf = p.multiplyTransforms([0, 0, 0], dict['obj_quat_in_palm'], [0, 0, 1], [0, 0, 0, 1])[0]
+            o_unitz_hf_sum += np.array(unitz_hf)
+        o_pos_hf_sum /= count
+        o_unitz_hf_sum /= count      # rough estimate of unit z average
+        o_unitz_hf_sum /= np.linalg.norm(o_unitz_hf_sum)      # normalize unit z vector
+
+        x, y, z = o_unitz_hf_sum
+        a1_solved = np.arcsin(-y)
+        a2_solved = np.arctan2(x, z)
+        # a3_solved is zero since equation has under-determined
+        quat_solved = p.getQuaternionFromEuler([a1_solved, a2_solved, 0])
+
+        uz_check = p.multiplyTransforms([0, 0, 0], quat_solved, [0, 0, 1], [0, 0, 0, 1])[0]
+        assert np.linalg.norm(np.array(o_unitz_hf_sum) - np.array((uz_check))) < 1e-3
+
+        return list(o_pos_hf_sum), list(quat_solved)
 
     def seed(self, seed=None):
         self.np_random, seed = gym.utils.seeding.np_random(seed)
