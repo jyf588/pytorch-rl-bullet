@@ -89,7 +89,6 @@ class InmoovShadowNew:
         self.arm_id = p.loadURDF(os.path.join(currentdir,
                                              "assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand_v2_2.urdf"),
                                  list(self.base_init_pos), p.getQuaternionFromEuler(list(self.base_init_euler)),
-                                 # flags=p.URDF_USE_INERTIA_FROM_FILE,        # TODO
                                  flags=p.URDF_USE_SELF_COLLISION | p.URDF_USE_INERTIA_FROM_FILE
                                        | p.URDF_USE_SELF_COLLISION_EXCLUDE_ALL_PARENTS,
                                  useFixedBase=1)
@@ -103,7 +102,7 @@ class InmoovShadowNew:
         self.scale_mass_inertia(self.ee_id, p.getNumJoints(self.arm_id), 10.0)   # TODO 5.0
 
         for i in range(self.ee_id, p.getNumJoints(self.arm_id)):
-            p.changeDynamics(self.arm_id, i, lateralFriction=2.0)       # TODO 1.6
+            p.changeDynamics(self.arm_id, i, lateralFriction=3.0)       # TODO 1.6
 
         # use np for multi-indexing
         self.ll = np.array([p.getJointInfo(self.arm_id, i)[8] for i in range(p.getNumJoints(self.arm_id))])
@@ -172,17 +171,22 @@ class InmoovShadowNew:
         self.tar_arm_q = arm_q
         self.tar_fin_q = np.array(tar_act_q)
 
-    def reset(self, w_pos, w_quat, all_fin_q=None, tar_act_q=None):
+    def solve_arm_IK(self, w_pos, w_quat, rand_init=False):     # TODO
         # reset according to wrist 6D pos
         wx_trans = list(w_pos)
         wx_quat = list(w_quat)
         closeEnough = False
-        sp = [-0.44, 0.00, -0.5, -1.8, -0.44, -0.488, -0.8] + [0.0]*len(self.all_findofs)   # dummy init guess IK
+        if rand_init:
+            sp = list(self.np_random.uniform(low=-0.03, high=0.03, size=7)) + [0.0]*len(self.all_findofs)
+            sp[3] -= 1.57
+        else:
+            sp = [-0.44, 0.00, -0.5, -1.8, -0.44, -0.488, -0.8] + [0.0]*len(self.all_findofs)    # dummy init guess IK
         ll = self.ll[self.arm_dofs+self.all_findofs]
         ul = self.ul[self.arm_dofs+self.all_findofs]
         jr = ul - ll
         iter = 0
-        while not closeEnough and iter < 20:
+        dist = 1e30
+        while not closeEnough and iter < 50:
             for ind in range(len(self.arm_dofs)):
                 p.resetJointState(self.arm_id, self.arm_dofs[ind], sp[ind])
 
@@ -200,7 +204,11 @@ class InmoovShadowNew:
             # print("dist=", dist)
             if dist < 1e-3: closeEnough = True
             iter += 1
+        if dist > 1e-2: sp = None     # TODO
+        return sp
 
+    def reset(self, w_pos, w_quat, all_fin_q=None, tar_act_q=None):
+        sp = self.solve_arm_IK(w_pos, w_quat)
         if all_fin_q is None or tar_act_q is None:       # normal reset for grasping
             good_init = False
             while not good_init:

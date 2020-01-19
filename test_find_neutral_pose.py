@@ -29,7 +29,8 @@ class InmoovArmObj:
         self.base_init_pos = np.array([-0.30, 0.348, 0.272])
         self.base_init_euler = np.array([0,0,0])
 
-        path = "my_pybullet_envs/assets/inmoov_ros/inmoov_description/robots/imaginary_IK_robots/inmoov_arm_v2_2_obj_placing_0114_box_l_4.urdf"
+        # path = "my_pybullet_envs/assets/inmoov_ros/inmoov_description/robots/imaginary_IK_robots/inmoov_arm_v2_2_obj_placing_0114_box_l_4.urdf"
+        path = "my_pybullet_envs/assets/inmoov_ros/inmoov_description/robots/imaginary_IK_robots/inmoov_arm_v2_2_obj_placing_0114_cyl_s_1.urdf"
         # path = "my_pybullet_envs/assets/inmoov_ros/inmoov_description/robots/imaginary_IK_robots/inmoov_arm_v2_2_obj.urdf"
 
         self.arm_id = p.loadURDF(os.path.join(currentdir,

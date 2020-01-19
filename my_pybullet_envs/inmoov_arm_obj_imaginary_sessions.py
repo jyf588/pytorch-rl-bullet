@@ -50,7 +50,7 @@ class ImaginaryArmObjSession:
         self.ul = np.array([self.sim.getJointInfo(self.arm_id, i)[9] for i in range(self.sim.getNumJoints(self.arm_id))])
 
     def __del__(self):        # TODO
-        self.sim.disconnect()
+        del self.sim
 
     def reset(self, init_arm_q=np.array([0] * 6)):
         for ind in range(len(self.arm_dofs)):
@@ -202,7 +202,7 @@ class ImaginaryArmObjSessionFlexWrist:
         self.ul = np.array([self.sim.getJointInfo(self.arm_id, i)[9] for i in range(self.sim.getNumJoints(self.arm_id))])
 
     def __del__(self):
-        self.sim.disconnect()
+        del self.sim
 
     def print_all_joints_info(self):
         for i in range(self.sim.getNumJoints(self.arm_id)):
