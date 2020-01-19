@@ -17,7 +17,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=False,
+                 renders=True,
                  init_noise=True,
                  up=True):
         self.renders = renders
@@ -122,10 +122,10 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         cand_states = None
         while not done:
             if self.up:
-                # self.tx = self.np_random.uniform(low=0, high=0.25)  # sample xy
-                # self.ty = self.np_random.uniform(low=-0.1, high=0.5)
-                self.tx = self.np_random.uniform(low=0, high=0.2)
-                self.ty = self.np_random.uniform(low=-0.2, high=0.0)
+                self.tx = self.np_random.uniform(low=0.05, high=0.3)  # sample xy
+                self.ty = self.np_random.uniform(low=-0.2, high=0.6)
+                # self.tx = self.np_random.uniform(low=0, high=0.2)
+                # self.ty = self.np_random.uniform(low=-0.2, high=0.0)
             else:
                 self.tx = 0.0
                 self.ty = 0.0
@@ -136,7 +136,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                 cand_arm_q = self.robot.solve_arm_IK(cand_state[0], cand_state[1])
                 if cand_arm_q is not None:
                     done = True
-                    this_cost = np.linalg.norm(np.array(cand_arm_q) - ref)
+                    this_cost = np.sum(np.abs(np.array(cand_arm_q) - ref))  # change to l1
                     if this_cost < cost:
                         min_ind = ind
                         arm_q = cand_arm_q
