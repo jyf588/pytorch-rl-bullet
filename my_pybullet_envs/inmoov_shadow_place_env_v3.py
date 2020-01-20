@@ -17,12 +17,22 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=True,
+                 renders=False,
                  init_noise=True,
-                 up=True):
+                 up=True,
+                 is_box=True,
+                 is_small=False,
+                 ):
         self.renders = renders
-        self.init_noise = init_noise        # TODO: bottom object noise
+        self.init_noise = init_noise
         self.up = up
+        self.is_box = is_box
+        self.is_small = is_small
+        # self.grasp_pi_name = '0114_cyl_s_1'
+        self.grasp_pi_name = '0112_box'  # TODO
+        self.half_obj_height = 0.07 if self.is_small else 0.09
+        self.start_clearance = 0.16
+        self.cand_angles = [0., 1.57, 3.14, -1.57]  # TODO: finer grid?
 
         self._timeStep = 1. / 240.
         if self.renders:
@@ -31,9 +41,9 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
             p.connect(p.DIRECT)
         self.np_random = None
         self.robot = None
-
         self.viewer = None
         self.timer = 0
+
         # TODO: tune this is not principled
         self.frameSkip = 3
         self.action_scale = np.array([0.004] * 7 + [0.008] * 17)  # shadow hand is 22-5=17dof
@@ -42,16 +52,13 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         self.ty = None
         self.tz = None
         self.desired_obj_pos_final = None
-        self.isBox = True
 
         self.saved_file = None
-        if self.isBox:
-            with open(os.path.join(currentdir, 'assets/place_init_dist/final_states_0112_box.pickle'), 'rb') as handle:
-                self.saved_file = pickle.load(handle)
-        else:
-            with open(os.path.join(currentdir, 'assets/place_init_dist/final_states_xxx.pickle'), 'rb') as handle:
-                self.saved_file = pickle.load(handle)
+        with open(os.path.join(currentdir, 'assets/place_init_dist/final_states_' + self.grasp_pi_name + '.pickle'),
+                  'rb') as handle:
+            self.saved_file = pickle.load(handle)
         assert self.saved_file is not None
+
         self.o_pos_pf_ave = self.saved_file['ave_obj_pos_in_palm']
         self.o_quat_pf_ave = self.saved_file['ave_obj_quat_in_palm']
         self.o_quat_pf_ave /= np.linalg.norm(self.o_quat_pf_ave)        # in case not normalized
@@ -75,11 +82,8 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
 
     def get_reset_poses(self, desired_obj_quat):
         # TODO, assume tx ty sampled already
-        desired_obj_pos = [self.tx, self.ty, 0.16+self.tz]        # TODO: 0.16 enough clearance? 0.13 small
-        if self.isBox:
-            self.desired_obj_pos_final = [self.tx, self.ty, 0.09+self.tz]       # TODO: for reward calc., diff if size diff
-        else:
-            self.desired_obj_pos_final = [self.tx, self.ty, 0.10+self.tz]
+        desired_obj_pos = [self.tx, self.ty, self.start_clearance+self.tz]
+        self.desired_obj_pos_final = [self.tx, self.ty, self.half_obj_height + self.tz]
 
         p_pos_of_ave, p_quat_of_ave = p.invertTransform(self.o_pos_pf_ave, self.o_quat_pf_ave)
         p_pos, p_quat = p.multiplyTransforms(desired_obj_pos, desired_obj_quat,
@@ -111,13 +115,9 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         self.floor_id = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'),
                                    [0, 0, 0], useFixedBase=1)
 
-        # p_pos, p_quat, o_pos, o_quat, all_fin_q_init, tar_fin_q_init = self.get_reset_poses()
-
-        cand_angles = [0., 1.57, 3.14, -1.57]  # TODO: finer grid?
-        cand_quats = [p.getQuaternionFromEuler([0, 0, cand_angle]) for cand_angle in cand_angles]
+        cand_quats = [p.getQuaternionFromEuler([0, 0, cand_angle]) for cand_angle in self.cand_angles]
         ref = np.array([0.] * 3 + [-1.57] + [0.] * 3)
-        self.tz = 0.2
-
+        self.tz = 0.18      # TODO: btm always large cyl
         done = False
         cand_states = None
         while not done:
@@ -150,12 +150,20 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         self.bottom_obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
                                         btm_xyz, useFixedBase=0)
 
-        if self.isBox:
-            self.obj_id = p.loadURDF(os.path.join(currentdir, 'assets/box.urdf'),
-                                     o_pos, o_quat, useFixedBase=0)
+        if self.is_box:
+            if self.is_small:
+                self.obj_id = p.loadURDF(os.path.join(currentdir, 'assets/box_small.urdf'),
+                                         o_pos, o_quat, useFixedBase=0)
+            else:
+                self.obj_id = p.loadURDF(os.path.join(currentdir, 'assets/box.urdf'),
+                                         o_pos, o_quat, useFixedBase=0)
         else:
-            self.obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
-                                     o_pos, o_quat, useFixedBase=0)
+            if self.is_small:
+                self.obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cyl_small.urdf'),
+                                         o_pos, o_quat, useFixedBase=0)
+            else:
+                self.obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
+                                         o_pos, o_quat, useFixedBase=0)
         self.obj_mass = p.getDynamicsInfo(self.obj_id, -1)[0]
 
         # self.robot.reset(p_pos, p_quat, all_fin_q_init, tar_fin_q_init)
@@ -250,16 +258,18 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
             # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
             #     p.setCollisionFilterPair(self.obj_id, self.robot.arm_id, -1, i, enableCollision=0)
             #     p.setCollisionFilterPair(self.bottom_obj_id, self.robot.arm_id, -1, i, enableCollision=0)
-            for test_t in range(300):
+            for test_t in range(400):
                 open_up_q = np.array([0.2, 0.2, 0.2] * 4 + [-0.4, 1.9, -0.0, 0.5, 0.0])
                 devi = open_up_q - self.robot.get_q_dq(self.robot.fin_actdofs)[0]
                 self.robot.apply_action(np.array([0.0]*7+list(devi/150.)))
                 p.stepSimulation()
                 if self.renders:
                     time.sleep(self._timeStep)
-            clPosNow, _ = p.getBasePositionAndOrientation(self.obj_id)
-            dist = np.linalg.norm(np.array(self.desired_obj_pos_final) - np.array(clPosNow))
-            if dist < 0.05:
+            upPosNow, _ = p.getBasePositionAndOrientation(self.obj_id)
+            btmPosNow, _ = p.getBasePositionAndOrientation(self.bottom_obj_id)
+            # dist = np.linalg.norm(np.array(btmPosNow) + [0., 0., self.tz/2+self.half_obj_height] - upPosNow)  # TODO
+            dist = np.linalg.norm(np.array(self.desired_obj_pos_final) - np.array(upPosNow))
+            if dist < 0.06:
                 # succeed = True
                 reward += 2000
 
@@ -281,7 +291,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         # self.observation.extend(clVels[0])
         # self.observation.extend(clVels[1])
 
-        # # TODO: somehow wrist sensor is very noisy, maybe not useful as obs
+        # # somehow wrist sensor is very noisy, maybe not useful as obs
         # cf = np.array(self.robot.get_wrist_wrench())
         # cf[:3] /= (self.robot.maxForce * 3)
         # cf[3:] /= (self.robot.maxForce * 0.5)     # just in case there is not state normalization in ppo

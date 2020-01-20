@@ -204,7 +204,7 @@ class InmoovShadowNew:
             # print("dist=", dist)
             if dist < 1e-3: closeEnough = True
             iter += 1
-        if dist > 1e-2: sp = None     # TODO
+        if dist > 1e-3: sp = None     # TODO
         return sp
 
     def reset(self, w_pos, w_quat, all_fin_q=None, tar_act_q=None):
@@ -284,7 +284,7 @@ class InmoovShadowNew:
             jointIndices=self.fin_zerodofs,
             controlMode=p.POSITION_CONTROL,
             targetPositions=[0.0]*len(self.fin_zerodofs),
-            forces=[self.maxForce / 4.0] * len(self.fin_zerodofs))
+            forces=[self.maxForce / 10.0] * len(self.fin_zerodofs))
 
     def get_robot_observation_dim(self):
         return len(self.get_robot_observation())

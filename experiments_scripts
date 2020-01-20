@@ -668,8 +668,17 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v3" --algo ppo --use-gae --l
 1/19 08:41 increase placing range old init
 python main.py --env-name "InmoovHandPlaceBulletEnv-v3" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0112_place_v3_4 --seed 7018
 python main.py --env-name "InmoovHandPlaceBulletEnv-v3" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0112_place_v3_5 --seed 7019
+# 5 slightly better
+# sort of still works
 
-
+1/19 11:05
+# use small cyl final_states_0114_cyl_s_1.pickle, zeroDof 200/10., IK 1e-3 none,
+python main.py --env-name "InmoovHandPlaceBulletEnv-v3" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0114_cyl_s_1_place_v3_0 --seed 7020
+python main.py --env-name "InmoovHandPlaceBulletEnv-v3" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0114_cyl_s_1_place_v3_1 --seed 7021
+1/19 1808
+# make sure 0112_box works
+python main.py --env-name "InmoovHandPlaceBulletEnv-v3" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0112_place_v3_5 --seed 7022
+python main.py --env-name "InmoovHandPlaceBulletEnv-v3" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0112_place_v3_6 --seed 7023
 
 
 

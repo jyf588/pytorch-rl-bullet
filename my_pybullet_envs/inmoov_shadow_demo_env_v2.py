@@ -127,9 +127,9 @@ class InmoovShadowHandDemoEnvNew(gym.Env):
 
         # TODO: from now on, assume always Univeral Arm Policy
         xy = np.array([self.tx, self.ty])
-        self.observation.extend(list(xy + self.np_random.uniform(low=-0.01, high=0.01, size=2)))
-        self.observation.extend(list(xy + self.np_random.uniform(low=-0.01, high=0.01, size=2)))
-        self.observation.extend(list(xy + self.np_random.uniform(low=-0.01, high=0.01, size=2)))
+        self.observation.extend(list(xy + self.np_random.uniform(low=-0.001, high=0.001, size=2)))
+        self.observation.extend(list(xy + self.np_random.uniform(low=-0.001, high=0.001, size=2)))
+        self.observation.extend(list(xy + self.np_random.uniform(low=-0.001, high=0.001, size=2)))
 
         return self.observation
 
