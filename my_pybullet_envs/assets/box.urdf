@@ -5,19 +5,18 @@
       <geometry>
         <box size="0.08 0.08 0.18"/>
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="black"/>
+      <origin rpy="0 0 0" xyz="0 0 0.0"/>
     </visual>
     <collision>
       <geometry>
          <box size="0.08 0.08 0.18"/>
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0.0"/>
     </collision>
     <inertial>
       <mass value="3.5"/>
       <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001"/>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0.0"/>
     </inertial>
   </link>
 </robot>
