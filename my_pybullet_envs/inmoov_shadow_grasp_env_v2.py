@@ -25,7 +25,7 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
                  renders=False,
                  init_noise=True,
                  up=True,
-                 is_box=False,
+                 is_box=True,
                  small=True,
                  using_comfortable=True,
                  using_comfortable_range=False):

@@ -699,6 +699,10 @@ python main.py --env-name "InmoovHandGraspBulletEnv-v3" --algo ppo --use-gae --l
 # retrain V2 for small cylinder, mu 1.7
 python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_cyl_s_0 --seed 8012
 python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_cyl_s_1 --seed 8013
+1/21 01:28
+# for small box, other same
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_box_s_0 --seed 8014
+python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 2048 --num-processes 4  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_box_s_1 --seed 8015
 
 
 
@@ -719,4 +723,9 @@ python main.py --env-name "InmoovHandGraspBulletEnv-v1" --algo ppo --use-gae --l
 
 # copy header
 # copy folder
+
+# run the crack
+# run grasp env v2 to train policy for different objects
+# run output states to collect the pickle file (use rot inv or rot old?)
+# train with place v3
 

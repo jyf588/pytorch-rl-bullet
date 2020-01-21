@@ -57,7 +57,7 @@ def main():
   parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   # parser.add_argument('--env', help='environment ID', default='AllegroHandPickBulletEnv-v0')
 
-  parser.add_argument('--env', help='environment ID', default='InmoovHandPlaceBulletEnv-v3')
+  parser.add_argument('--env', help='environment ID', default='InmoovHandGraspBulletEnv-v1')
   # parser.add_argument('--env', help='environment ID', default='ShadowHandPlaceBulletEnv-v0')
 
   # parser.add_argument('--env', help='environment ID', default='AntBulletEnv-v0')
@@ -68,7 +68,7 @@ def main():
                       help='Repeat reset to show reset performance',
                       type=int,
                       default=0)
-  parser.add_argument('--steps', help='Number of steps', type=int, default=100)
+  parser.add_argument('--steps', help='Number of steps', type=int, default=134)
   # parser.add_argument('--steps', help='Number of steps', type=int, default=300)
 
   args = parser.parse_args()
