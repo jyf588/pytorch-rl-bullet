@@ -94,7 +94,7 @@ masks = torch.zeros(1, 1)
 #     render_func('human')
 
 obs = env.reset()
-
+print("obs", obs)
 
 if args.env_name.find('Bullet') > -1:
     import pybullet as p
@@ -106,6 +106,8 @@ if args.env_name.find('Bullet') > -1:
 
 reward_total = 0
 
+control_step = 0
+
 while True:
     with torch.no_grad():
         value, action, _, recurrent_hidden_states = actor_critic.act(
@@ -113,6 +115,12 @@ while True:
 
     # Obser reward and next obs
     obs, reward, done, _ = env.step(action)
+
+    print(obs)
+    print(action)
+    print(control_step)
+    control_step += 1
+    # input("press enter obs")
 
     reward_total += reward
 

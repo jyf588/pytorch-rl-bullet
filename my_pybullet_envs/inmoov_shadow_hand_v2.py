@@ -102,7 +102,7 @@ class InmoovShadowNew:
         self.scale_mass_inertia(self.ee_id, p.getNumJoints(self.arm_id), 10.0)   # TODO 5.0
 
         for i in range(self.ee_id, p.getNumJoints(self.arm_id)):
-            p.changeDynamics(self.arm_id, i, lateralFriction=3.0)       # TODO 1.6
+            p.changeDynamics(self.arm_id, i, lateralFriction=1.7)       # TODO 1.6
 
         # use np for multi-indexing
         self.ll = np.array([p.getJointInfo(self.arm_id, i)[8] for i in range(p.getNumJoints(self.arm_id))])
@@ -112,6 +112,10 @@ class InmoovShadowNew:
 
         # p.stepSimulation()
         # input("press enter")
+
+    def change_hand_friction(self, mu):
+        for i in range(self.ee_id, p.getNumJoints(self.arm_id)):
+            p.changeDynamics(self.arm_id, i, lateralFriction=mu)
 
     def print_all_joints_info(self):
         for i in range(p.getNumJoints(self.arm_id)):
@@ -162,6 +166,11 @@ class InmoovShadowNew:
             p.resetJointState(self.arm_id, self.fin_zerodofs[ind], 0.0, 0.0)
         self.tar_arm_q = init_arm_q
         self.tar_fin_q = init_fin_q
+
+    def reset_only_finger_states(self, all_fin_q, tar_act_q):
+        for ind in range(len(self.all_findofs)):
+            p.resetJointState(self.arm_id, self.all_findofs[ind], all_fin_q[ind], 0.0)
+        self.tar_fin_q = np.array(tar_act_q)
 
     def reset_with_certain_arm_q_finger_states(self, arm_q, all_fin_q=None, tar_act_q=None):
         for ind in range(len(self.arm_dofs)):
@@ -235,17 +244,18 @@ class InmoovShadowNew:
                         jac_r[0][:n_arm_dofs], jac_r[1][:n_arm_dofs], jac_r[2][:n_arm_dofs]])
         return jac
 
-    def get_robot_observation(self):
+    def get_robot_observation(self, withVel=False):
         obs = []
 
         links = [self.ee_id] + self.fin_tips
         for link in links:
             pos, orn = self.get_link_pos_quat(link)
-            # linVel, angVel = self.get_link_v_w(link)
+            linVel, angVel = self.get_link_v_w(link)
             obs.extend(pos)
             obs.extend(orn)
-            # obs.extend(linVel)
-            # obs.extend(angVel)
+            if withVel:
+                obs.extend(linVel)
+                obs.extend(angVel)
 
         a_q, a_dq = self.get_q_dq(self.arm_dofs)
         # print("arm q", a_q)
@@ -284,7 +294,7 @@ class InmoovShadowNew:
             jointIndices=self.fin_zerodofs,
             controlMode=p.POSITION_CONTROL,
             targetPositions=[0.0]*len(self.fin_zerodofs),
-            forces=[self.maxForce / 10.0] * len(self.fin_zerodofs))
+            forces=[self.maxForce / 4.0] * len(self.fin_zerodofs))
 
     def get_robot_observation_dim(self):
         return len(self.get_robot_observation())

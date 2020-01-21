@@ -42,7 +42,7 @@ class InmoovArmObj:
         # self.arm_dofs = [0, 1, 2, 3, 4, 6, 7]   # TODO
         self.arm_dofs = [0, 1, 2, 3, 4, 6]
 
-        self.reset()
+        self.reset(np.array([-0.44, 0.00, -0.5, -1.8, -0.44, -0.488]))
 
         self.ee_id = 8
 
@@ -51,7 +51,9 @@ class InmoovArmObj:
         self.ll = np.array([p.getJointInfo(self.arm_id, i)[8] for i in range(p.getNumJoints(self.arm_id))])
         self.ul = np.array([p.getJointInfo(self.arm_id, i)[9] for i in range(p.getNumJoints(self.arm_id))])
 
-    def reset(self, init_arm_q=np.array([0] * 6)):  # TODO
+    def reset(self, init_arm_q=np.array([0.] * 6)):  # TODO
+        # init_arm_q += np.random.uniform(low=-0.03, high=0.03, size=6)
+        # init_arm_q[3] -= 1.57
         for ind in range(len(self.arm_dofs)):
             p.resetJointState(self.arm_id, self.arm_dofs[ind], init_arm_q[ind], 0.0)
 

@@ -36,7 +36,25 @@ class InmoovShadowHandDemoEnvNew(gym.Env):
         self.tx = -1.
         self.ty = -1.   # dummy
 
-        self.reset()    # and update init
+        user_answer = input("withVel?").lower().strip()
+        if user_answer == "1":
+            self.withVel = True
+        elif user_answer == "0":
+            self.withVel = False
+        else:
+            self.withVel = None
+        # self.withVel = input("withVel?")
+        # self.withVel = bool(self.withVel)
+
+        if self.np_random is None:
+            self.seed(0)  # used once temporarily, will be overwritten outside by env
+
+        self.robot = InmoovShadowNew(init_noise=self.init_noise, timestep=self._timeStep)
+
+        if self.np_random is not None:
+            self.robot.np_random = self.np_random
+
+        self.observation = self.getExtendedObservation()
 
         action_dim = len(self.action_scale)
         self.act = self.action_scale * 0.0
@@ -59,20 +77,20 @@ class InmoovShadowHandDemoEnvNew(gym.Env):
 
     def reset(self):
 
-        if self.np_random is None:
-            self.seed(0)    # used once temporarily, will be overwritten outside by env
+        # if self.np_random is None:
+        #     self.seed(0)    # used once temporarily, will be overwritten outside by env
+        #
+        # if self.robot is not None:
+        #     if p.isConnected(0):
+        #         p.removeBody(self.robot.arm_id)
+        #         self.robot.arm_id = -123
+        #     self.robot = None
+        # self.robot = InmoovShadowNew(init_noise=self.init_noise, timestep=self._timeStep)
+        #
+        # if self.np_random is not None:
+        #     self.robot.np_random = self.np_random
 
-        if self.robot is not None:
-            if p.isConnected(0):
-                p.removeBody(self.robot.arm_id)
-                self.robot.arm_id = -123
-            self.robot = None
-        self.robot = InmoovShadowNew(init_noise=self.init_noise, timestep=self._timeStep)
-
-        if self.np_random is not None:
-            self.robot.np_random = self.np_random
-
-        self.robot.reset_with_certain_arm_q([0.0]*len(self.robot.arm_dofs))
+        # self.robot.reset_with_certain_arm_q([0.0]*len(self.robot.arm_dofs))
 
         # delete this will just fail
         # self.robot.reset_with_certain_arm_q([-7.60999597e-01, 3.05809706e-02, -5.82112526e-01,
@@ -99,7 +117,8 @@ class InmoovShadowHandDemoEnvNew(gym.Env):
         return self.getExtendedObservation(), 0.0, False, {}
 
     def getExtendedObservation(self):
-        self.observation = self.robot.get_robot_observation()
+        # print(self.withVel)
+        self.observation = self.robot.get_robot_observation(self.withVel)
 
         curContact = []
         for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
@@ -130,6 +149,9 @@ class InmoovShadowHandDemoEnvNew(gym.Env):
         self.observation.extend(list(xy + self.np_random.uniform(low=-0.001, high=0.001, size=2)))
         self.observation.extend(list(xy + self.np_random.uniform(low=-0.001, high=0.001, size=2)))
         self.observation.extend(list(xy + self.np_random.uniform(low=-0.001, high=0.001, size=2)))
+        # self.observation.extend(list(xy))
+        # self.observation.extend(list(xy))
+        # self.observation.extend(list(xy))
 
         return self.observation
 

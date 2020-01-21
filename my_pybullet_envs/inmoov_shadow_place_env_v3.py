@@ -17,22 +17,27 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=False,
+                 renders=True,
                  init_noise=True,
                  up=True,
-                 is_box=True,
-                 is_small=False,
+                 is_box=False,
+                 is_small=True,
+                 place_floor=True,
+                 grasp_pi_name='0114_cyl_s_1'         #'0114_cyl_s_1' '0112_box'
                  ):
         self.renders = renders
         self.init_noise = init_noise
         self.up = up
         self.is_box = is_box
         self.is_small = is_small
-        # self.grasp_pi_name = '0114_cyl_s_1'
-        self.grasp_pi_name = '0112_box'  # TODO
-        self.half_obj_height = 0.07 if self.is_small else 0.09
-        self.start_clearance = 0.16
+        self.place_floor = place_floor
+        self.grasp_pi_name = grasp_pi_name
+
+        self.half_obj_height = 0.065 if self.is_small else 0.09
+        self.start_clearance = 0.14
+        self.btm_obj_height = 0.18      # always place on larger one
         self.cand_angles = [0., 1.57, 3.14, -1.57]  # TODO: finer grid?
+        self.cand_quats = [p.getQuaternionFromEuler([0, 0, cand_angle]) for cand_angle in self.cand_angles]
 
         self._timeStep = 1. / 240.
         if self.renders:
@@ -48,9 +53,9 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         self.frameSkip = 3
         self.action_scale = np.array([0.004] * 7 + [0.008] * 17)  # shadow hand is 22-5=17dof
 
-        self.tx = None
-        self.ty = None
-        self.tz = None
+        self.tx = -1    # dummy
+        self.ty = -1    # dummy
+        self.tz = -1    # dummy
         self.desired_obj_pos_final = None
 
         self.saved_file = None
@@ -70,7 +75,12 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         # print(self.init_states[51])
         # print(self.init_states[89])
 
-        self.reset()    # and update init obs
+        if self.np_random is None:
+            self.seed(0)    # used once temporarily, will be overwritten outside by env
+        self.robot = InmoovShadowNew(init_noise=False, timestep=self._timeStep)
+        if self.np_random is not None:
+            self.robot.np_random = self.np_random
+        self.observation = self.getExtendedObservation()
         action_dim = len(self.action_scale)
         self.act = self.action_scale * 0.0
         self.action_space = gym.spaces.Box(low=np.array([-1.]*action_dim), high=np.array([+1.]*action_dim))
@@ -80,75 +90,16 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         #
         # input("press enter")
 
-    def get_reset_poses(self, desired_obj_quat):
-        # TODO, assume tx ty sampled already
-        desired_obj_pos = [self.tx, self.ty, self.start_clearance+self.tz]
-        self.desired_obj_pos_final = [self.tx, self.ty, self.half_obj_height + self.tz]
+    def reset_robot_object_from_sample(self, state, arm_q):
+        o_pos_pf = state['obj_pos_in_palm']
+        o_quat_pf = state['obj_quat_in_palm']
+        all_fin_q_init = state['all_fin_q']
+        tar_fin_q_init = state['fin_tar_q']
 
-        p_pos_of_ave, p_quat_of_ave = p.invertTransform(self.o_pos_pf_ave, self.o_quat_pf_ave)
-        p_pos, p_quat = p.multiplyTransforms(desired_obj_pos, desired_obj_quat,
-                                             p_pos_of_ave, p_quat_of_ave)
+        self.robot.reset_with_certain_arm_q_finger_states(arm_q, all_fin_q_init, tar_fin_q_init)
 
-        init_state = self.sample_init_state()
-        o_pos_pf = init_state['obj_pos_in_palm']
-        o_quat_pf = init_state['obj_quat_in_palm']
-        all_fin_q_init = init_state['all_fin_q']
-        tar_fin_q_init = init_state['fin_tar_q']
-
+        p_pos, p_quat = self.robot.get_link_pos_quat(self.robot.ee_id)
         o_pos, o_quat = p.multiplyTransforms(p_pos, p_quat, o_pos_pf, o_quat_pf)
-
-        return p_pos, p_quat, o_pos, o_quat, all_fin_q_init, tar_fin_q_init
-
-    def reset(self):
-        p.resetSimulation()
-        # p.setPhysicsEngineParameter(numSolverIterations=200)
-        p.setTimeStep(self._timeStep)
-        p.setGravity(0, 0, -10)
-
-        if self.np_random is None:
-            self.seed(0)    # used once temporarily, will be overwritten outside by env
-        self.robot = InmoovShadowNew(init_noise=False, timestep=self._timeStep)
-        if self.np_random is not None:
-            self.robot.np_random = self.np_random
-
-        self.timer = 0
-        self.floor_id = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'),
-                                   [0, 0, 0], useFixedBase=1)
-
-        cand_quats = [p.getQuaternionFromEuler([0, 0, cand_angle]) for cand_angle in self.cand_angles]
-        ref = np.array([0.] * 3 + [-1.57] + [0.] * 3)
-        self.tz = 0.18      # TODO: btm always large cyl
-        done = False
-        cand_states = None
-        while not done:
-            if self.up:
-                self.tx = self.np_random.uniform(low=0.05, high=0.3)  # sample xy
-                self.ty = self.np_random.uniform(low=-0.2, high=0.6)
-                # self.tx = self.np_random.uniform(low=0, high=0.2)
-                # self.ty = self.np_random.uniform(low=-0.2, high=0.0)
-            else:
-                self.tx = 0.0
-                self.ty = 0.0
-            cand_states = [self.get_reset_poses(cand_quat) for cand_quat in cand_quats]
-            cost = 1e30
-            min_ind = None
-            for ind, cand_state in enumerate(cand_states):
-                cand_arm_q = self.robot.solve_arm_IK(cand_state[0], cand_state[1])
-                if cand_arm_q is not None:
-                    done = True
-                    this_cost = np.sum(np.abs(np.array(cand_arm_q) - ref))  # change to l1
-                    if this_cost < cost:
-                        min_ind = ind
-                        arm_q = cand_arm_q
-                        cost = this_cost
-            # print(self.tx, self.ty, done, min_ind)
-        _, _, o_pos, o_quat, all_fin_q_init, tar_fin_q_init = cand_states[min_ind]
-
-        btm_xyz = np.array([self.tx, self.ty, self.tz/2.0])
-        if self.init_noise:
-            btm_xyz += np.append(self.np_random.uniform(low=-0.01, high=0.01, size=2), 0)
-        self.bottom_obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
-                                        btm_xyz, useFixedBase=0)
 
         if self.is_box:
             if self.is_small:
@@ -159,20 +110,86 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                                          o_pos, o_quat, useFixedBase=0)
         else:
             if self.is_small:
-                self.obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cyl_small.urdf'),
+                self.obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cylinder_small.urdf'),
                                          o_pos, o_quat, useFixedBase=0)
             else:
                 self.obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
                                          o_pos, o_quat, useFixedBase=0)
+        p.changeDynamics(self.obj_id, -1, lateralFriction=1.0)
         self.obj_mass = p.getDynamicsInfo(self.obj_id, -1)[0]
 
-        # self.robot.reset(p_pos, p_quat, all_fin_q_init, tar_fin_q_init)
-        self.robot.reset_with_certain_arm_q_finger_states(arm_q, all_fin_q_init, tar_fin_q_init)
+        return
 
-        p.changeDynamics(self.obj_id, -1, lateralFriction=1.0)
-        p.changeDynamics(self.bottom_obj_id, -1, lateralFriction=1.0)
-        p.changeDynamics(self.floor_id, -1, lateralFriction=1.0)
+    def get_optimal_init_arm_q(self, desired_obj_pos):
+        # TODO: desired obj init pos -> should add clearance to z.
+        arm_q = None
+        cost = 1e30
+        ref = np.array([0.] * 3 + [-1.57] + [0.] * 3)
+        for ind, cand_quat in enumerate(self.cand_quats):
+            p_pos_of_ave, p_quat_of_ave = p.invertTransform(self.o_pos_pf_ave, self.o_quat_pf_ave)
+            p_pos, p_quat = p.multiplyTransforms(desired_obj_pos, cand_quat,
+                                                 p_pos_of_ave, p_quat_of_ave)
+            cand_arm_q = self.robot.solve_arm_IK(p_pos, p_quat)
+            if cand_arm_q is not None:
+                this_cost = np.sum(np.abs(np.array(cand_arm_q) - ref))  # change to l1
+                if this_cost < cost:
+                    arm_q = cand_arm_q
+                    cost = this_cost
+        return arm_q
 
+    def sample_valid_arm_q(self):
+        self.tz = self.btm_obj_height if not self.place_floor else 0.0
+        while True:
+            if self.up:
+                self.tx = self.np_random.uniform(low=0, high=0.25)
+                self.ty = self.np_random.uniform(low=-0.1, high=0.5)
+                # self.tx = self.np_random.uniform(low=0, high=0.2)
+                # self.ty = self.np_random.uniform(low=-0.2, high=0.0)
+            else:
+                self.tx = 0.0
+                self.ty = 0.0
+
+            desired_obj_pos = [self.tx, self.ty, self.start_clearance + self.tz]
+            self.desired_obj_pos_final = [self.tx, self.ty, self.half_obj_height + self.tz]
+            arm_q = self.get_optimal_init_arm_q(desired_obj_pos)
+            if arm_q is None:
+                continue
+            else:
+                return arm_q
+
+    def reset(self):
+        p.resetSimulation()
+        # p.setPhysicsEngineParameter(numSolverIterations=200)
+        p.setTimeStep(self._timeStep)
+        p.setGravity(0, 0, -10)
+        self.timer = 0
+
+        if self.np_random is None:
+            self.seed(0)    # used once temporarily, will be overwritten outside by env
+        self.robot = InmoovShadowNew(init_noise=False, timestep=self._timeStep)
+        if self.np_random is not None:
+            self.robot.np_random = self.np_random
+
+        arm_q = self.sample_valid_arm_q()   # reset done during solving IK
+        init_state = self.sample_init_state()
+        self.reset_robot_object_from_sample(init_state, arm_q)
+
+        if self.place_floor:
+            self.bottom_obj_id = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'),
+                                       [0, 0, 0], useFixedBase=1)
+            p.changeDynamics(self.bottom_obj_id, -1, lateralFriction=1.0)
+        else:
+            btm_xyz = np.array([self.tx, self.ty, self.tz/2.0])
+            if self.init_noise:
+                btm_xyz += np.append(self.np_random.uniform(low=-0.01, high=0.01, size=2), 0)
+            self.bottom_obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
+                                            btm_xyz, useFixedBase=0)
+            self.floor_id = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'),
+                                       [0, 0, 0], useFixedBase=1)
+            p.changeDynamics(self.bottom_obj_id, -1, lateralFriction=1.0)
+            p.changeDynamics(self.floor_id, -1, lateralFriction=1.0)
+
+        p.stepSimulation()      # TODO
         self.observation = self.getExtendedObservation()
         return np.array(self.observation)
 
@@ -192,7 +209,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                 self.robot.apply_action(self.act * self.action_scale)
             p.stepSimulation()
             if self.renders:
-                time.sleep(self._timeStep)
+                time.sleep(self._timeStep * 2.0)    # TODO
             self.timer += 1
 
         reward = 0.
@@ -300,10 +317,14 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
 
         curContact = []
         for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
-            cps = p.getContactPoints(self.obj_id, self.robot.arm_id, -1, i)
-            if len(cps) > 0:
+            cps = p.getContactPoints(bodyA=self.robot.arm_id, linkIndexA=i)
+            con_this_link = False
+            for cp in cps:
+                if cp[1] != cp[2]:      # not self-collision of the robot
+                    con_this_link = True
+                    break
+            if con_this_link:
                 curContact.extend([1.0])
-                # print("touch!!!")
             else:
                 curContact.extend([-1.0])
         self.observation.extend(curContact)
