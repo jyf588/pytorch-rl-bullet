@@ -84,7 +84,13 @@ env = make_vec_envs(
     device=device,
     allow_early_resets=False)
 env_core = env.venv.venv.envs[0]
+COLORS = {"red": [0.8, 0.0, 0.0, 1.0],
+          "grey": [0.4, 0.4, 0.4, 1.0],
+          "yellow": [0.8, 0.8, 0.0, 1.0],
+          "blue": [0.0, 0.0, 0.8, 1.0],
+          "green": [0.0, 0.8, 0.0, 1.0]}
 table_id = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/tabletop.urdf'), [0.27, 0.1, 0.0], useFixedBase=1)
+p.changeVisualShape(table_id, -1, rgbaColor=COLORS["grey"])
 p.changeDynamics(table_id, -1, lateralFriction=1.0) 
 
 # Prepare grasping policy: We need to use the same statistics for normalization as used in training
@@ -105,29 +111,52 @@ recurrent_hidden_states = torch.zeros(1,actor_critic.recurrent_hidden_state_size
 masks = torch.zeros(1, 1)
 env.reset()
 
+
+
 ################################----- HERE IS THE INPUT FROM VISION AND LANGUAGE MODULE
-#np.random.seed(123)
-tx = np.random.uniform(low=0, high=0.25) # target object location
-ty = np.random.uniform(low=-0.2, high=0.5)
-e = np.random.uniform(low=-0.01,high=0.01,size=(6,))
-est_x = tx + np.random.uniform(low=-0.01,high=0.01)
-est_y = ty + np.random.uniform(low=-0.01,high=0.01)
+import json
+#load scene
+file_path = homedir+'/container_data/scene.json'
+while not os.path.exists(file_path):
+    time.sleep(1)
+if os.path.isfile(file_path):
+    with open(file_path) as jsonfile:
+        Scene = json.load(jsonfile)
+    os.remove(file_path)
+else:
+    raise ValueError("%s isn't a file!" % file_path)
+file_path = homedir+'/container_data/vision_output.json'
+while not os.path.exists(file_path):
+    time.sleep(1)
+if os.path.isfile(file_path):
+    with open(file_path) as jsonfile:
+        data = json.load(jsonfile)
+    Vision_output = data['objects']
+    os.remove(file_path)
+else:
+    raise ValueError("%s isn't a file!" % file_path)
+# #np.random.seed(123)
+# tx = np.random.uniform(low=0, high=0.25) # target object location
+# ty = np.random.uniform(low=-0.2, high=0.5)
+# e = np.random.uniform(low=-0.01,high=0.01,size=(6,))
+# est_x = tx + np.random.uniform(low=-0.01,high=0.01)
+# est_y = ty + np.random.uniform(low=-0.01,high=0.01)
 
-# Ground-truth scene:
-obj1 = {'shape':'box','color':'yellow','position':np.array([0.45,0.1,0,0])} #ref 1
-obj2 = {'shape':'box','color':'red','position':np.array([tx,ty,0,0])} # target
-obj3 = {'shape':'cylinder','color':'blue','position':np.array([0.1,0.5,0,0])} # ref 2
-obj4 = {'shape':'cylinder','color':'yellow','position':np.array([0.5,-0.4,0,0])} #irrelevant
-Scene = [obj1, obj2, obj3, obj4]
+# # Ground-truth scene:
+# obj1 = {'shape':'box','color':'yellow','position':np.array([0.45,0.1,0,0])} #ref 1
+# obj2 = {'shape':'box','color':'red','position':np.array([tx,ty,0,0])} # target
+# obj3 = {'shape':'cylinder','color':'blue','position':np.array([0.1,0.5,0,0])} # ref 2
+# obj4 = {'shape':'cylinder','color':'yellow','position':np.array([0.5,-0.4,0,0])} #irrelevant
+# Scene = [obj1, obj2, obj3, obj4]
 
-# Vision module output:
-obj1 = {'shape':'box','color':'yellow','position':np.array([0.45+e[0],0.1+e[1],0,0])} #ref 1
-obj2 = {'shape':'box','color':'red','position':np.array([est_x,est_y,0,0])} # target
-obj3 = {'shape':'cylinder','color':'blue','position':np.array([0.1+e[2],0.5+e[3],0,0])} # ref 2
-obj4 = {'shape':'cylinder','color':'yellow','position':np.array([0.5+e[4],-0.4+e[5],0,0])} #irrelevant
-Vision_output = [obj1, obj2, obj3, obj4]
+# # Vision module output:
+# obj1 = {'shape':'box','color':'yellow','position':np.array([0.45+e[0],0.1+e[1],0,0])} #ref 1
+# obj2 = {'shape':'box','color':'red','position':np.array([est_x,est_y,0,0])} # target
+# obj3 = {'shape':'cylinder','color':'blue','position':np.array([0.1+e[2],0.5+e[3],0,0])} # ref 2
+# obj4 = {'shape':'cylinder','color':'yellow','position':np.array([0.5+e[4],-0.4+e[5],0,0])} #irrelevant
+# Vision_output = [obj1, obj2, obj3, obj4]
 
-sentence = "Put the smaller red box between the blue cylinder and yellow box"
+sentence = "Put the small red box between the blue cylinder and yellow box"
 
 [OBJECTS, target_xyz] = NLPmod(sentence, Vision_output)
 destin_x = target_xyz[0] #np.random.uniform(low=0, high=0.25) # destination location for target object
@@ -156,11 +185,13 @@ destin_z = target_xyz[2]
 
 for i in range(len(Scene)):
     ob_shape = Scene[i]['shape']
+    ob_color = Scene[i]['color']
     real_loc = Scene[i]['position'][0:3]+np.array([0,0,0.1])
     urdf_file = 'my_pybullet_envs/assets/'+ob_shape+'.urdf'
     exec("oid%s = p.loadURDF(os.path.join(currentdir,urdf_file), real_loc, useFixedBase=0)"  % i)
     est_loc = Vision_output[i]['position'][0:3]+np.array([0,0,0.1])
     env_core.assign_estimated_obj_pos(est_loc[0], est_loc[1])
+    exec("p.changeVisualShape(oid%s, -1, rgbaColor=COLORS[ob_color])" % i)
 # oid1 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/cylinder.urdf'), [a_tx, a_ty, 0.1], useFixedBase=0)   # tar obj
 #oid1 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/box.urdf'), [tx, ty, 0.1], useFixedBase=0)   # tar obj
 # oid2 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/box.urdf'), [0.1, 0.2, 0.1], useFixedBase=0)

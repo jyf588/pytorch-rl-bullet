@@ -22,8 +22,9 @@ class ImaginaryArmObjSession:
     # (8, b'rh_obj_j', 4) 0.0 -1.0
 
     def __init__(self,
-                 base_init_pos=np.array([-0.30, 0.348, 0.272]),
-                 filename='inmoov_arm_v2_2_obj.urdf'):
+		 filename='inmoov_arm_v2_2_obj.urdf',
+                 base_init_pos=np.array([-0.30, 0.348, 0.272])
+                 ):
 
         self.sim = bc.BulletClient(connection_mode=p.DIRECT)   # this is always session 1
         # print(self.sim2._client)
@@ -171,8 +172,9 @@ class ImaginaryArmObjSessionFlexWrist:
     # (8, b'rh_obj_j', 4) 0.0 -1.0
 
     def __init__(self,
-                 base_init_pos=np.array([-0.30, 0.348, 0.272]),
-                 filename='inmoov_arm_v2_2_obj_flexwrist.urdf'):    # TODO: hard coded here
+		 filename='inmoov_arm_v2_2_obj_flexwrist.urdf',
+                 base_init_pos=np.array([-0.30, 0.348, 0.272])
+                 ):    # TODO: hard coded here
 
         self.sim = bc.BulletClient(connection_mode=p.DIRECT)   # this is always session > 0, init after main session.
         # print(self.sim2._client)

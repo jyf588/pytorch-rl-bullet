@@ -25,7 +25,7 @@ def PlotTree(doc):
 def NLPmod(sentence,Vision_output):
     nlp = spacy.load("en_core_web_sm")
     doc = nlp(sentence)
-    Color_list = ['red', 'green', 'blue', 'yellow']
+    Color_list = ['red', 'green', 'blue', 'yellow', 'grey']
     Shape_list = ['square', 'box', 'block', 'cylinder','ball']  
     Size_list = ['small','smaller','big','bigger','large','larger']
     Relation_list = ['right','left', 'behind', 'front', 'top','between'] 
@@ -184,17 +184,17 @@ def NLPmod(sentence,Vision_output):
         offset = 0.1
     #for i in range(len(relation)):
         if relation[0] == 'right':
-            target_xyz = Vision_output[reference_ID[0][0]]['position']+np.array([0,-offset,0,0])
+            target_xyz = np.asarray(Vision_output[reference_ID[0][0]]['position'])+np.array([0,-offset,0,0])
         if relation[0] == 'left':
-            target_xyz = Vision_output[reference_ID[0][0]]['position']+np.array([0,offset,0,0])
+            target_xyz = np.asarray(Vision_output[reference_ID[0][0]]['position'])+np.array([0,offset,0,0])
         if relation[0] == 'front':
-            target_xyz = Vision_output[reference_ID[0][0]]['position']+np.array([-offset,0,0,0])
+            target_xyz = np.asarray(Vision_output[reference_ID[0][0]]['position'])+np.array([-offset,0,0,0])
         if relation[0] == 'behind':
-            target_xyz = Vision_output[reference_ID[0][0]]['position']+np.array([offset,0,0,0])
+            target_xyz = np.asarray(Vision_output[reference_ID[0][0]]['position'])+np.array([offset,0,0,0])
         if relation[0] == 'top':
-            target_xyz = Vision_output[reference_ID[0][0]]['position']+np.array([0,0,offset,0])
+            target_xyz = np.asarray(Vision_output[reference_ID[0][0]]['position'])+np.array([0,0,offset,0])
         if relation[0] == 'between':
-            target_xyz = 0.5*(Vision_output[reference_ID[0][0]]['position']+Vision_output[reference_ID[0][1]]['position'])
+            target_xyz = 0.5*(np.asarray(Vision_output[reference_ID[0][0]]['position'])+np.asarray(Vision_output[reference_ID[0][1]]['position']))
         return target_xyz
 
 
