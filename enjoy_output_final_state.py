@@ -125,12 +125,12 @@ while not finish:
     # if 95 <= timer <= 101:
     #     input("press enter")
 
-    if not done and 45 <= timer <= 55:   # TODO: timer/r, need to change if Pi different
+    if not done and 85 <= timer <= 95:   # TODO: timer/r, need to change if Pi different
         # input("press enter")
         env_core.append_final_state()
         print(len(env_core.final_states))
 
-        if len(env_core.final_states) > 20000:      # TODO: length
+        if len(env_core.final_states) > 100000:      # TODO: length
             finish = True
 
     if done:
@@ -154,7 +154,7 @@ while not finish:
     #     render_func('human')
     # p.getCameraImage()
 
-with open('my_pybullet_envs/assets/place_init_dist/final_states_0114_cyl_s_1.pickle', 'wb') as handle:      # TODO: change name
+with open('my_pybullet_envs/assets/place_init_dist/final_states_0120_box_s_1.pickle', 'wb') as handle:      # TODO: change name
     o_pos_pf_ave, o_quat_pf_ave_ri = env_core.calc_average_obj_in_palm_rot_invariant()
     _, o_quat_pf_ave = env_core.calc_average_obj_in_palm()
     print(o_pos_pf_ave, o_quat_pf_ave_ri)

@@ -1,4 +1,4 @@
-from .inmoov_shadow_hand_v2 import InmoovShadowNew
+from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
 
 import pybullet as p
 import time
@@ -17,13 +17,13 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
-                 renders=True,
+                 renders=False,
                  init_noise=True,
                  up=True,
-                 is_box=False,
-                 is_small=True,
+                 is_box=True,
+                 is_small=False,
                  place_floor=True,
-                 grasp_pi_name='0114_cyl_s_1'         #'0114_cyl_s_1' '0112_box'
+                 grasp_pi_name='0120_box_l_1'         #'0114_cyl_s_1' '0112_box'
                  ):
         self.renders = renders
         self.init_noise = init_noise
@@ -175,8 +175,8 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         self.reset_robot_object_from_sample(init_state, arm_q)
 
         if self.place_floor:
-            self.bottom_obj_id = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'),
-                                       [0, 0, 0], useFixedBase=1)
+            self.bottom_obj_id =p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.25, 0.2, 0.0],
+                                             useFixedBase=1)
             p.changeDynamics(self.bottom_obj_id, -1, lateralFriction=1.0)
         else:
             btm_xyz = np.array([self.tx, self.ty, self.tz/2.0])
@@ -184,8 +184,8 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                 btm_xyz += np.append(self.np_random.uniform(low=-0.01, high=0.01, size=2), 0)
             self.bottom_obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
                                             btm_xyz, useFixedBase=0)
-            self.floor_id = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'),
-                                       [0, 0, 0], useFixedBase=1)
+            self.floor_id = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.25, 0.2, 0.0],
+                              useFixedBase=1)
             p.changeDynamics(self.bottom_obj_id, -1, lateralFriction=1.0)
             p.changeDynamics(self.floor_id, -1, lateralFriction=1.0)
 
@@ -239,9 +239,9 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         if np.abs(total_nf) > (self.obj_mass*9.):       # mg
             meaningful_c = True
             reward += 5.0
-        else:
-            meaningful_c = False
-            reward += np.abs(total_nf) / 10.
+        # else:
+        #     meaningful_c = False
+        #     reward += np.abs(total_nf) / 10.
 
         btm_vels = p.getBaseVelocity(self.bottom_obj_id)
         btm_linv = np.array(btm_vels[0])
@@ -250,7 +250,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
 
         # print("nf", np.abs(total_nf))
 
-        if rotMetric > 0.9 and xyzMetric > 0.8 and velMetric > 0.8 and meaningful_c:     # close to placing
+        if rotMetric > 0.9 and xyzMetric > 0.8 and velMetric > 0.8:     # close to placing
             # print("close enough", self.timer)
             for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
                 cps = p.getContactPoints(self.obj_id, self.robot.arm_id, -1, i)
@@ -275,10 +275,13 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
             # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
             #     p.setCollisionFilterPair(self.obj_id, self.robot.arm_id, -1, i, enableCollision=0)
             #     p.setCollisionFilterPair(self.bottom_obj_id, self.robot.arm_id, -1, i, enableCollision=0)
-            for test_t in range(400):
-                open_up_q = np.array([0.2, 0.2, 0.2] * 4 + [-0.4, 1.9, -0.0, 0.5, 0.0])
+            self.robot.tar_fin_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
+            for test_t in range(300):
+                thumb_pose = [-0.84771132, 0.60768666, -0.13419822, 0.52214954, 0.25141182]     # TODO: can this be same for different shapes?
+                open_up_q = np.array([0.1, 0.1, 0.1] * 4 + thumb_pose)
                 devi = open_up_q - self.robot.get_q_dq(self.robot.fin_actdofs)[0]
-                self.robot.apply_action(np.array([0.0]*7+list(devi/150.)))
+                if test_t < 200:
+                    self.robot.apply_action(np.array([0.0] * 7 + list(devi / 150.)))
                 p.stepSimulation()
                 if self.renders:
                     time.sleep(self._timeStep)
@@ -357,3 +360,25 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         s = inspect.getsource(type(self))
         s = s + inspect.getsource(type(self.robot))
         return s
+
+
+if __name__ == "__main__":
+    env = InmoovShadowHandPlaceEnvV3()
+    p.setPhysicsEngineParameter(numSolverIterations=200)
+    env.seed(303)
+    for _ in range(20):
+        env.reset()
+        env.robot.tar_fin_q = env.robot.get_q_dq(env.robot.fin_actdofs)[0]
+        for test_t in range(300):
+            thumb_pose = [-0.84771132,  0.60768666, -0.13419822,  0.52214954,  0.25141182]
+            open_up_q = np.array([0.0, 0.0, 0.0] * 4 + thumb_pose)
+            devi = open_up_q - env.robot.get_q_dq(env.robot.fin_actdofs)[0]
+            if test_t < 200:
+                env.robot.apply_action(np.array([0.0] * 7 + list(devi / 150.)))
+            p.stepSimulation()
+            # input("press enter")
+            if env.renders:
+                time.sleep(env._timeStep * 2.0)
+        print(env.robot.get_q_dq(env.robot.fin_actdofs))
+    # input("press enter")
+    p.disconnect()

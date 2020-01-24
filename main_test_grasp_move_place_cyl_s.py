@@ -27,14 +27,14 @@ homedir = os.path.expanduser("~")
 
 # constants
 DEMO_ENV_NAME = 'ShadowHandDemoBulletEnv-v1'
-GRASP_PI = '0114_cyl_s_1'
+GRASP_PI = '0120_cyl_s_1'
 GRASP_DIR = "./trained_models_%s/ppo/" % GRASP_PI
 GRASP_PI_ENV_NAME = 'InmoovHandGraspBulletEnv-v1'
-PLACE_PI = '0114_cyl_s_1_place_v3_2'
+PLACE_PI = '0120_cyl_s_1_place_0'   # '0114_cyl_s_1_place_v3_2'
 PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 PLACE_PI_ENV_NAME = 'InmoovHandPlaceBulletEnv-v3'
 
-GRASP_END_STEP = 23
+GRASP_END_STEP = 90
 
 STATE_NORM = True
 OBJ_MU = 1.0
@@ -51,40 +51,55 @@ args.det = not args.non_det
 IS_CUDA = True
 DEVICE = 'cuda' if IS_CUDA else 'cpu'
 TS = 1./240
-TABLE_OFFSET = [0.25, 0.1, 0.0]     # TODO: chaged to 0.2 for vision, 0.25 may collide, need to change OR reaching.
+TABLE_OFFSET = [0.25, 0.2, 0.0]     # TODO: chaged to 0.2 for vision, 0.25 may collide, need to change OR reaching.
 HALF_OBJ_HEIGHT_L = 0.09
 HALF_OBJ_HEIGHT_S = 0.07    # todo: 0.065 now
 PLACE_CLEARANCE = 0.16
 
 # test only one obj
-g_tx = 0.2
-g_ty = -0.2
-p_tx = 0.15
-p_ty = 0.4
+g_tx = 0.1
+g_ty = 0.43
+p_tx = 0.2
+p_ty = -0.0
+g_tx = 0.1
+g_ty = 0.43
+p_tx = 0.2
+p_ty = 0.2
+# g_tx = 0.2
+# g_ty = -0.1
+# p_tx = 0.15
+# p_ty = 0.4
 p_tz = 0.0  # TODO: depending on placing on floor or not
 
 
-def planning(robot, Traj, i_g_obs, recurrent_hidden_states, masks):
+def planning(Traj, i_g_obs, recurrent_hidden_states, masks):
+    print("end of traj", Traj[-1, 0:7])
     g_obs = i_g_obs
-    for ind in range(0, len(Traj), 3):
-            tar_armq = Traj[ind, 0:7]
-            # for ji, i in enumerate(robot.arm_dofs):
-            #     p.resetJointState(robot.arm_id, i, tar_armq[ji])
-            # for ind in range(len(robot.fin_actdofs)):
-            #     p.resetJointState(robot.arm_id, robot.fin_actdofs[ind], robot.init_fin_q[ind], 0.0)
-            # for ind in range(len(robot.fin_zerodofs)):
-            #     p.resetJointState(robot.arm_id, robot.fin_zerodofs[ind], 0.0, 0.0)
-
-            with torch.no_grad():
-                value, action, _, recurrent_hidden_states = g_actor_critic.act(
-                    g_obs, recurrent_hidden_states, masks, deterministic=args.det)
-                # print(g_obs)
-                # print(action)
-                # input("press enter")
-            action[:7] = 0
-            env_core.robot.tar_arm_q = tar_armq
-            g_obs, _, _ , _ = env.step(action)
-            masks.fill_(0.0 if done else 1.0)
+    for ind in range(0, len(Traj)):
+        tar_armq = Traj[ind, 0:7]
+        env_core.robot.tar_arm_q = tar_armq
+        env_core.robot.apply_action([0.0]*24)
+        p.stepSimulation()
+        time.sleep(1. / 240.)
+    # for ind in range(0, len(Traj), 3):
+    #         tar_armq = Traj[ind, 0:7]
+    #         # for ji, i in enumerate(robot.arm_dofs):
+    #         #     p.resetJointState(robot.arm_id, i, tar_armq[ji])
+    #         # for ind in range(len(robot.fin_actdofs)):
+    #         #     p.resetJointState(robot.arm_id, robot.fin_actdofs[ind], robot.init_fin_q[ind], 0.0)
+    #         # for ind in range(len(robot.fin_zerodofs)):
+    #         #     p.resetJointState(robot.arm_id, robot.fin_zerodofs[ind], 0.0, 0.0)
+    #
+    #         with torch.no_grad():
+    #             value, action, _, recurrent_hidden_states = g_actor_critic.act(
+    #                 g_obs, recurrent_hidden_states, masks, deterministic=args.det)
+    #             # print(g_obs)
+    #             # print(action)
+    #             # input("press enter")
+    #         action[:7] = 0
+    #         env_core.robot.tar_arm_q = tar_armq
+    #         g_obs, _, _ , _ = env.step(action)
+    #         masks.fill_(0.0 if done else 1.0)
 
             # #print(tar_armq)
             # p.setJointMotorControlArray(
@@ -105,10 +120,13 @@ def planning(robot, Traj, i_g_obs, recurrent_hidden_states, masks):
             # # print(robot.tar_fin_q)
             # time.sleep(TS)
 
-    # for _ in range(50):
-    #     robot.tar_arm_q = tar_armq
-    #     p.stepSimulation()
-    #     #time.sleep(1. / 240.)    # TODO: stay still for a while
+    for _ in range(50):
+        # print(env_core.robot.tar_arm_q)
+        env_core.robot.tar_arm_q = tar_armq
+        env_core.robot.apply_action([0.0] * 24)         # stay still for a while
+        p.stepSimulation()
+        # print("act", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
+    #     #time.sleep(1. / 240.)
 
 
 def get_relative_state_for_reset(oid):
@@ -149,7 +167,7 @@ p.resetSimulation()
 
 desired_obj_pos = [p_tx, p_ty, PLACE_CLEARANCE + p_tz]
 # TODO: write an imagivary session?
-a = InmoovShadowHandPlaceEnvV3(renders=False, is_box=False, is_small=True, place_floor=True, grasp_pi_name='0114_cyl_s_1')
+a = InmoovShadowHandPlaceEnvV3(renders=False, is_box=False, is_small=True, place_floor=True, grasp_pi_name='0120_cyl_s_1')
 Qdestin =a.get_optimal_init_arm_q(desired_obj_pos)
 print("place arm q", Qdestin)
 p.resetSimulation()
@@ -227,6 +245,7 @@ final_g_obs = copy.copy(g_obs)
 
 state = get_relative_state_for_reset(oid1)
 print("after grasping", state)
+print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 input("after grasping")
 
 ##########################----- SEND MOVE COMMAND TO OPENRAVE
@@ -234,13 +253,23 @@ Qmove_init = np.concatenate((env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
 file_path = homedir+'/container_data/PB_MOVE.npz'
 np.savez(file_path, [], Qmove_init, Qdestin)
 
+
 # Wait for command from OpenRave
 file_path = homedir+'/container_data/OR_MOVE.npy'
+assert not os.path.exists(file_path)
 while not os.path.exists(file_path):
     time.sleep(1)
 if os.path.isfile(file_path):
     Traj2 = np.load(file_path)
-    os.remove(file_path)
+    print("loaded")
+    try:
+        os.remove(file_path)
+        print("deleted")
+        input("press enter")
+    except OSError as e:  # name the Exception `e`
+        print("Failed with:", e.strerror)  # look what it says
+        print("Error code:", e.code)
+    # print(os.remove(file_path))
 else:
     raise ValueError("%s isn't a file!" % file_path)
 print("Trajectory obtained from OpenRave!")
@@ -248,9 +277,9 @@ input("press enter")
 
 
 ##################################---- EXECUTE PLANNED MOVING TRAJECTORY
-planning(env_core.robot, Traj2, final_g_obs, recurrent_hidden_states, masks)
-state = get_relative_state_for_reset(oid1)
-print("after moving", state)
+planning(Traj2, final_g_obs, recurrent_hidden_states, masks)
+print("after moving", get_relative_state_for_reset(oid1))
+print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 input("after moving")
 
 
@@ -269,6 +298,7 @@ input("after moving")
 #     allow_early_resets=False)
 # env_core = env.venv.venv.envs[0].env.env
 
+###### fake: reset###
 # o_pos_pf = state['obj_pos_in_palm']
 # o_quat_pf = state['obj_quat_in_palm']
 # all_fin_q_init = state['all_fin_q']
@@ -288,8 +318,10 @@ input("after moving")
 # state = get_relative_state_for_reset(oid1)
 #
 # print("before releasing", state)
+# print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 # # print(env_core.withVel)
 # input("before realsing")
+######
 
 p_actor_critic, p_ob_rms, recurrent_hidden_states, masks = load_policy_params(PLACE_DIR, PLACE_PI_ENV_NAME) # latter 2 returns dummy
 p_obs = env.reset()
