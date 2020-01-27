@@ -95,6 +95,8 @@ masks = torch.zeros(1, 1)
 
 obs = env.reset()
 print("obs", obs)
+input("reset, press enter")
+done = False
 
 if args.env_name.find('Bullet') > -1:
     import pybullet as p
@@ -113,12 +115,15 @@ while True:
         value, action, _, recurrent_hidden_states = actor_critic.act(
             obs, recurrent_hidden_states, masks, deterministic=args.det)
 
+    if done:
+        input("reset, press enter")
+
     # Obser reward and next obs
     obs, reward, done, _ = env.step(action)
 
-    print(obs)
-    print(action)
-    print(control_step)
+    # print(obs)
+    # print(action)
+    # print(control_step)
     control_step += 1
     # input("press enter obs")
 

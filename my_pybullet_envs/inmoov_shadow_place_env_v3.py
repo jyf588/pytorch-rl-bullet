@@ -23,7 +23,8 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                  is_box=True,
                  is_small=False,
                  place_floor=True,
-                 grasp_pi_name='0120_box_l_1'         #'0114_cyl_s_1' '0112_box'
+                 grasp_pi_name='0120_box_l_1',        #'0114_cyl_s_1' '0112_box'
+                 use_gt_6d=True
                  ):
         self.renders = renders
         self.init_noise = init_noise
@@ -32,6 +33,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         self.is_small = is_small
         self.place_floor = place_floor
         self.grasp_pi_name = grasp_pi_name
+        self.use_gt_6d = use_gt_6d
 
         self.half_obj_height = 0.065 if self.is_small else 0.09
         self.start_clearance = 0.14
@@ -74,6 +76,8 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         # print(self.init_states[10])
         # print(self.init_states[51])
         # print(self.init_states[89])
+
+        self.obj_id = None
 
         if self.np_random is None:
             self.seed(0)    # used once temporarily, will be overwritten outside by env
@@ -209,7 +213,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                 self.robot.apply_action(self.act * self.action_scale)
             p.stepSimulation()
             if self.renders:
-                time.sleep(self._timeStep * 2.0)    # TODO
+                time.sleep(self._timeStep * 1.0)
             self.timer += 1
 
         reward = 0.
@@ -243,12 +247,11 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         #     meaningful_c = False
         #     reward += np.abs(total_nf) / 10.
 
+        # not used when placing on floor
         btm_vels = p.getBaseVelocity(self.bottom_obj_id)
         btm_linv = np.array(btm_vels[0])
         btm_angv = np.array(btm_vels[1])
         reward += np.maximum(-np.linalg.norm(btm_linv) - np.linalg.norm(btm_angv), -10.0) * 0.3
-
-        # print("nf", np.abs(total_nf))
 
         if rotMetric > 0.9 and xyzMetric > 0.8 and velMetric > 0.8:     # close to placing
             # print("close enough", self.timer)
@@ -258,13 +261,12 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                     reward += 0.5   # the fewer links in contact, the better
             palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
             dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(clPos)), 0.3)
-            reward += dist * 10.0
-            # rewards is height of target object
+            reward += dist * 10.0       # palm away from obj
             for i in self.robot.fin_tips[:4]:
                 tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
                 reward += np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.25)  # 4 finger tips
             tip_pos = p.getLinkState(self.robot.arm_id, self.robot.fin_tips[4])[0]  # thumb tip
-            reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.25) * 5.0
+            reward += np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.25) * 5.0   # away form obj
 
         # succeed = False
         obs = self.getExtendedObservation()     # call last obs before test period
@@ -275,16 +277,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
             # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
             #     p.setCollisionFilterPair(self.obj_id, self.robot.arm_id, -1, i, enableCollision=0)
             #     p.setCollisionFilterPair(self.bottom_obj_id, self.robot.arm_id, -1, i, enableCollision=0)
-            self.robot.tar_fin_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
-            for test_t in range(300):
-                thumb_pose = [-0.84771132, 0.60768666, -0.13419822, 0.52214954, 0.25141182]     # TODO: can this be same for different shapes?
-                open_up_q = np.array([0.1, 0.1, 0.1] * 4 + thumb_pose)
-                devi = open_up_q - self.robot.get_q_dq(self.robot.fin_actdofs)[0]
-                if test_t < 200:
-                    self.robot.apply_action(np.array([0.0] * 7 + list(devi / 150.)))
-                p.stepSimulation()
-                if self.renders:
-                    time.sleep(self._timeStep)
+            self.execute_release_traj()
             upPosNow, _ = p.getBasePositionAndOrientation(self.obj_id)
             btmPosNow, _ = p.getBasePositionAndOrientation(self.bottom_obj_id)
             # dist = np.linalg.norm(np.array(btmPosNow) + [0., 0., self.tz/2+self.half_obj_height] - upPosNow)  # TODO
@@ -295,17 +288,51 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
 
         return obs, reward, False, {}
 
+    def execute_release_traj(self):
+
+        self.robot.tar_arm_q = self.robot.get_q_dq(self.robot.arm_dofs)[0]
+        self.robot.tar_fin_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
+        tar_wrist_xyz = list(self.robot.get_link_pos_quat(self.robot.ee_id)[0])
+        ik_q = None
+        for test_t in range(300):
+            if test_t < 200:
+                tar_wrist_xyz[0] -= 0.001
+                ik_q = p.calculateInverseKinematics(self.robot.arm_id, self.robot.ee_id, tar_wrist_xyz)
+            self.robot.tar_arm_q = np.array(ik_q[:len(self.robot.arm_dofs)])
+            self.robot.apply_action(np.array([0.0] * len(self.action_scale)))
+            p.stepSimulation()
+            if self.renders:
+                time.sleep(self._timeStep)
+
+        # self.robot.tar_fin_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
+        # for test_t in range(300):
+        #     thumb_pose = [-0.84771132, 0.60768666, -0.13419822, 0.52214954,
+        #                   0.25141182]  # TODO: can this be same for different shapes?
+        #     open_up_q = np.array([0.1, 0.1, 0.1] * 4 + thumb_pose)
+        #     devi = open_up_q - self.robot.get_q_dq(self.robot.fin_actdofs)[0]
+        #     if test_t < 200:
+        #         self.robot.apply_action(np.array([0.0] * 7 + list(devi / 150.)))
+        #     p.stepSimulation()
+        #     if self.renders:
+        #         time.sleep(self._timeStep)
+
+
     def getExtendedObservation(self):
         self.observation = self.robot.get_robot_observation()
 
-        # clPos, clOrn = p.getBasePositionAndOrientation(self.cylinderId)
-        # clPos = np.array(clPos)
-        # clOrnMat = p.getMatrixFromQuaternion(clOrn)
-        # clOrnMat = np.array(clOrnMat)
-        #
-        # self.observation.extend(list(clPos))
-        # # self.observation.extend(list(clOrnMat))
-        # self.observation.extend(list(clOrn))
+        if self.use_gt_6d:
+            if self.obj_id is None:
+                self.observation.extend([0.0]*(3+9+3))
+            else:
+                clPos, clOrn = p.getBasePositionAndOrientation(self.obj_id)
+                clPos = np.array(clPos)
+                clOrnMat = p.getMatrixFromQuaternion(clOrn)
+                clOrnMat = np.array(clOrnMat)
+
+                self.observation.extend(list(clPos + self.np_random.uniform(low=-0.005, high=0.005, size=3)))
+                self.observation.extend(list(clPos + self.np_random.uniform(low=-0.005, high=0.005, size=3)))
+                self.observation.extend(list(clOrnMat + self.np_random.uniform(low=-0.005, high=0.005, size=9)))
+
         #
         # clVels = p.getBaseVelocity(self.cylinderId)
         # self.observation.extend(clVels[0])
