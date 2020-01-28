@@ -36,7 +36,7 @@ class InmoovShadowHandDemoEnvNew(gym.Env):
         self.tx = -1.
         self.ty = -1.   # dummy
 
-        user_answer = input("withVel?").lower().strip()
+        user_answer = input("withVel?").lower().strip()     # TODO:tmp
         if user_answer == "1":
             self.withVel = True
         elif user_answer == "0":
@@ -45,6 +45,8 @@ class InmoovShadowHandDemoEnvNew(gym.Env):
             self.withVel = None
         # self.withVel = input("withVel?")
         # self.withVel = bool(self.withVel)
+
+        self.obj_id = None      # TODO:tmp , none if unknown
 
         if self.np_random is None:
             self.seed(0)  # used once temporarily, will be overwritten outside by env
@@ -74,6 +76,13 @@ class InmoovShadowHandDemoEnvNew(gym.Env):
     def assign_estimated_obj_pos(self, x, y):
         self.tx = x
         self.ty = y
+
+    def update_obj_id(self, obj_id):    # TODO:tmp
+        self.obj_id = obj_id
+        self.observation = self.getExtendedObservation()
+        obs_dim = len(self.observation)
+        obs_dummy = np.array([1.12234567]*obs_dim)
+        self.observation_space = gym.spaces.Box(low=-np.inf*obs_dummy, high=np.inf*obs_dummy)
 
     def reset(self):
 
@@ -119,6 +128,16 @@ class InmoovShadowHandDemoEnvNew(gym.Env):
     def getExtendedObservation(self):
         # print(self.withVel)
         self.observation = self.robot.get_robot_observation(self.withVel)
+
+        if self.obj_id is not None:     # TODO:tmp
+            clPos, clOrn = p.getBasePositionAndOrientation(self.obj_id)
+            clPos = np.array(clPos)
+            clOrnMat = p.getMatrixFromQuaternion(clOrn)
+            clOrnMat = np.array(clOrnMat)
+
+            self.observation.extend(list(clPos + self.np_random.uniform(low=-0.001, high=0.001, size=3)))
+            self.observation.extend(list(clPos + self.np_random.uniform(low=-0.001, high=0.001, size=3)))
+            self.observation.extend(list(clOrnMat + self.np_random.uniform(low=-0.001, high=0.001, size=9)))
 
         curContact = []
         for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
