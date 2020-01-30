@@ -22,7 +22,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                  up=True,
                  is_box=True,
                  is_small=False,
-                 place_floor=True,
+                 place_floor=False,
                  grasp_pi_name='0120_box_l_1',        #'0114_cyl_s_1' '0112_box'
                  use_gt_6d=True
                  ):
@@ -78,6 +78,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         # print(self.init_states[89])
 
         self.obj_id = None
+        self.bottom_obj_id = None
 
         if self.np_random is None:
             self.seed(0)    # used once temporarily, will be overwritten outside by env
@@ -241,11 +242,11 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         for cp in cps_floor:
             total_nf += cp[9]
         if np.abs(total_nf) > (self.obj_mass*9.):       # mg
-            meaningful_c = True
+            # meaningful_c = True
             reward += 5.0
         # else:
         #     meaningful_c = False
-        #     reward += np.abs(total_nf) / 10.
+        #     # reward += np.abs(total_nf) / 10.
 
         # not used when placing on floor
         btm_vels = p.getBaseVelocity(self.bottom_obj_id)
@@ -264,7 +265,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
             reward += dist * 10.0       # palm away from obj
             for i in self.robot.fin_tips[:4]:
                 tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
-                reward += np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.25)  # 4 finger tips
+                reward += np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.25) * 2.5  # 4 finger tips
             tip_pos = p.getLinkState(self.robot.arm_id, self.robot.fin_tips[4])[0]  # thumb tip
             reward += np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.25) * 5.0   # away form obj
 
@@ -274,17 +275,30 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
             # this is slightly different from mountain car's sparse reward,
             # where you are only rewarded when reaching a certain state
             # this is saying you must be at certain state at certain time (after test)
-            # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
-            #     p.setCollisionFilterPair(self.obj_id, self.robot.arm_id, -1, i, enableCollision=0)
-            #     p.setCollisionFilterPair(self.bottom_obj_id, self.robot.arm_id, -1, i, enableCollision=0)
+            for i in range(-1, p.getNumJoints(self.robot.arm_id)):
+                p.setCollisionFilterPair(self.obj_id, self.robot.arm_id, -1, i, enableCollision=0)
+                p.setCollisionFilterPair(self.bottom_obj_id, self.robot.arm_id, -1, i, enableCollision=0)
             self.execute_release_traj()
-            upPosNow, _ = p.getBasePositionAndOrientation(self.obj_id)
-            btmPosNow, _ = p.getBasePositionAndOrientation(self.bottom_obj_id)
+
+            total_nf = 0
+            cps_floor = p.getContactPoints(self.obj_id, self.bottom_obj_id, -1, -1)
+            for cp in cps_floor:
+                total_nf += cp[9]
+            if np.abs(total_nf) > (self.obj_mass * 6.):  # mg
+                meaningful_c = True
+            else:
+                meaningful_c = False
+            _, upOrnNow = p.getBasePositionAndOrientation(self.obj_id)
+            # btmPosNow, _ = p.getBasePositionAndOrientation(self.bottom_obj_id)
+            z_axis, _ = p.multiplyTransforms([0, 0, 0], upOrnNow, [0, 0, 1], [0, 0, 0, 1])  # R_cl * unitz[0,0,1]
+            rotMetric = np.array(z_axis).dot(np.array([0, 0, 1]))
             # dist = np.linalg.norm(np.array(btmPosNow) + [0., 0., self.tz/2+self.half_obj_height] - upPosNow)  # TODO
-            dist = np.linalg.norm(np.array(self.desired_obj_pos_final) - np.array(upPosNow))
-            if dist < 0.06:
+            # dist = np.linalg.norm(np.array(self.desired_obj_pos_final) - np.array(upPosNow))
+            # reward += 3000 * np.exp(-(dist/0.03)**2)
+
+            if meaningful_c and rotMetric > 0.6:        # TODO:tmp is this good for floor placing as well?
                 # succeed = True
-                reward += 2000
+                reward += 3000
 
         return obs, reward, False, {}
 
@@ -332,6 +346,19 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                 self.observation.extend(list(clPos + self.np_random.uniform(low=-0.005, high=0.005, size=3)))
                 self.observation.extend(list(clPos + self.np_random.uniform(low=-0.005, high=0.005, size=3)))
                 self.observation.extend(list(clOrnMat + self.np_random.uniform(low=-0.005, high=0.005, size=9)))
+            if not self.place_floor:
+                if self.bottom_obj_id is None:
+                    self.observation.extend([0.0] * (3 + 9 + 3))
+                else:
+                    clPos, clOrn = p.getBasePositionAndOrientation(self.bottom_obj_id)
+                    clPos = np.array(clPos)
+                    clOrnMat = p.getMatrixFromQuaternion(clOrn)
+                    clOrnMat = np.array(clOrnMat)
+
+                    self.observation.extend(list(clPos + self.np_random.uniform(low=-0.005, high=0.005, size=3)))
+                    self.observation.extend(list(clPos + self.np_random.uniform(low=-0.005, high=0.005, size=3)))
+                    self.observation.extend(list(clOrnMat + self.np_random.uniform(low=-0.005, high=0.005, size=9)))
+
 
         #
         # clVels = p.getBaseVelocity(self.cylinderId)
