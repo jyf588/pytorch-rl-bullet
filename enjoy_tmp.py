@@ -10,158 +10,188 @@ import gym
 import my_pybullet_envs
 
 import pybullet as p
-
 import time
 
 from a2c_ppo_acktr.envs import VecPyTorch, make_vec_envs
 from a2c_ppo_acktr.utils import get_render_func, get_vec_normalize
 
-# TODO: seems some jittering motion during tarZ<0
+import os
+import inspect
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+
+ts = 1/240
 
 # may need to refactor this into robot class
 def planning(robot):
-    l = 200
-    n_wp = None
+    l = 20
+    n_armq = None
     for ind in range(len(Traj) - 1):
         c_wp = Traj[ind]
         n_wp = Traj[ind + 1]
 
-        assert len(c_wp) == 16      # TODO: why 16?
+        assert len(c_wp) == 15      # TODO: q 7 + dq 7 + dt 1
         c_armq = np.array(c_wp[:7])
         n_armq = np.array(n_wp[:7])
-        # armdq = wp[7:14]
         for t in range(l):
-            armq = c_armq * (1. - t / l) + n_armq * (t / l)
-            for ji, i in enumerate(robot.armDofs):
-                # p.resetJointState(a.robotId, i, armq[ji])
-                p.setJointMotorControl2(bodyIndex=robot.robotId,
-                                        jointIndex=i,
-                                        controlMode=p.POSITION_CONTROL,
-                                        targetPosition=armq[ji],
-                                        targetVelocity=0.,
-                                        force=3000,  # TODO
-                                        positionGain=0.2,   # TODO
-                                        velocityGain=1)
-            for i in range(len(robot.activeFinDofs)):
-                p.setJointMotorControl2(robot.robotId,
-                                        jointIndex=robot.activeFinDofs[i],
-                                        controlMode=p.POSITION_CONTROL,
-                                        targetPosition=robot.tarFingerPos[i],
-                                        force=robot.maxForce)
-            for ind in range(len(robot.zeroFinDofs)):
-                p.setJointMotorControl2(robot.robotId,
-                                        jointIndex=robot.zeroFinDofs[ind],
-                                        controlMode=p.POSITION_CONTROL,
-                                        targetPosition=0.0,
-                                        force=robot.maxForce)
+            tar_armq = c_armq * (1. - t / l) + n_armq * (t / l)
+
+            # for ji, i in enumerate(robot.arm_dofs):
+            #     p.resetJointState(robot.arm_id, i, tar_armq[ji])
+            # for ind in range(len(robot.fin_actdofs)):
+            #     p.resetJointState(robot.arm_id, robot.fin_actdofs[ind], robot.init_fin_q[ind], 0.0)
+            # for ind in range(len(robot.fin_zerodofs)):
+            #     p.resetJointState(robot.arm_id, robot.fin_zerodofs[ind], 0.0, 0.0)
+
+            p.setJointMotorControlArray(
+                bodyIndex=robot.arm_id,
+                jointIndices=robot.arm_dofs,
+                controlMode=p.POSITION_CONTROL,
+                targetPositions=list(tar_armq),
+                forces=[robot.maxForce * 3] * len(robot.arm_dofs))
+            p.setJointMotorControlArray(
+                bodyIndex=robot.arm_id,
+                jointIndices=robot.fin_actdofs,
+                controlMode=p.POSITION_CONTROL,
+                targetPositions=list(robot.tar_fin_q),
+                forces=[robot.maxForce] * len(robot.tar_fin_q))
+            p.setJointMotorControlArray(
+                bodyIndex=robot.arm_id,
+                jointIndices=robot.fin_zerodofs,
+                controlMode=p.POSITION_CONTROL,
+                targetPositions=[0.0] * len(robot.fin_zerodofs),
+                forces=[robot.maxForce / 4.0] * len(robot.fin_zerodofs))
             p.stepSimulation()
-            p.setTimeStep(1. / 480.)
+            print(robot.tar_fin_q)
+            time.sleep(ts)
 
-    cps = p.getContactPoints(bodyA=robot.robotId)
+    cps = p.getContactPoints(bodyA=robot.arm_id)   # TODO
     print(len(cps) == 0)
-    for _ in range(1000):
-        armq = np.array(n_wp[:7])
-        for ji, i in enumerate(robot.armDofs):
-            # p.resetJointState(a.robotId, i, armq[ji])
-            p.setJointMotorControl2(bodyIndex=robot.robotId,
-                                    jointIndex=i,
-                                    controlMode=p.POSITION_CONTROL,
-                                    targetPosition=armq[ji],
-                                    targetVelocity=0.,
-                                    force=3000,  # TODO wrist force larger
-                                    positionGain=1.0,
-                                    velocityGain=1)
-        for i in range(len(robot.activeFinDofs)):
-            p.setJointMotorControl2(robot.robotId,
-                                    jointIndex=robot.activeFinDofs[i],
-                                    controlMode=p.POSITION_CONTROL,
-                                    targetPosition=robot.tarFingerPos[i],
-                                    force=robot.maxForce)
-        for ind in range(len(robot.zeroFinDofs)):
-            p.setJointMotorControl2(robot.robotId,
-                                    jointIndex=robot.zeroFinDofs[ind],
-                                    controlMode=p.POSITION_CONTROL,
-                                    targetPosition=0.0,
-                                    force=robot.maxForce)
+    for _ in range(100):
+        robot.tar_arm_q = n_armq
         p.stepSimulation()
-        p.setTimeStep(1. / 480.)
-
-    newPos, newOrn = robot.get_palm_pos_orn()
-    robot.palmInitPos = np.copy(newPos)
-    robot.palmInitOri = np.copy(p.getEulerFromQuaternion(newOrn))
-    robot.tarPalmPos = np.copy(robot.palmInitPos)
-    robot.tarPalmOri = np.copy(robot.palmInitOri)  # euler angles
-    robot.tarFingerPos = np.copy(robot.initFinPos)  # used for position control and as part of state
-    robot.xyz_ll = robot.palmInitPos + np.array([-0.1, -0.1, -0.1])  # TODO: how to set these
-    robot.xyz_ul = robot.palmInitPos + np.array([0.3, 0.1, 0.1])
-    print(robot.xyz_ll)
-    print(robot.xyz_ul)
+        time.sleep(1. / 240.)    # TODO: stay still for a while
 
 # TODO: change this to read it OpenRave file
-Traj = [[ 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 1.],
-[-0.01109587, 0.00853604, -0.00930493, -0.00154651, -0.00402582, 0.00332282, 0.00984393, -1.0533695,  0.81035606, -0.88334944, -0.1468154, -0.3821846, 0.31544643, 0.93451781, 0.02106739, 1.],
-[-0.28142909, 0.13287289, -0.22060106, -0.15989818, -0.12374688, 0.0644147,
- 0.13134642, -5.30498903, 2.11410234, -4.0864303, -3.57768696, -2.43370846,
- 1.12146199, 1.92327538, 0.08503239, 1.],
-[-0.31711221, 0.14699525, -0.24806974, -0.18410401, -0.14014211, 0.07193479,
- 0.14301815, -5.63127171, 2.21415594, -4.33224482, -3.84098286, -2.59114887
-, 1.18331816, 1.65390905, 0.00652565, 1.],
-[-0.37071074, 0.16980463, -0.29307915, -0.22435413, -0.16714174, 0.08418859
-, 0.15744151, -5.1333584,  2.36683955, -4.70736225, -4.24277718, -2.83140579
-, 1.27771181, 1.24285113, 0.00995827, 1.],
-[-0.43487499, 0.19870244, -0.35938357, -0.28468647, -0.20715413, 0.10211886
-, 0.17036908, -4.46485649, 1.95593151, -5.21099755, -4.78222908, -3.15397643
-, 1.40444539, 0.69096188, 0.01337004, 1.],
-[ -4.35550062e-01,  1.98998070e-01, -3.60171573e-01, -2.85410606e-01
-, -2.07631685e-01,  1.02331499e-01,  1.70473171e-01, -4.45729020e+00
-,  1.95128074e+00, -5.20365874e+00, -4.78833474e+00, -3.15762737e+00
-,  1.40587979e+00,  6.84715447e-01,  1.51325688e-04,  1.00000000e+00],
-[ -4.46913905e-01,  2.03943254e-01, -3.73471328e-01, -2.97933211e-01
-, -2.15881311e-01,  1.05927922e-01,  1.72106422e-01, -4.32793850e+00
-,  1.87177213e+00, -5.07819584e+00, -4.89271593e+00, -3.22004314e+00
-,  1.37446468e+00,  5.77927694e-01,  2.58703415e-03,  1.00000000e+00],
-[ -4.60777782e-01,  2.09890633e-01, -3.89792745e-01, -3.14122580e-01
-, -2.26243122e-01,  1.10350716e-01,  1.73773303e-01, -4.16469255e+00
-,  1.77142975e+00, -4.91985769e+00, -5.02444829e+00, -3.12731887e+00
-,  1.33481781e+00,  4.43158170e-01,  3.26491897e-03,  1.00000000e+00],
-[-0.62627117, 0.27098661, -0.59941907, -0.61403706, -0.35743617, 0.17530051
-, 0.11215021, -1.41724091, 0.28927909, -2.15063734, -5.09137957, -1.29769674
-, 0.85587652, -2.52164592, 0.05929608, 1.],
-[-0.53693192, 0.17535432, -0.58145177, -1.02816041, -0.33326575, 0.22049331,
- -0.38858924, 3.20741999, -2.20555798, 2.51066583, -3.2068202,  1.78202332
-, 0.04969635, -7.51216634, 0.09981041, 1.],
-[ -5.17295721e-01,  1.61970048e-01, -5.65901269e-01, -1.04666838e+00
-, -3.22267824e-01,  2.20645879e-01, -4.31845748e-01,  3.47954136e+00
-, -2.35235761e+00,  2.78494328e+00, -3.09593015e+00,  1.96323826e+00
-,  2.25960595e-03, -7.21851729e+00,  5.87298094e-03,  1.00000000e+00],
-[-0.49052675, 0.145178,  -0.54421731, -1.06886917, -0.30703737, 0.22044517,
- -0.48344868, 3.81940571, -2.2262356,  3.12750045, -2.95743469, 2.18956556,
- -0.05698623, -6.85176609, 0.00733502, 1.],
-[ -4.86984579e-01,  1.43132161e-01, -5.41313101e-01, -1.07158864e+00
-, -3.05025442e-01,  2.20389177e-01, -4.89746484e-01,  3.86213783e+00
-, -2.21037792e+00,  3.17057115e+00, -2.94002126e+00,  2.17349359e+00
-, -6.44353783e-02, -6.80565340e+00,  9.22253715e-04,  1.00000000e+00],
-[-0.43053628, 0.11482047, -0.50079981, -1.10961054, -0.27723364, 0.2187799,
- -0.57718568, 4.48855335, -1.97791816, 2.82277159, -2.68475557, 1.93789246,
- -0.17363339, -6.12968179, 0.01351943, 1.],
-[ -4.09637435e-01,  1.05608237e-01, -4.87666058e-01, -1.12216530e+00
-, -2.68214392e-01,  2.17862781e-01, -6.05772082e-01,  4.30013240e+00
-, -1.89614370e+00,  2.70042302e+00, -2.59495848e+00,  1.85501295e+00
-, -2.12046952e-01, -5.89188921e+00,  4.75585166e-03,  1.00000000e+00],
-[ -1.76335583e-01,  1.05845221e-03, -3.46301291e-01, -1.29353319e+00
-, -1.69614821e-01,  2.10772305e-01, -9.51495442e-01, -6.98412061e-02
-,  4.19220996e-04, -1.37159497e-01, -5.12329482e-01, -6.71793148e-02
-,  8.34805529e-02, -3.76858647e-01,  1.10300611e-01,  1.00000000e+00],
-[ -1.76693400e-01,  1.06060000e-03, -3.47004000e-01, -1.29615800e+00
-, -1.69959000e-01,  2.11200000e-01, -9.53426200e-01,  0.00000000e+00
-,  0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  0.00000000e+00
-,  0.00000000e+00,  0.00000000e+00,  1.02465896e-02,  1.00000000e+00]]
+###
+Traj = np.array(
+    [[  0.00000000e+00,   0.00000000e+00,   0.00000000e+00,
+          0.00000000e+00,   0.00000000e+00,   0.00000000e+00,
+          0.00000000e+00,   0.00000000e+00,   0.00000000e+00,
+          0.00000000e+00,   0.00000000e+00,   0.00000000e+00,
+          0.00000000e+00,   0.00000000e+00,   0.00000000e+00],
+       [ -6.60049762e-03,   1.41110095e-04,  -4.99070289e-03,
+         -1.23043404e-02,  -5.85865581e-03,  -1.97250077e-03,
+          1.45828301e-04,  -5.95041847e-01,   1.27212244e-02,
+         -4.49917149e-01,  -1.10924932e+00,  -5.28164023e-01,
+         -1.77823033e-01,   1.31465757e-02,   2.21849863e-02],
+       [ -2.81502883e-01,   7.23930158e-02,  -2.36019150e-01,
+         -2.75513085e-01,  -2.04477881e-01,  -9.38069720e-03,
+          1.43452157e-01,  -5.27677111e+00,   1.53055267e+00,
+         -4.48476478e+00,  -4.51279182e+00,  -3.71426894e+00,
+          1.95867058e-02,   3.04782344e+00,   9.36345852e-02],
+       [ -4.02723852e-01,   1.07926737e-01,  -3.39175920e-01,
+         -3.77782796e-01,  -2.89549113e-01,  -1.02094500e-02,
+          2.14239674e-01,  -6.32189926e+00,   1.86938653e+00,
+         -5.38548598e+00,  -5.27258332e+00,  -4.42552064e+00,
+         -9.88834674e-02,   3.72527104e+00,   2.09025630e-02],
+       [ -4.52033774e-01,   1.21460513e-01,  -3.81196218e-01,
+         -4.18754737e-01,  -3.24039605e-01,  -1.11208266e-02,
+          2.43380757e-01,  -6.70055240e+00,   1.70480150e+00,
+         -5.71182005e+00,  -5.54785811e+00,  -4.68320932e+00,
+         -1.41805575e-01,   3.97071238e+00,   7.57306283e-03],
+       [ -4.69039750e-01,   1.25678378e-01,  -3.95694279e-01,
+         -4.32819218e-01,  -3.35922666e-01,  -1.14953000e-02,
+          2.53257307e-01,  -6.82627278e+00,   1.65015599e+00,
+         -5.82016945e+00,  -5.63925483e+00,  -4.76876710e+00,
+         -1.56056570e-01,   3.88525284e+00,   2.51440763e-03],
+       [ -4.82877630e-01,   1.28955017e-01,  -4.07321976e-01,
+         -4.44240799e-01,  -3.45587846e-01,  -1.18208113e-02,
+          2.61006862e-01,  -6.92688877e+00,   1.60642234e+00,
+         -5.73634134e+00,  -5.71240105e+00,  -4.83724032e+00,
+         -1.67461863e-01,   3.81685822e+00,   2.01231976e-03],
+       [ -4.96832731e-01,   1.32170482e-01,  -4.18878050e-01,
+         -4.55908935e-01,  -3.55475066e-01,  -1.21723462e-02,
+          2.68683153e-01,  -6.82541412e+00,   1.56231546e+00,
+         -5.65179785e+00,  -5.78617150e+00,  -4.90629789e+00,
+         -1.78964490e-01,   3.74787993e+00,   2.02949292e-03],
+       [ -5.27357579e-01,   1.39051121e-01,  -4.44151577e-01,
+         -4.82600347e-01,  -3.77490434e-01,  -1.30448924e-02,
+          2.85376988e-01,  -6.59801433e+00,   1.46347407e+00,
+         -5.46233994e+00,  -5.95148752e+00,  -4.77505103e+00,
+         -2.04741323e-01,   3.59330290e+00,   4.54799592e-03],
+       [ -9.07503333e-01,   1.84945993e-01,  -7.57913457e-01,
+         -8.92313344e-01,  -6.79059824e-01,  -5.09049236e-02,
+          4.68008143e-01,  -2.34930153e+00,  -3.83267580e-01,
+         -1.92252919e+00,  -3.69173893e+00,  -2.32284907e+00,
+         -6.86352827e-01,   7.05202647e-01,   8.49742560e-02],
+       [ -9.62546781e-01,   1.30764948e-01,  -7.94098144e-01,
+         -1.11728340e+00,  -7.63782318e-01,  -1.09258926e-01,
+          4.24661086e-01,   4.53466145e-01,  -1.48286450e+00,
+          6.76237122e-01,  -4.05679826e+00,  -5.95207669e-01,
+         -1.32350643e+00,  -2.19818483e+00,   5.80677496e-02],
+       [ -9.36010491e-01,   8.76389366e-02,  -7.63081022e-01,
+         -1.20962692e+00,  -7.69354500e-01,  -1.45887210e-01,
+          3.53840370e-01,   1.66351925e+00,  -1.95759905e+00,
+          1.79821568e+00,  -3.31008989e+00,   1.50675716e-01,
+         -1.59858798e+00,  -3.45167903e+00,   2.50698840e-02],
+       [ -9.32210714e-01,   8.32601543e-02,  -7.58991749e-01,
+         -1.21687961e+00,  -7.68948175e-01,  -1.49385169e-01,
+          3.46078931e-01,   1.77034050e+00,  -1.99950774e+00,
+          1.89726188e+00,  -3.24417185e+00,   2.16520926e-01,
+         -1.56251939e+00,  -3.56233519e+00,   2.21312313e-03],
+       [ -8.88157383e-01,   4.89282355e-02,  -7.13123784e-01,
+         -1.27482600e+00,  -7.58964982e-01,  -1.76918297e-01,
+          2.66513558e-01,   2.71786081e+00,  -1.49826551e+00,
+          2.77581627e+00,  -2.65946913e+00,   8.00577649e-01,
+         -1.24258563e+00,  -4.54387162e+00,   1.96307287e-02],
+       [ -8.86805695e-01,   4.81894871e-02,  -7.11752460e-01,
+         -1.27613921e+00,  -7.58564922e-01,  -1.77531576e-01,
+          2.64257493e-01,   2.74176071e+00,  -1.48562236e+00,
+          2.76311494e+00,  -2.64472080e+00,   8.15309682e-01,
+         -1.23451574e+00,  -4.56862954e+00,   4.95158301e-04],
+       [ -8.75600471e-01,   4.22125614e-02,  -7.00445819e-01,
+         -1.28691582e+00,  -7.54903758e-01,  -1.82541090e-01,
+          2.44758143e-01,   2.62882310e+00,  -1.37907560e+00,
+          2.65607786e+00,  -2.52043323e+00,   9.39459938e-01,
+         -1.16650889e+00,  -4.77727023e+00,   4.17281385e-03],
+       [ -8.44067679e-01,   2.66055375e-02,  -6.68446317e-01,
+         -1.31683206e+00,  -7.40382887e-01,  -1.96179701e-01,
+          1.87521949e-01,   2.28119150e+00,  -1.05111560e+00,
+          2.32660862e+00,  -2.13786549e+00,   1.32160500e+00,
+         -9.57178019e-01,  -4.13505640e+00,   1.28442765e-02],
+       [ -7.54673345e-01,   1.04938743e-02,  -5.73522833e-01,
+         -1.39212294e+00,  -6.73105802e-01,  -2.24202545e-01,
+          2.72834979e-02,   6.04071100e-01,   5.31100774e-01,
+          7.37111053e-01,  -2.92198533e-01,   8.49808421e-01,
+          5.27217768e-02,  -1.03674798e+00,   6.19661684e-02],
+       [ -7.48410650e-01,   1.60000509e-02,  -5.65880849e-01,
+         -1.39515230e+00,  -6.64295430e-01,  -2.23655953e-01,
+          1.65350342e-02,   0.00000000e+00,   0.00000000e+00,
+          0.00000000e+00,   0.00000000e+00,   0.00000000e+00,
+          0.00000000e+00,   0.00000000e+00,   2.07349596e-02],
+       [ -7.54705123e-01,   2.32905107e-02,  -5.73996687e-01,
+         -1.40185247e+00,  -6.56835166e-01,  -2.33033309e-01,
+          8.26751709e-03,  -6.50008762e-01,   7.52860881e-01,
+         -8.38094940e-01,  -6.91903790e-01,   7.70395970e-01,
+         -9.68367470e-01,  -8.53758242e-01,   1.93673494e-02],
+       [ -7.54705123e-01,   2.32905107e-02,  -5.73996687e-01,
+         -1.40185247e+00,  -6.56835166e-01,  -2.33033309e-01,
+          8.26751709e-03,  -6.50008762e-01,   7.52860881e-01,
+         -8.38094940e-01,  -6.91903790e-01,   7.70395970e-01,
+         -9.68367470e-01,  -8.53758242e-01,   6.93889390e-18],
+       [ -7.60999597e-01,   3.05809706e-02,  -5.82112526e-01,
+         -1.40855264e+00,  -6.49374902e-01,  -2.42410664e-01,
+          0.00000000e+00,   0.00000000e+00,   0.00000000e+00,
+          0.00000000e+00,   0.00000000e+00,   0.00000000e+00,
+          0.00000000e+00,   0.00000000e+00,   1.93673494e-02]]
+    )
+###
 
 sys.path.append('a2c_ppo_acktr')
 
 parser = argparse.ArgumentParser(description='RL')
 parser.add_argument(
-    '--seed', type=int, default=10, help='random seed (default: 1)')
+    '--seed', type=int, default=1, help='random seed (default: 1)')
 parser.add_argument(
     '--log-interval',
     type=int,
@@ -169,22 +199,38 @@ parser.add_argument(
     help='log interval, one log per n updates (default: 10)')
 parser.add_argument(
     '--env-name',
-    default='PongNoFrameskip-v4',
+    default='ShadowHandDemoBulletEnv-v1',
     help='environment to train on (default: PongNoFrameskip-v4)')
 parser.add_argument(
     '--load-dir',
-    default='./trained_models/',
+    default='./trained_models_0114_cyl_l_2/ppo/',    # TODO
     help='directory to save agent logs (default: ./trained_models/)')
 parser.add_argument(
     '--non-det',
-    action='store_true',
-    default=False,
-    help='whether to use a non-deterministic policy')
+    type=int,
+    default=0,
+    help='whether to use a non-deterministic policy, 1 true 0 false')
+parser.add_argument(
+    '--iter',
+    type=int,
+    default=-1,
+    help='which iter pi to test')
 args = parser.parse_args()
+
+# TODO
+is_cuda = False
+device = 'cuda' if is_cuda else 'cpu'
 
 args.det = not args.non_det
 
+p.connect(p.GUI)
 
+p.resetSimulation()
+# p.setPhysicsEngineParameter(numSolverIterations=200)
+p.setTimeStep(ts)
+p.setGravity(0, 0, -10)
+
+# ignore, not working
 # from my_pybullet_envs.inmoov_shadow_hand_grasp_env_tmp import InmoovShadowHandGraspEnvTmp
 # # env = gym.make(args.env_name)
 # env = InmoovShadowHandGraspEnvTmp()
@@ -206,12 +252,21 @@ env = make_vec_envs(
     1,
     None,
     None,
-    device='cuda',
+    device=device,
     allow_early_resets=False)
 
 # dont know why there are so many wrappers in make_vec_envs...
 env_core = env.venv.venv.envs[0]
 robot = env_core.robot
+
+table_id = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/tabletop.urdf'), [0.27, 0.1, 0.0], useFixedBase=1)  # TODO
+tx = 0.1
+ty = 0.0
+oid1 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/box.urdf'), [tx, ty, 0.1], useFixedBase=0)   # tar obj
+oid2 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/box.urdf'), [0.1, 0.2, 0.1], useFixedBase=0)
+oid3 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/cylinder.urdf'), [0.2, -0.15, 0.1], useFixedBase=0)
+env_core.assign_estimated_obj_pos(tx, ty)
+
 # print(robot.get_robot_observation())
 
 # # Get a render function
@@ -220,9 +275,16 @@ robot = env_core.robot
 # print(render_func)
 
 # We need to use the same statistics for normalization as used in training
-ori_env_name = 'InmoovShadowHandGraspBulletEnv-v0'  # TODO
-actor_critic, ob_rms = \
-            torch.load(os.path.join(args.load_dir, ori_env_name + ".pt"))
+ori_env_name = 'InmoovHandGraspBulletEnv-v1'
+if args.iter >= 0:
+    path = os.path.join(args.load_dir, ori_env_name + "_" + str(args.iter) + ".pt")
+else:
+    path = os.path.join(args.load_dir, ori_env_name + ".pt")
+
+if is_cuda:
+    actor_critic, ob_rms = torch.load(path)
+else:
+    actor_critic, ob_rms = torch.load(path, map_location='cpu')
 
 vec_norm = get_vec_normalize(env)
 if vec_norm is not None:
@@ -237,7 +299,7 @@ masks = torch.zeros(1, 1)
 # if render_func is not None:
 #     render_func('human')
 
-obs = env.reset()
+env.reset()
 
 #
 # if args.env_name.find('Bullet') > -1:
@@ -248,111 +310,77 @@ obs = env.reset()
 #         if (p.getBodyInfo(i)[0].decode() == "r_forearm_link"):
 #             torsoId = i
 
-reward_total = 0
+control_steps = 0
 
-timer = 0
+print("Done reset! Start planning")
+input("press enter")
+planning(robot)
+print(robot.get_q_dq(robot.arm_dofs))
+print(robot.tar_arm_q)
+print(robot.tar_fin_q)
+input("press enter")
 
-resetted = True
+# robot.reset_with_certain_arm_q
+robot.reset_with_certain_arm_q([-7.60999597e-01,   3.05809706e-02,  -5.82112526e-01,
+         -1.40855264e+00,  -6.49374902e-01,  -2.42410664e-01,
+          0.00000000e+00])
 
-while True:
+sample = torch.from_numpy(env.action_space.sample() * 0.0)
+obs, _, _, _ = env.step(sample)
+print(obs)
+
+print(oid1)
+
+for i in range(100):
     with torch.no_grad():
         value, action, _, recurrent_hidden_states = actor_critic.act(
             obs, recurrent_hidden_states, masks, deterministic=args.det)
 
-    # where is the reset() called?
-    # modify each reset so that reset to rest arm pose
-    # after each reset(done), depends on whether planning is finished, run planning_traj or step
-    if resetted:
-        print("Done reset! Start planning")
-        input("press enter")
-        planning(robot)
-        print(robot.get_raw_state_arm())
-        resetted = False
-        # input("press enter")
-
-    # maybe in demo, only roll out for 300 steps.
-    # then start to first go up in z, then +y, then go down in z, then drop.
-    # Obser reward and next obs
     obs, reward, done, _ = env.step(action)
-    timer += 1
+    control_steps += 1
 
-    reward_total += reward
+# if control_steps >= 100:  # done grasping
+for _ in range(1000):
+    p.stepSimulation()
+    time.sleep(ts)
 
-    if timer >= 300:    # done grasping
-        print(robot.tarPalmPos)
-        print(robot.get_palm_pos_orn())
-        print(p.getBasePositionAndOrientation(env_core.cylinderId))
-        robot.xyz_ll = robot.palmInitPos + np.array([-1.0, -1.0, -0.2])    # TODO: enlarge this for transporting
-        robot.xyz_ul = robot.palmInitPos + np.array([1.0, 1.0, 0.5])
-        # input("press enter")
+masks.fill_(0.0 if done else 1.0)
 
-        print("tr:", reward_total)
-        reward_total = 0.
-        resetted = True
-        # run traj here
+input("press enter")
 
-        action = [0,0,0.001] + [0.0] * 20
-        for t in range(200):
-            robot.apply_action(action)
-            for _ in range(2):
-                p.stepSimulation()
-            # p.stepSimulation()
-            time.sleep(1./480.)
-
-        print(robot.tarPalmPos)
-        print(robot.get_palm_pos_orn())
-        print(p.getBasePositionAndOrientation(env_core.cylinderId))
-        # input("press enter")
-
-        action = [0, 0.001, 0.0] + [0.0] * 20
-        for t in range(250):
-            robot.apply_action(action)
-            for _ in range(2):
-                p.stepSimulation()
-            time.sleep(1./480.)
-        print(robot.tarPalmPos)
-        print(robot.get_palm_pos_orn())
-        print(p.getBasePositionAndOrientation(env_core.cylinderId))
-        # input("press enter")
-
-        action = [0, 0, -0.001] + [0.0] * 20
-        for t in range(200):
-            robot.apply_action(action)
-            for _ in range(2):
-                p.stepSimulation()
-            time.sleep(1./480.)
-        print(robot.tarPalmPos)
-        print(robot.get_palm_pos_orn())
-        print(p.getBasePositionAndOrientation(env_core.cylinderId))
-        # input("press enter")
-
-        action = [-0.000] + [-0.00]*5 + [-0.02] * 17
-        for t in range(200):
-            robot.apply_action(action)
-            for _ in range(2):
-                p.stepSimulation()
-            time.sleep(1./480.)
-        print(robot.tarPalmPos)
-        print(robot.get_palm_pos_orn())
-        print(p.getBasePositionAndOrientation(env_core.cylinderId))
-        # input("press enter")
-
-        for _ in range(1000):
-            p.stepSimulation()
-            time.sleep(1. / 480.)
-
-        obs = env.reset()
-        timer = 0
-
-    masks.fill_(0.0 if done else 1.0)
-
-    # if args.env_name.find('Bullet') > -1:
-    #     if robot is not None:
-    #         distance = 0.8
-    #         yaw = 0
-    #         humanPos, humanOrn = robot.get_palm_pos_orn()
-    #         p.resetDebugVisualizerCamera(distance, yaw, -20, humanPos)
-
-    # if render_func is not None:
-    #     render_func('human')
-    # p.getCameraImage()
+# while True:
+#
+#     # where is the reset() called?
+#     # modify each reset so that reset to rest arm pose
+#     # after each reset(done), depends on whether planning is finished, run planning_traj or step
+#     if resetted:
+#
+#
+#     obs = env_core.getExtendedObservation()
+#     with torch.no_grad():
+#         value, action, _, recurrent_hidden_states = actor_critic.act(
+#             obs, recurrent_hidden_states, masks, deterministic=args.det)
+#
+#     obs, reward, done, _ = env.step(action)
+#     control_steps += 1
+#
+#     if control_steps >= 100:    # done grasping
+#         for _ in range(1000):
+#             p.stepSimulation()
+#             time.sleep(ts)
+#
+#         obs = env.reset()
+#         timer = 0
+#
+#     masks.fill_(0.0 if done else 1.0)
+#
+#     # if args.env_name.find('Bullet') > -1:
+#     #     if robot is not None:
+#     #         distance = 0.8
+#     #         yaw = 0
+#     #         humanPos, humanOrn = robot.get_palm_pos_orn()
+#     #         p.resetDebugVisualizerCamera(distance, yaw, -20, humanPos)
+#
+#     # if render_func is not None:
+#     #     render_func('human')
+#     # p.getCameraImage()

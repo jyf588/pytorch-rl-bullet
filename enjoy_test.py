@@ -203,7 +203,8 @@ parser.add_argument(
     help='environment to train on (default: PongNoFrameskip-v4)')
 parser.add_argument(
     '--load-dir',
-    default='./trained_models_0114_box_l_4/ppo/',    # TODO
+    # default='./trained_models_0114_box_l_4/ppo/',    # TODO
+    default='./trained_models_0117_box_l_1/ppo/',
     help='directory to save agent logs (default: ./trained_models/)')
 parser.add_argument(
     '--non-det',
@@ -347,6 +348,8 @@ for i in range(200):
             obs, recurrent_hidden_states, masks, deterministic=args.det)
 
     # print(action)
+    # if i > 100:
+    #     action[0, 1] = 0.5
 
     obs, reward, done, _ = env.step(action)
     control_steps += 1
