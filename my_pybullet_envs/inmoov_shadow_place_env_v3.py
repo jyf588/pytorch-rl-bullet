@@ -23,7 +23,6 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                  is_box=True,
                  is_small=False,
                  place_floor=False,
-                 grasp_pi_name='0120_box_l_1',        #'0114_cyl_s_1' '0112_box'
                  use_gt_6d=True
                  ):
         self.renders = renders
@@ -32,13 +31,24 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         self.is_box = is_box
         self.is_small = is_small
         self.place_floor = place_floor
-        self.grasp_pi_name = grasp_pi_name
         self.use_gt_6d = use_gt_6d
+
+        # TODO: hardcoded here
+        if self.is_box:
+            if self.is_small:
+                self.grasp_pi_name = '0120_box_s_1'
+            else:
+                self.grasp_pi_name = '0120_box_l_1'
+        else:
+            if self.is_small:
+                self.grasp_pi_name = '0120_cyl_s_1'
+            else:
+                self.grasp_pi_name = '0120_cyl_l_0'
 
         self.half_obj_height = 0.065 if self.is_small else 0.09
         self.start_clearance = 0.14
         self.btm_obj_height = 0.18      # always place on larger one
-        self.cand_angles = [0., 1.57, 3.14, -1.57]  # TODO: finer grid?
+        self.cand_angles = [0., 3.14/3, 6.28/3, 3.14, -6.28/3, -3.14/3]  # TODO: finer grid?
         self.cand_quats = [p.getQuaternionFromEuler([0, 0, cand_angle]) for cand_angle in self.cand_angles]
 
         self._timeStep = 1. / 240.
@@ -228,7 +238,9 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         rotMetric = np.array(z_axis).dot(np.array([0, 0, 1]))
 
         # enlarge 0.15 -> 0.45
-        xyzMetric = 1 - (np.minimum(np.linalg.norm(np.array(self.desired_obj_pos_final) - np.array(clPos)), 0.45) / 0.15)
+        # xyzMetric = 1 - (np.minimum(np.linalg.norm(np.array(self.desired_obj_pos_final) - np.array(clPos)), 0.45) / 0.15)
+        # TODO:tmp change to xy metric, allow it to free drop
+        xyzMetric = 1 - (np.minimum(np.linalg.norm(np.array(self.desired_obj_pos_final[:2]) - np.array(clPos[:2])), 0.45) / 0.15)
         linV_R = np.linalg.norm(clLinV)
         angV_R = np.linalg.norm(clAngV)
         velMetric = 1 - np.minimum(linV_R + angV_R / 2.0, 5.0) / 5.0
