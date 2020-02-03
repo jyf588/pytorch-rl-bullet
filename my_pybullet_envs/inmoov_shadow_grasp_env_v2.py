@@ -45,6 +45,8 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
             p.connect(p.DIRECT)     # this session seems always 0
         self.np_random = None
         self.robot = None
+        self.seed(0)  # used once temporarily, will be overwritten outside by env
+        self.robot = None
         self.viewer = None
 
         self.final_states = []  # wont be cleared unless call clear function
@@ -139,9 +141,6 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         p.setTimeStep(self._timeStep)
         p.setGravity(0, 0, -10)
 
-        if self.np_random is None:
-            self.seed(0)    # used once temporarily, will be overwritten outside by env
-
         if self.using_comfortable:
             if self.using_comfortable_range:
                 arm_q, cyl_init_pos = self.get_reset_poses_comfortable_range()
@@ -150,9 +149,8 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         else:
             init_palm_pos, init_palm_quat, cyl_init_pos = self.get_reset_poses_old()
 
-        # cyInit = np.array(cyl_init_pos)
         if self.init_noise:
-            cyl_init_pos += np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
+            cyl_init_pos += np.append(self.np_random.uniform(low=-0.012, high=0.012, size=2), 0)
 
         if self.isBox:
             if self.small:
@@ -176,11 +174,8 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         p.changeDynamics(self.cylinderId, -1, lateralFriction=1.0)
         p.changeDynamics(self.floorId, -1, lateralFriction=1.0)
 
-        self.robot = InmoovShadowNew(init_noise=self.init_noise, timestep=self._timeStep,
-                                     conservative_clip=True, conservative_range=0.02)
-
-        if self.np_random is not None:
-            self.robot.np_random = self.np_random
+        self.robot = InmoovShadowNew(init_noise=self.init_noise, timestep=self._timeStep, np_random=self.np_random,
+                                     conservative_clip=False)
 
         if self.using_comfortable:
             self.robot.reset_with_certain_arm_q(arm_q)

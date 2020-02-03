@@ -20,11 +20,12 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                  renders=False,
                  init_noise=True,
                  up=True,
-                 is_box=True,
+                 is_box=False,
                  is_small=False,
-                 place_floor=False,
+                 place_floor=True,
                  use_gt_6d=False,
-                 gt_only_init=True
+                 gt_only_init=True,
+                 grasp_pi_name=None
                  ):
         self.renders = renders
         self.init_noise = init_noise
@@ -36,16 +37,20 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         self.gt_only_init = gt_only_init
 
         # TODO: hardcoded here
-        if self.is_box:
-            if self.is_small:
-                self.grasp_pi_name = '0120_box_s_1'
+        if grasp_pi_name is None:
+            if self.is_box:
+                if self.is_small:
+                    self.grasp_pi_name = '0120_box_s_1'
+                else:
+                    self.grasp_pi_name = '0120_box_l_1'
             else:
-                self.grasp_pi_name = '0120_box_l_1'
+                if self.is_small:
+                    self.grasp_pi_name = '0120_cyl_s_1'
+                else:
+                    self.grasp_pi_name = '0120_cyl_l_0'
         else:
-            if self.is_small:
-                self.grasp_pi_name = '0120_cyl_s_1'
-            else:
-                self.grasp_pi_name = '0120_cyl_l_0'
+            self.grasp_pi_name = grasp_pi_name
+
 
         self.half_obj_height = 0.065 if self.is_small else 0.09
         self.start_clearance = 0.14
@@ -92,11 +97,9 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         self.obj_id = None
         self.bottom_obj_id = None
 
-        if self.np_random is None:
-            self.seed(0)    # used once temporarily, will be overwritten outside by env
-        self.robot = InmoovShadowNew(init_noise=False, timestep=self._timeStep)
-        if self.np_random is not None:
-            self.robot.np_random = self.np_random
+        self.seed(0)    # used once temporarily, will be overwritten outside by env
+        self.robot = InmoovShadowNew(init_noise=False, timestep=self._timeStep, np_random=self.np_random)
+
         self.observation = self.getExtendedObservation()
         action_dim = len(self.action_scale)
         self.act = self.action_scale * 0.0
@@ -107,9 +110,16 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         #
         # input("press enter")
 
+    def perturb(self, arr, r=0.02):
+        r = np.abs(r)
+        return np.copy(np.array(arr) + self.np_random.uniform(low=-r, high=r, size=len(arr)))
+
     def reset_robot_object_from_sample(self, state, arm_q):
         o_pos_pf = state['obj_pos_in_palm']
         o_quat_pf = state['obj_quat_in_palm']
+        if self.init_noise:
+            o_pos_pf = list(self.perturb(o_pos_pf, 0.005))
+            o_quat_pf = list(self.perturb(o_quat_pf, 0.005))
         all_fin_q_init = state['all_fin_q']
         tar_fin_q_init = state['fin_tar_q']
 
@@ -181,11 +191,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         p.setGravity(0, 0, -10)
         self.timer = 0
 
-        if self.np_random is None:
-            self.seed(0)    # used once temporarily, will be overwritten outside by env
-        self.robot = InmoovShadowNew(init_noise=False, timestep=self._timeStep)
-        if self.np_random is not None:
-            self.robot.np_random = self.np_random
+        self.robot = InmoovShadowNew(init_noise=False, timestep=self._timeStep, np_random=self.np_random)
 
         arm_q = self.sample_valid_arm_q()   # reset done during solving IK
         init_state = self.sample_init_state()
@@ -349,6 +355,14 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         #     if self.renders:
         #         time.sleep(self._timeStep)
 
+    def obj6DtoObs(self, o_pos, o_orn):
+        objObs = []
+        o_pos = np.array(o_pos)
+        o_rotmat = np.array(p.getMatrixFromQuaternion(o_orn))
+        objObs.extend(list(self.perturb(o_pos, r=0.005)))
+        objObs.extend(list(self.perturb(o_pos, r=0.005)))
+        objObs.extend(list(self.perturb(o_rotmat, r=0.005)))
+        return objObs
 
     def getExtendedObservation(self):
         self.observation = self.robot.get_robot_observation()
@@ -361,13 +375,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                     clPos, clOrn = self.t_pos, self.t_orn
                 else:
                     clPos, clOrn = p.getBasePositionAndOrientation(self.obj_id)
-                clPos = np.array(clPos)
-                clOrnMat = p.getMatrixFromQuaternion(clOrn)
-                clOrnMat = np.array(clOrnMat)
-
-                self.observation.extend(list(clPos + self.np_random.uniform(low=-0.005, high=0.005, size=3)))
-                self.observation.extend(list(clPos + self.np_random.uniform(low=-0.005, high=0.005, size=3)))
-                self.observation.extend(list(clOrnMat + self.np_random.uniform(low=-0.005, high=0.005, size=9)))
+                self.observation.extend(self.obj6DtoObs(clPos, clOrn))
             if not self.place_floor:
                 if self.bottom_obj_id is None:
                     self.observation.extend([0.0] * (3 + 9 + 3))
@@ -376,14 +384,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                         clPos, clOrn = self.b_pos, self.b_orn
                     else:
                         clPos, clOrn = p.getBasePositionAndOrientation(self.bottom_obj_id)
-                    clPos = np.array(clPos)
-                    clOrnMat = p.getMatrixFromQuaternion(clOrn)
-                    clOrnMat = np.array(clOrnMat)
-
-                    self.observation.extend(list(clPos + self.np_random.uniform(low=-0.005, high=0.005, size=3)))
-                    self.observation.extend(list(clPos + self.np_random.uniform(low=-0.005, high=0.005, size=3)))
-                    self.observation.extend(list(clOrnMat + self.np_random.uniform(low=-0.005, high=0.005, size=9)))
-
+                    self.observation.extend(self.obj6DtoObs(clPos, clOrn))
 
         #
         # clVels = p.getBaseVelocity(self.cylinderId)
@@ -413,9 +414,9 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
 
         if self.up:
             xy = np.array([self.tx, self.ty])   # TODO: tx, ty wrt world origin
-            self.observation.extend(list(xy + self.np_random.uniform(low=-0.005, high=0.005, size=2)))
-            self.observation.extend(list(xy + self.np_random.uniform(low=-0.005, high=0.005, size=2)))
-            self.observation.extend(list(xy + self.np_random.uniform(low=-0.005, high=0.005, size=2)))
+            self.observation.extend(list(self.perturb(xy, r=0.005)))
+            self.observation.extend(list(self.perturb(xy, r=0.005)))
+            self.observation.extend(list(self.perturb(xy, r=0.005)))
 
         # if self.lastContact is not None:
         #     self.observation.extend(self.lastContact)

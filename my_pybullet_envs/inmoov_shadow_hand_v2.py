@@ -65,6 +65,7 @@ class InmoovShadowNew:
     def __init__(self,
                  init_noise=True,
                  timestep=1. / 240,
+                 np_random=None,
                  conservative_clip=False,
                  conservative_range=None
                  ):
@@ -88,7 +89,7 @@ class InmoovShadowNew:
         self.ee_id = 7      # link 7 is palm
 
         self.maxForce = 200.    # TODO
-        self.np_random = None   # seeding inited outside in Env
+        self.np_random = np_random
 
         self.arm_id = p.loadURDF(os.path.join(currentdir,
                                              "assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand_v2_2.urdf"),
@@ -171,20 +172,28 @@ class InmoovShadowNew:
         self.tar_arm_q = init_arm_q
         self.tar_fin_q = init_fin_q
 
-    def reset_only_finger_states(self, all_fin_q, tar_act_q):
+    def reset_only_certain_finger_states(self, all_fin_q, tar_act_q):
+        if self.init_noise:
+            all_fin_q = self.perturb(all_fin_q, r=0.01)
+            tar_act_q = self.perturb(tar_act_q, r=0.01)
+        else:
+            all_fin_q = np.array(all_fin_q)
+            tar_act_q = np.array(tar_act_q)
         for ind in range(len(self.all_findofs)):
             p.resetJointState(self.arm_id, self.all_findofs[ind], all_fin_q[ind], 0.0)
         self.tar_fin_q = np.array(tar_act_q)
 
-    def reset_with_certain_arm_q_finger_states(self, arm_q, all_fin_q=None, tar_act_q=None):
+    def reset_with_certain_arm_q_finger_states(self, arm_q, all_fin_q, tar_act_q):
+        if self.init_noise:
+            arm_q = self.perturb(arm_q, r=0.002)
+        else:
+            arm_q = np.array(arm_q)
         for ind in range(len(self.arm_dofs)):
             p.resetJointState(self.arm_id, self.arm_dofs[ind], arm_q[ind], 0.0)
-        for ind in range(len(self.all_findofs)):
-            p.resetJointState(self.arm_id, self.all_findofs[ind], all_fin_q[ind], 0.0)
         self.tar_arm_q = arm_q
-        self.tar_fin_q = np.array(tar_act_q)
+        self.reset_only_certain_finger_states(all_fin_q, tar_act_q)
 
-    def solve_arm_IK(self, w_pos, w_quat, rand_init=False):     # TODO
+    def solve_arm_IK(self, w_pos, w_quat, rand_init=False):
         # reset according to wrist 6D pos
         wx_trans = list(w_pos)
         wx_quat = list(w_quat)
@@ -233,7 +242,7 @@ class InmoovShadowNew:
                 # print(cps[0][6])
                 if len(cps) == 0: good_init = True   # TODO: init hand last and make sure it does not colllide with env
         else:
-            # reset for placing, no noise, no collision checking
+            # reset for placing, no collision checking
             self.reset_with_certain_arm_q_finger_states(sp, all_fin_q, tar_act_q)
         # input("after reset")
 
