@@ -115,8 +115,8 @@ while True:
         value, action, _, recurrent_hidden_states = actor_critic.act(
             obs, recurrent_hidden_states, masks, deterministic=args.det)
 
-    if done:
-        input("reset, press enter")
+    # if done:
+    #     input("reset, press enter")
 
     # Obser reward and next obs
     obs, reward, done, _ = env.step(action)
@@ -131,6 +131,10 @@ while True:
 
     if done:
         print("tr:", reward_total)
+        if reward_total > 4000:
+            print("good")
+        else:
+            print("bad")
         reward_total = 0.
 
     masks.fill_(0.0 if done else 1.0)

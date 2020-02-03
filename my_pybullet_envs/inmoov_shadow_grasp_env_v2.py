@@ -26,7 +26,7 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
                  init_noise=True,
                  up=True,
                  is_box=True,
-                 small=True,
+                 small=False,
                  using_comfortable=True,
                  using_comfortable_range=False):
         self.renders = renders
@@ -176,7 +176,8 @@ class InmoovShadowHandGraspEnvNew(gym.Env):
         p.changeDynamics(self.cylinderId, -1, lateralFriction=1.0)
         p.changeDynamics(self.floorId, -1, lateralFriction=1.0)
 
-        self.robot = InmoovShadowNew(init_noise=self.init_noise, timestep=self._timeStep)
+        self.robot = InmoovShadowNew(init_noise=self.init_noise, timestep=self._timeStep,
+                                     conservative_clip=True, conservative_range=0.02)
 
         if self.np_random is not None:
             self.robot.np_random = self.np_random

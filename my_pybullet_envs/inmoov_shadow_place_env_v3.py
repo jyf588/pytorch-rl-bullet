@@ -23,7 +23,8 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                  is_box=True,
                  is_small=False,
                  place_floor=False,
-                 use_gt_6d=True
+                 use_gt_6d=False,
+                 gt_only_init=True
                  ):
         self.renders = renders
         self.init_noise = init_noise
@@ -32,6 +33,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         self.is_small = is_small
         self.place_floor = place_floor
         self.use_gt_6d = use_gt_6d
+        self.gt_only_init = gt_only_init
 
         # TODO: hardcoded here
         if self.is_box:
@@ -205,7 +207,12 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
             p.changeDynamics(self.floor_id, -1, lateralFriction=1.0)
 
         p.stepSimulation()      # TODO
+
+        # init obj pose
+        self.t_pos, self.t_orn = p.getBasePositionAndOrientation(self.obj_id)
+        self.b_pos, self.b_orn = p.getBasePositionAndOrientation(self.bottom_obj_id)
         self.observation = self.getExtendedObservation()
+
         return np.array(self.observation)
 
     def sample_init_state(self):
@@ -350,7 +357,10 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
             if self.obj_id is None:
                 self.observation.extend([0.0]*(3+9+3))
             else:
-                clPos, clOrn = p.getBasePositionAndOrientation(self.obj_id)
+                if self.gt_only_init:
+                    clPos, clOrn = self.t_pos, self.t_orn
+                else:
+                    clPos, clOrn = p.getBasePositionAndOrientation(self.obj_id)
                 clPos = np.array(clPos)
                 clOrnMat = p.getMatrixFromQuaternion(clOrn)
                 clOrnMat = np.array(clOrnMat)
@@ -362,7 +372,10 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                 if self.bottom_obj_id is None:
                     self.observation.extend([0.0] * (3 + 9 + 3))
                 else:
-                    clPos, clOrn = p.getBasePositionAndOrientation(self.bottom_obj_id)
+                    if self.gt_only_init:
+                        clPos, clOrn = self.b_pos, self.b_orn
+                    else:
+                        clPos, clOrn = p.getBasePositionAndOrientation(self.bottom_obj_id)
                     clPos = np.array(clPos)
                     clOrnMat = p.getMatrixFromQuaternion(clOrn)
                     clOrnMat = np.array(clOrnMat)

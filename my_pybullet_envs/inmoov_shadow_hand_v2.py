@@ -64,10 +64,14 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 class InmoovShadowNew:
     def __init__(self,
                  init_noise=True,
-                 timestep=1. / 240
+                 timestep=1. / 240,
+                 conservative_clip=False,
+                 conservative_range=None
                  ):
         self.init_noise = init_noise
         self._timestep = timestep
+        self.conservative_clip = conservative_clip
+        self.conservative_range = conservative_range
 
         self.base_init_pos = np.array([-0.30, 0.348, 0.272])
         # self.base_init_pos = np.array([-0.44, 0.348, 0.272])
@@ -274,7 +278,11 @@ class InmoovShadowNew:
         # TODO: a is already scaled, how much to scale? decide in Env.
         self.act = np.array(a)
         self.tar_arm_q += self.act[:len(self.arm_dofs)]     # assume arm controls are the first ones.
-        self.tar_arm_q = np.clip(self.tar_arm_q, self.ll[self.arm_dofs], self.ul[self.arm_dofs])
+        if self.conservative_clip:
+            cur_q, _ = self.get_q_dq(self.arm_dofs)
+            self.tar_arm_q = np.clip(self.tar_arm_q, cur_q - self.conservative_range, cur_q + self.conservative_range)
+        else:
+            self.tar_arm_q = np.clip(self.tar_arm_q, self.ll[self.arm_dofs], self.ul[self.arm_dofs])
         self.tar_fin_q += self.act[len(self.arm_dofs):]
         self.tar_fin_q = np.clip(self.tar_fin_q, self.ll[self.fin_actdofs], self.ul[self.fin_actdofs])
         p.setJointMotorControlArray(
