@@ -47,12 +47,12 @@ homedir = os.path.expanduser("~")
 
 # constants
 DEMO_ENV_NAME = 'ShadowHandDemoBulletEnv-v1'
-# GRASP_PI = '0120_cyl_l_0'
-GRASP_PI = '0120_box_s_1'
+GRASP_PI = '0120_cyl_l_0'
+# GRASP_PI = '0120_box_s_1'
 GRASP_DIR = "./trained_models_%s/ppo/" % GRASP_PI
 GRASP_PI_ENV_NAME = 'InmoovHandGraspBulletEnv-v1'
-# PLACE_PI = '0120_cyl_l_0_place_f_nogt_0'
-PLACE_PI = '0120_box_s_1_place_f_nogt_1'
+PLACE_PI = '0120_cyl_l_0_place_f_nogt_0'
+# PLACE_PI = '0120_box_s_1_place_f_nogt_1'
 PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 PLACE_PI_ENV_NAME = 'InmoovHandPlaceBulletEnv-v3'
 
@@ -88,20 +88,26 @@ HALF_OBJ_HEIGHT_L = 0.09
 HALF_OBJ_HEIGHT_S = 0.065
 PLACE_CLEARANCE = 0.16
 
-# test only one obj
-g_tx = 0.1
-g_ty = 0.43
-p_tx = 0.2
-p_ty = -0.0
-# g_tx = 0.1
-# g_ty = 0.43
-# p_tx = 0.2
-# p_ty = 0.2
-# g_tx = 0.2
-# g_ty = -0.1
-# p_tx = 0.15
-# p_ty = 0.4
-p_tz = 0.0  # TODO: depending on placing on floor or not
+COLORS = {"red": [0.8, 0.0, 0.0, 1.0],
+          "grey": [0.4, 0.4, 0.4, 1.0],
+          "yellow": [0.8, 0.8, 0.0, 1.0],
+          "blue": [0.0, 0.0, 0.8, 1.0],
+          "green": [0.0, 0.8, 0.0, 1.0]}
+
+g_tx = 0.2
+g_ty = 0.35
+p_tz = 0.0  # TODO: placing on floor
+# Ground-truth scene:
+obj1 = {'shape':'box','color':'yellow','position':[0.15,-0.18,0,0],'size': 'large'} #ref 1
+# obj2 = {'shape':'box','color':'red','position': [g_tx,g_ty,0,0],'size': 'small'} # target
+obj2 = {'shape':'cylinder','color':'green','position': [g_tx,g_ty,0,0],'size': 'large'} # target
+obj3 = {'shape':'cylinder','color':'blue','position':[0.1,0.7,0,0],'size': 'large'} # ref 2
+obj4 = {'shape':'cylinder','color':'yellow','position':[0.15,0.1,0,0],'size': 'small'} #irrelevant
+objs = [obj1, obj2, obj3, obj4]
+Target_ind = 1  # TODO:tmp
+# command
+sentence = "Put the small red box between the blue cylinder and yellow box"
+sentence = "Put the large green cylinder between the yellow cylinder and yellow box"
 
 
 def planning(Traj, i_g_obs, recurrent_hidden_states, masks):
@@ -184,7 +190,45 @@ def unwrap_action(act_tensor):
     return action.numpy()
 
 
-# set up world
+def construct_bullet_scene(objs):       # TODO: copied from inference code
+    # p.resetSimulation()
+    obj_ids = []
+    for obj in objs:
+        ob_shape = obj['shape']
+        assert len(obj['position']) == 4  # x y and z height
+
+        real_loc = np.array(obj['position'][0:3])
+
+        if obj['size'] == 'small':
+            ob_shape += '_small'
+            real_loc += [0, 0, HALF_OBJ_HEIGHT_S + 0.001]
+        else:
+            real_loc += [0, 0, HALF_OBJ_HEIGHT_L + 0.001]
+        urdf_file = 'my_pybullet_envs/assets/' + ob_shape + '.urdf'     # TODO: hardcoded path
+
+        obj_id = p.loadURDF(os.path.join(currentdir, urdf_file), real_loc, useFixedBase=0)
+        p.changeVisualShape(obj_id, -1, rgbaColor=COLORS[obj['color']])
+
+        p.changeDynamics(obj_id, -1, lateralFriction=OBJ_MU)
+        obj_ids.append(obj_id)
+
+    table_id = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/tabletop.urdf'), TABLE_OFFSET,
+                          useFixedBase=1)  # main sim uses 0.27, 0.1/ constuct table at last
+    p.changeVisualShape(table_id, -1, rgbaColor=COLORS['grey'])
+    p.changeDynamics(table_id, -1, lateralFriction=FLOOR_MU)
+    return obj_ids
+
+
+################# pre-calculation & loading
+[OBJECTS, target_xyz] = NLPmod(sentence, objs)
+print("tar xyz from language", target_xyz)
+p_tx = target_xyz[0]
+p_ty = target_xyz[1]
+
+# latter 2 returns dummy
+g_actor_critic, g_ob_rms, _, _ = load_policy_params(GRASP_DIR, GRASP_PI_ENV_NAME)
+p_actor_critic, p_ob_rms, recurrent_hidden_states, masks = load_policy_params(PLACE_DIR, PLACE_PI_ENV_NAME)
+
 p.connect(p.GUI)
 p.resetSimulation()
 
@@ -196,35 +240,18 @@ a = InmoovShadowHandPlaceEnvV3(renders=False, is_box=pi_is_box, is_small=pi_is_s
 a.seed(args.seed)
 Qdestin =a.get_optimal_init_arm_q(desired_obj_pos)
 print("place arm q", Qdestin)
-# arm_q = [-0.8095155039980575, -0.42793360197051106, -0.7269143588514168, -1.2848182939515076, -0.7268314292697703, -0.7463880732365392, -0.7885470027289124]
 
-# latter 2 returns dummy
-g_actor_critic, g_ob_rms, _, _ = load_policy_params(GRASP_DIR, GRASP_PI_ENV_NAME)
-p_actor_critic, p_ob_rms, recurrent_hidden_states, masks = load_policy_params(PLACE_DIR, PLACE_PI_ENV_NAME)
-
+################## set up world
 p.resetSimulation()
 p.setTimeStep(TS)
 p.setGravity(0, 0, -10)
 
-
 env_core = InmoovShadowHandDemoEnvV3(noisy_obs=NOISY_OBS, seed=args.seed)
 
+obj_ids = construct_bullet_scene(objs)
+oid1 = obj_ids[Target_ind]   # TODO:tmp
 
-# oid1 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/cylinder_small.urdf'), [g_tx, g_ty, HALF_OBJ_HEIGHT_S+0.001],
-#                   useFixedBase=0)
-# oid1 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/box.urdf'), [g_tx, g_ty, HALF_OBJ_HEIGHT_L+0.001],
-#                   useFixedBase=0)
-# oid1 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/cylinder.urdf'), [g_tx, g_ty, HALF_OBJ_HEIGHT_L+0.001],
-#                   useFixedBase=0)
-oid1 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/box_small.urdf'), [g_tx, g_ty, HALF_OBJ_HEIGHT_S+0.001],
-                  useFixedBase=0)
-p.changeDynamics(oid1, -1, lateralFriction=OBJ_MU)
-table_id = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/tabletop.urdf'), TABLE_OFFSET,
-                      useFixedBase=1)
-p.changeDynamics(table_id, -1, lateralFriction=FLOOR_MU)
-
-
-# ready to grasp
+#################### ready to grasp
 
 env_core.robot.reset_with_certain_arm_q(Qreach)     # TODO
 env_core.reset()
@@ -242,8 +269,8 @@ for i in range(GRASP_END_STEP):
     g_obs = env_core.get_robot_contact_txty_obs(g_tx, g_ty)
     g_obs = wrap_over_grasp_obs(g_obs)
 
-    print(g_obs)
-    print(action)
+    # print(g_obs)
+    # print(action)
     # print(control_steps)
     # control_steps += 1
     # input("press enter g_obs")
