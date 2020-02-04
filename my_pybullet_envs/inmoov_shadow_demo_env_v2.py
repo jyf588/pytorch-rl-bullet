@@ -138,6 +138,9 @@ class InmoovShadowHandDemoEnvNew(gym.Env):
             self.observation.extend(list(clPos + self.np_random.uniform(low=-0.001, high=0.001, size=3)))
             self.observation.extend(list(clPos + self.np_random.uniform(low=-0.001, high=0.001, size=3)))
             self.observation.extend(list(clOrnMat + self.np_random.uniform(low=-0.001, high=0.001, size=9)))
+            # self.observation.extend(list(clPos ))
+            # self.observation.extend(list(clPos ))
+            # self.observation.extend(list(clOrnMat ))
 
         curContact = []
         for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):

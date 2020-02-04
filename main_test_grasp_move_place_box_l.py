@@ -345,6 +345,7 @@ input("after moving")
 
 p_actor_critic, p_ob_rms, recurrent_hidden_states, masks = load_policy_params(PLACE_DIR, PLACE_PI_ENV_NAME) # latter 2 returns dummy
 env_core.update_obj_id(oid1)    # TODO:tmp
+env_core.assign_estimated_obj_pos(p_tx, p_ty)
 # p_obs = env.reset()
 p_obs = env_core.getExtendedObservation()   # TODO:tmp, no normalize
 p_obs = torch.Tensor([p_obs])
@@ -371,7 +372,7 @@ for i in range(95):
         p_obs = p_obs.cuda()
 
     # print(action)
-    # print(g_obs)
+    # print(p_obs)
     # input("press enter g_obs")
 
     masks.fill_(0.0 if done else 1.0)
