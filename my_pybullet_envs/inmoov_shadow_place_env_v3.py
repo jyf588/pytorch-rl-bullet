@@ -22,8 +22,8 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                  up=True,
                  is_box=True,
                  is_small=True,
-                 place_floor=True,
-                 use_gt_6d=False,
+                 place_floor=False,
+                 use_gt_6d=True,
                  gt_only_init=True,
                  grasp_pi_name=None
                  ):
@@ -364,27 +364,35 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         objObs.extend(list(self.perturb(o_rotmat, r=0.005)))
         return objObs
 
+    def obj6DtoObs_UpVec(self, o_pos, o_orn):
+        objObs = []
+        o_pos = np.array(o_pos)
+        o_rotmat = np.array(p.getMatrixFromQuaternion(o_orn))
+        o_upv = [o_rotmat[2], o_rotmat[5], o_rotmat[8]]
+        objObs.extend(list(self.perturb(o_pos, r=0.005)))
+        objObs.extend(list(self.perturb(o_pos, r=0.005)))
+        objObs.extend(list(self.perturb(o_upv, r=0.005)))
+        objObs.extend(list(self.perturb(o_upv, r=0.005)))
+        return objObs
+
     def getExtendedObservation(self):
         self.observation = self.robot.get_robot_observation()
 
         if self.use_gt_6d:
             if self.obj_id is None:
-                self.observation.extend([0.0]*(3+9+3))
+                self.observation.extend(self.obj6DtoObs_UpVec([0,0,0], [0,0,0,1]))  # TODO
             else:
                 if self.gt_only_init:
                     clPos, clOrn = self.t_pos, self.t_orn
                 else:
                     clPos, clOrn = p.getBasePositionAndOrientation(self.obj_id)
-                self.observation.extend(self.obj6DtoObs(clPos, clOrn))
-            if not self.place_floor:
+                self.observation.extend(self.obj6DtoObs_UpVec(clPos, clOrn))    # TODO
+            if not self.place_floor and not self.gt_only_init:  # if stacking & real-time, include bottom 6D
                 if self.bottom_obj_id is None:
-                    self.observation.extend([0.0] * (3 + 9 + 3))
+                    self.observation.extend(self.obj6DtoObs_UpVec([0,0,0], [0,0,0,1]))    # TODO
                 else:
-                    if self.gt_only_init:
-                        clPos, clOrn = self.b_pos, self.b_orn
-                    else:
-                        clPos, clOrn = p.getBasePositionAndOrientation(self.bottom_obj_id)
-                    self.observation.extend(self.obj6DtoObs(clPos, clOrn))
+                    clPos, clOrn = p.getBasePositionAndOrientation(self.bottom_obj_id)
+                    self.observation.extend(self.obj6DtoObs_UpVec(clPos, clOrn))  # TODO
 
         #
         # clVels = p.getBaseVelocity(self.cylinderId)
