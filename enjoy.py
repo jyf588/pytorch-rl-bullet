@@ -2,6 +2,7 @@ import argparse
 import os
 # workaround to unpickle olf model files
 import sys
+import time
 
 import numpy as np
 import torch
@@ -40,6 +41,16 @@ parser.add_argument(
     type=int,
     default=-1,
     help='which iter pi to test')
+parser.add_argument(
+    '--success_reward_thresh',
+    type=int,
+    default=4000,
+    help='The threshold reward value above which it is considered a success.')
+parser.add_argument(
+    '--n_trials',
+    type=int,
+    default=2000,
+    help='The number of trials to run.')
 args = parser.parse_args()
 
 # TODO
@@ -95,7 +106,7 @@ masks = torch.zeros(1, 1)
 
 obs = env.reset()
 print("obs", obs)
-input("reset, press enter")
+# input("reset, press enter")
 done = False
 
 if args.env_name.find('Bullet') > -1:
@@ -107,10 +118,11 @@ if args.env_name.find('Bullet') > -1:
             torsoId = i
 
 reward_total = 0
-
 control_step = 0
+n_success, n_trials = 0, 0
+start_time = time.time()
 
-while True:
+while n_trials < args.n_trials:
     with torch.no_grad():
         value, action, _, recurrent_hidden_states = actor_critic.act(
             obs, recurrent_hidden_states, masks, deterministic=args.det)
@@ -130,11 +142,13 @@ while True:
     reward_total += reward
 
     if done:
-        print("tr:", reward_total)
-        if reward_total > 4000:
-            print("good")
-        else:
-            print("bad")
+        if reward_total > args.success_reward_thresh:
+            n_success += 1
+        n_trials += 1
+        print(f"{args.load_dir}\t"
+            f"tr: {reward_total.numpy()[0][0]:.1f}\t"
+            f"Avg Success: {n_success / n_trials * 100: .2f} ({n_success}/{n_trials})"
+            f"(Avg. time/trial: {(time.time() - start_time)/n_trials:.2f})")
         reward_total = 0.
 
     masks.fill_(0.0 if done else 1.0)
