@@ -20,11 +20,11 @@ class InmoovShadowHandPlaceEnvV4(gym.Env):
                  renders=False,
                  init_noise=True,
                  up=True,
-                 is_box=False,
+                 is_box=True,
                  is_small=False,
                  place_floor=False,
                  use_gt_6d=True,
-                 gt_only_init=True,
+                 gt_only_init=False,
                  grasp_pi_name=None
                  ):
         self.renders = renders
@@ -128,6 +128,11 @@ class InmoovShadowHandPlaceEnvV4(gym.Env):
         p_pos, p_quat = self.robot.get_link_pos_quat(self.robot.ee_id)
         o_pos, o_quat = p.multiplyTransforms(p_pos, p_quat, o_pos_pf, o_quat_pf)
 
+        z_axis, _ = p.multiplyTransforms([0, 0, 0], o_quat, [0, 0, 1], [0, 0, 0, 1])  # R_cl * unitz[0,0,1]
+        rotMetric = np.array(z_axis).dot(np.array([0, 0, 1]))
+        # print(rotMetric, rotMetric)
+        if rotMetric < 0.9: return False
+
         if self.is_box:
             if self.is_small:
                 self.obj_id = p.loadURDF(os.path.join(currentdir, 'assets/box_small.urdf'),
@@ -145,7 +150,7 @@ class InmoovShadowHandPlaceEnvV4(gym.Env):
         p.changeDynamics(self.obj_id, -1, lateralFriction=1.0)
         self.obj_mass = p.getDynamicsInfo(self.obj_id, -1)[0]
 
-        return
+        return True
 
     def get_optimal_init_arm_q(self, desired_obj_pos):
         # TODO: desired obj init pos -> should add clearance to z.
@@ -194,8 +199,11 @@ class InmoovShadowHandPlaceEnvV4(gym.Env):
         self.robot = InmoovShadowNew(init_noise=False, timestep=self._timeStep, np_random=self.np_random)
 
         arm_q = self.sample_valid_arm_q()   # reset done during solving IK
-        init_state = self.sample_init_state()
-        self.reset_robot_object_from_sample(init_state, arm_q)
+
+        init_done = False
+        while not init_done:
+            init_state = self.sample_init_state()
+            init_done = self.reset_robot_object_from_sample(init_state, arm_q)
 
         if self.place_floor:
             self.bottom_obj_id =p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.25, 0.2, 0.0],
@@ -300,9 +308,9 @@ class InmoovShadowHandPlaceEnvV4(gym.Env):
             # this is slightly different from mountain car's sparse reward,
             # where you are only rewarded when reaching a certain state
             # this is saying you must be at certain state at certain time (after test)
-            for i in range(-1, p.getNumJoints(self.robot.arm_id)):
-                p.setCollisionFilterPair(self.obj_id, self.robot.arm_id, -1, i, enableCollision=0)
-                p.setCollisionFilterPair(self.bottom_obj_id, self.robot.arm_id, -1, i, enableCollision=0)
+            # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
+            #     p.setCollisionFilterPair(self.obj_id, self.robot.arm_id, -1, i, enableCollision=0)
+            #     p.setCollisionFilterPair(self.bottom_obj_id, self.robot.arm_id, -1, i, enableCollision=0)
             self.execute_release_traj()
 
             total_nf = 0
@@ -329,28 +337,31 @@ class InmoovShadowHandPlaceEnvV4(gym.Env):
 
     def execute_release_traj(self):
 
-        # self.robot.tar_arm_q = self.robot.get_q_dq(self.robot.arm_dofs)[0]
-        # self.robot.tar_fin_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
-        # tar_wrist_xyz = list(self.robot.get_link_pos_quat(self.robot.ee_id)[0])
-        # ik_q = None
-        # for test_t in range(300):
-        #     if test_t < 200:
-        #         tar_wrist_xyz[0] -= 0.001
-        #         ik_q = p.calculateInverseKinematics(self.robot.arm_id, self.robot.ee_id, tar_wrist_xyz)
-        #     self.robot.tar_arm_q = np.array(ik_q[:len(self.robot.arm_dofs)])
-        #     self.robot.apply_action(np.array([0.0] * len(self.action_scale)))
-        #     p.stepSimulation()
-        #     if self.renders:
-        #         time.sleep(self._timeStep)
-
-        self.robot.tar_fin_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
-        for test_t in range(300):
-            thumb_pose = [-0.84771132, 0.60768666, -0.13419822, 0.52214954,
-                          0.25141182]  # TODO: can this be same for different shapes?
+        cur_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
+        self.robot.tar_fin_q = cur_q
+        for test_t in range(170):
+            thumb_pose = list(cur_q[-5:])     # do not modify thumb
             open_up_q = np.array([0.1, 0.1, 0.1] * 4 + thumb_pose)
-            devi = open_up_q - self.robot.get_q_dq(self.robot.fin_actdofs)[0]
-            if test_t < 200:
+            devi = open_up_q - cur_q
+            if test_t < 150:
                 self.robot.apply_action(np.array([0.0] * 7 + list(devi / 150.)))
+            p.stepSimulation()
+            if self.renders:
+                time.sleep(self._timeStep)
+
+        self.robot.tar_arm_q = self.robot.get_q_dq(self.robot.arm_dofs)[0]
+        self.robot.tar_fin_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
+        tar_wrist_xyz = np.array(self.robot.get_link_pos_quat(self.robot.ee_id)[0])
+        dir = tar_wrist_xyz[:2] - [self.tx, self.ty]
+        dir = dir / np.linalg.norm(dir)
+        dir = np.array(list(dir) + [0.0])
+        ik_q = None
+        for test_t in range(170):
+            if test_t < 150:
+                tar_wrist_xyz += 0.001 * dir
+                ik_q = p.calculateInverseKinematics(self.robot.arm_id, self.robot.ee_id, list(tar_wrist_xyz))
+            self.robot.tar_arm_q = np.array(ik_q[:len(self.robot.arm_dofs)])
+            self.robot.apply_action(np.array([0.0] * len(self.action_scale)))
             p.stepSimulation()
             if self.renders:
                 time.sleep(self._timeStep)
