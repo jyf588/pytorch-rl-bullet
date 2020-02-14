@@ -23,9 +23,10 @@ class InmoovShadowHandPlaceEnvV4(gym.Env):
                  is_box=True,
                  is_small=False,
                  place_floor=False,
-                 use_gt_6d=True,
-                 gt_only_init=False,
-                 grasp_pi_name=None
+                 use_gt_6d=False,
+                 gt_only_init=True,
+                 grasp_pi_name=None,
+                 exclude_hard=True
                  ):
         self.renders = renders
         self.init_noise = init_noise
@@ -35,6 +36,8 @@ class InmoovShadowHandPlaceEnvV4(gym.Env):
         self.place_floor = place_floor
         self.use_gt_6d = use_gt_6d
         self.gt_only_init = gt_only_init
+        self.exclude_hard = exclude_hard
+        self.hard_orn_thres = 0.9
 
         # TODO: hardcoded here
         if grasp_pi_name is None:
@@ -131,7 +134,7 @@ class InmoovShadowHandPlaceEnvV4(gym.Env):
         z_axis, _ = p.multiplyTransforms([0, 0, 0], o_quat, [0, 0, 1], [0, 0, 0, 1])  # R_cl * unitz[0,0,1]
         rotMetric = np.array(z_axis).dot(np.array([0, 0, 1]))
         # print(rotMetric, rotMetric)
-        if rotMetric < 0.9: return False
+        if self.exclude_hard and rotMetric < self.hard_orn_thres: return False
 
         if self.is_box:
             if self.is_small:
@@ -331,7 +334,7 @@ class InmoovShadowHandPlaceEnvV4(gym.Env):
 
             if meaningful_c and rotMetric > 0.6:        # TODO:tmp is this good for floor placing as well?
                 # succeed = True
-                reward += 3000
+                reward += 1500
 
         return obs, reward, False, {}
 
@@ -339,12 +342,12 @@ class InmoovShadowHandPlaceEnvV4(gym.Env):
 
         cur_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
         self.robot.tar_fin_q = cur_q
-        for test_t in range(170):
+        for test_t in range(120):
             thumb_pose = list(cur_q[-5:])     # do not modify thumb
             open_up_q = np.array([0.1, 0.1, 0.1] * 4 + thumb_pose)
             devi = open_up_q - cur_q
-            if test_t < 150:
-                self.robot.apply_action(np.array([0.0] * 7 + list(devi / 150.)))
+            if test_t < 100:
+                self.robot.apply_action(np.array([0.0] * 7 + list(devi / 100.)))
             p.stepSimulation()
             if self.renders:
                 time.sleep(self._timeStep)
@@ -356,9 +359,9 @@ class InmoovShadowHandPlaceEnvV4(gym.Env):
         dir = dir / np.linalg.norm(dir)
         dir = np.array(list(dir) + [0.0])
         ik_q = None
-        for test_t in range(170):
-            if test_t < 150:
-                tar_wrist_xyz += 0.001 * dir
+        for test_t in range(200):
+            if test_t < 180:
+                tar_wrist_xyz += 0.0006 * dir
                 ik_q = p.calculateInverseKinematics(self.robot.arm_id, self.robot.ee_id, list(tar_wrist_xyz))
             self.robot.tar_arm_q = np.array(ik_q[:len(self.robot.arm_dofs)])
             self.robot.apply_action(np.array([0.0] * len(self.action_scale)))

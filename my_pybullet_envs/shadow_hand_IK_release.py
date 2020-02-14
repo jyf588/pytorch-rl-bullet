@@ -15,11 +15,11 @@ import pickle
 class ShadowHand:
     def __init__(self):      # default range for reaching
 
-        np.random.seed(300)   # TODO
+        np.random.seed(707)   # TODO
 
         self.is_box = False
-        self.is_small = True
-        self.grasp_pi_name = '0120_cyl_s_1'
+        self.is_small = False
+        self.grasp_pi_name = '0120_cyl_l_0'
 
         self.fin_actdofs = list(np.array([9, 10, 11, 14, 15, 16, 19, 20, 21, 25, 26, 27, 29, 30, 31, 32, 33]) - 8)
         self.fin_zerodofs = list(np.array([8, 13, 18, 24]) - 8)
