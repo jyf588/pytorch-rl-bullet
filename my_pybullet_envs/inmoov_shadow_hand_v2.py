@@ -82,7 +82,7 @@ class InmoovShadowNew:
         self.fin_zerodofs = [8, 13, 18, 24]
         self.fin_tips = [12, 17, 22, 28, 34]
         self.all_findofs = list(np.sort(self.fin_actdofs+self.fin_zerodofs))
-        self.init_fin_q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.0])
+        self.init_fin_q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.8, 0.1, 0.5, 0.0])
         self.tar_arm_q = np.zeros(len(self.arm_dofs))       # dummy
         self.tar_fin_q = np.zeros(len(self.fin_actdofs))
 

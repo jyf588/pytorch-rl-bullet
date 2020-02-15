@@ -16,7 +16,7 @@ from .inmoov_shadow_demo_env_v2 import InmoovShadowHandDemoEnvNew
 from .inmoov_shadow_place_env_v3 import InmoovShadowHandPlaceEnvV3
 from .inmoov_shadow_grasp_env_v3 import InmoovShadowHandGraspEnvV3
 from .inmoov_shadow_place_env_v4 import InmoovShadowHandPlaceEnvV4
-
+from .inmoov_shadow_grasp_env_v4 import InmoovShadowHandGraspEnvV4
 
 def register(id, *args, **kvargs):
   if id in registry.env_specs:
@@ -54,6 +54,12 @@ register(
 register(
     id='InmoovHandGraspBulletEnv-v3',
     entry_point='my_pybullet_envs:InmoovShadowHandGraspEnvV3',
+    max_episode_steps=134,
+)
+
+register(
+    id='InmoovHandGraspBulletEnv-v4',
+    entry_point='my_pybullet_envs:InmoovShadowHandGraspEnvV4',
     max_episode_steps=134,
 )
 

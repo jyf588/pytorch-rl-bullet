@@ -57,8 +57,8 @@ def main():
   parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   # parser.add_argument('--env', help='environment ID', default='AllegroHandPickBulletEnv-v0')
 
-  parser.add_argument('--env', help='environment ID', default='InmoovHandPlaceBulletEnv-v4')
-  # parser.add_argument('--env', help='environment ID', default='ShadowHandPlaceBulletEnv-v0')
+  parser.add_argument('--env', help='environment ID', default='InmoovHandGraspBulletEnv-v4')
+  # parser.add_argument('--env', help='environment ID', default='ShadowHandPlaceBulletEnv-v3')
 
   # parser.add_argument('--env', help='environment ID', default='AntBulletEnv-v0')
   parser.add_argument('--seed', help='RNG seed', type=int, default=207)
