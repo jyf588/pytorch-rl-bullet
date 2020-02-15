@@ -13,7 +13,7 @@ import my_pybullet_envs
 
 def test(args):
   count = 0
-  env = gym.make(args.env)
+  env = gym.make(args.env, renders=False)
   env.seed(args.seed)
   # env.env.configure(args)
   # print("args.render=", args.render)

@@ -51,13 +51,36 @@ parser.add_argument(
     type=int,
     default=2000,
     help='The number of trials to run.')
-args = parser.parse_args()
+
+args, unknown = parser.parse_known_args()  # this is an 'internal' method
+# which returns 'parsed', the same as what parse_args() would return
+# and 'unknown', the remainder of that
+# the difference to parse_args() is that it does not exit when it finds redundant arguments
+
+
+def pairwise(iterable):
+    "s -> (s0, s1), (s2, s3), (s4, s5), ..."
+    a = iter(iterable)
+    return zip(a, a)
+
+
+for arg, value in pairwise(unknown):  # note: assume always --arg value (no --arg)
+    assert arg.startswith(("-", "--"))
+    parser.add_argument(arg, type=float)  # assume always float (pass bool as 0 or 1)
+
+args_w_extra = parser.parse_args()
+args_dict = vars(args)
+args_w_extra_dict = vars(args_w_extra)
+extra_dict = {k: args_w_extra_dict[k] for k in set(args_w_extra_dict) - set(args_dict)}
 
 # TODO
 is_cuda = True
 device = 'cuda' if is_cuda else 'cpu'
 
 args.det = not args.non_det
+
+if 'renders' not in extra_dict:
+    extra_dict['renders'] = True
 
 env = make_vec_envs(
     args.env_name,
@@ -66,7 +89,8 @@ env = make_vec_envs(
     None,
     None,
     device=device,
-    allow_early_resets=False)
+    allow_early_resets=False,
+    **extra_dict)
 
 # # Get a render function
 # render_func = get_render_func(env)

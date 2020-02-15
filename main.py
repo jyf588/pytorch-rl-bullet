@@ -32,7 +32,7 @@ import my_pybullet_envs
 # TODO: path override warning
 
 def main():
-    args = get_args()
+    args, extra_dict = get_args()
 
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
@@ -50,7 +50,7 @@ def main():
     device = torch.device("cuda:0" if args.cuda else "cpu")
 
     envs = make_vec_envs(args.env_name, args.seed, args.num_processes,
-                         args.gamma, args.log_dir, device, False)
+                         args.gamma, args.log_dir, device, False, renders=False, **extra_dict)
 
     actor_critic = Policy(
         envs.observation_space.shape,
@@ -58,7 +58,7 @@ def main():
         base_kwargs={'recurrent': args.recurrent_policy})
     actor_critic.to(device)
 
-    dummy = gym.make(args.env_name)
+    dummy = gym.make(args.env_name, renders=False, **extra_dict)
     save_path = os.path.join(args.save_dir, args.algo)
     try:
         os.makedirs(save_path)
