@@ -188,7 +188,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
 
 
         if self.isBox:
-            dim = [self.half_width, self.half_width, self.half_height]
+            dim = [self.half_width*0.8, self.half_width*0.8, self.half_height]
             self.obj_id = self.create_prim_2_grasp(p.GEOM_BOX, dim, obj_init_xyz)
             # if self.small:
             #     self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/box_small.urdf'),
@@ -197,7 +197,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             #     self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/box.urdf'),
             #                                  obj_init_xyz, useFixedBase=0)
         else:
-            dim = [self.half_width*0.8, self.half_height*2.0]   # TODO
+            dim = [self.half_width, self.half_height*2.0]   # TODO
             self.obj_id = self.create_prim_2_grasp(p.GEOM_CYLINDER, dim, obj_init_xyz)
             #
             # if self.small:
