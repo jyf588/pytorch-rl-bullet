@@ -13,7 +13,7 @@ import my_pybullet_envs
 
 def test(args):
   count = 0
-  env = gym.make(args.env, renders=False)
+  env = gym.make(args.env, renders=True)
   env.seed(args.seed)
   # env.env.configure(args)
   # print("args.render=", args.render)
@@ -57,7 +57,8 @@ def main():
   parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   # parser.add_argument('--env', help='environment ID', default='AllegroHandPickBulletEnv-v0')
 
-  parser.add_argument('--env', help='environment ID', default='InmoovHandGraspBulletEnv-v4')
+  parser.add_argument('--env', help='environment ID', default='InmoovHandGraspPlaceBulletEnv-v1')
+  # parser.add_argument('--env', help='environment ID', default='InmoovHandGraspBulletEnv-v4')
   # parser.add_argument('--env', help='environment ID', default='ShadowHandPlaceBulletEnv-v3')
 
   # parser.add_argument('--env', help='environment ID', default='AntBulletEnv-v0')
@@ -68,7 +69,7 @@ def main():
                       help='Repeat reset to show reset performance',
                       type=int,
                       default=0)
-  parser.add_argument('--steps', help='Number of steps', type=int, default=100)
+  parser.add_argument('--steps', help='Number of steps', type=int, default=300) # large enough
   # parser.add_argument('--steps', help='Number of steps', type=int, default=300)
 
   args = parser.parse_args()

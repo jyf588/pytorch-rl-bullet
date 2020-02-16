@@ -13,29 +13,32 @@ import os
 import inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 
-# episode length 400
-
 # TODO: txyz will be given by vision module. tz is zero for grasping, obj frame at bottom.
 
 
-class InmoovShadowHandGraspEnvV4(gym.Env):
+class InmoovShadowHandGraspPlaceEnvV1(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
                  renders=True,
                  init_noise=True,
-                 up=True,
-                 # is_box=False,
-                 using_comfortable=True,
-                 using_comfortable_range=False):
+                 up=False,
+                 random_shape=False,
+                 random_size=False,
+                 using_comfortable=False,
+                 using_comfortable_range=False,
+                 cotrain_place=True):
+        # TODO: use obj 6D later
         self.renders = renders
         self.init_noise = init_noise
         self.up = up
-        # self.isBox = is_box
-        # self.small = small
+        self.random_shape = random_shape
+        self.random_size = random_size
         self.using_comfortable = using_comfortable
         self.using_comfortable_range = using_comfortable_range
         self.vary_angle_range = 0.6
+        self.cotrain_place = cotrain_place
+        self.obj_mass = 3.5
 
         self._timeStep = 1. / 240.
         if self.renders:
@@ -50,12 +53,17 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
 
         self.final_states = []  # wont be cleared unless call clear function
 
-        # TODO: tune this is not principled
         self.frameSkip = 3
         self.action_scale = np.array([0.004] * 7 + [0.008] * 17)  # shadow hand is 22-5=17dof
 
-        self.tx = None
-        self.ty = None
+        if self.up:
+            self.tx = None
+            self.ty = None
+        else:
+            self.tx = 0.
+            self.ty = 0.    # constants
+        self.tz = 0         # TODO: placing floor
+        self.grasp_phase = True
 
         self.reset()    # and update init
 
@@ -123,18 +131,9 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
 
         init_palm_pos = [-0.18, 0.095, 0.11]
         cyl_init_pos = [0, 0, self.half_height+0.001]
-        # if self.small:
-        #     cyl_init_pos = [0, 0, 0.0651]
-        #     init_palm_pos = [-0.18, 0.095, 0.075]   # absorbed by imaginary session
-        # else:
-        #     cyl_init_pos = [0, 0, 0.091]
-        #     init_palm_pos = [-0.18, 0.095, 0.11]
-
         if self.up:
             self.tx = self.np_random.uniform(low=0, high=0.2)
             self.ty = self.np_random.uniform(low=-0.2, high=0.0)
-            # self.tx = 0.18
-            # self.ty = -0.18
             cyl_init_pos = np.array(cyl_init_pos) + np.array([self.tx, self.ty, 0])
             init_palm_pos = np.array(init_palm_pos) + np.array([self.tx, self.ty, 0])
         return init_palm_pos, init_palm_quat, cyl_init_pos
@@ -147,7 +146,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         if shape == p.GEOM_BOX:
             visualShapeId = p.createVisualShape(shapeType=shape, halfExtents=dim)
             collisionShapeId = p.createCollisionShape(shapeType=shape, halfExtents=dim)
-            id = p.createMultiBody(baseMass=3.5, baseInertialFramePosition=[0, 0, 0],
+            id = p.createMultiBody(baseMass=self.obj_mass, baseInertialFramePosition=[0, 0, 0],
                               baseCollisionShapeIndex=collisionShapeId,
                               baseVisualShapeIndex=visualShapeId,
                               basePosition=init_xyz)
@@ -156,7 +155,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             visualShapeId = p.createVisualShape(shape, dim[0], [1,1,1], dim[1])
             # collisionShapeId = p.createCollisionShape(shapeType=shape, radius=dim[0], length=dim[1])
             collisionShapeId = p.createCollisionShape(shape, dim[0], [1, 1, 1], dim[1])
-            id = p.createMultiBody(baseMass=3.5, baseInertialFramePosition=[0, 0, 0],
+            id = p.createMultiBody(baseMass=self.obj_mass, baseInertialFramePosition=[0, 0, 0],
                               baseCollisionShapeIndex=collisionShapeId,
                               baseVisualShapeIndex=visualShapeId,
                               basePosition=init_xyz)
@@ -170,10 +169,9 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         p.setTimeStep(self._timeStep)
         p.setGravity(0, 0, -10)
 
-        # self.small = bool(self.np_random.randint(2))
-        self.isBox = bool(self.np_random.randint(2))
-        self.half_height = self.np_random.uniform(low=0.055, high=0.09)
-        self.half_width = self.np_random.uniform(low=0.03, high=0.05)   # aka radius
+        self.isBox = bool(self.np_random.randint(2)) if self.random_shape else False
+        self.half_height = self.np_random.uniform(low=0.055, high=0.09) if self.random_size else 0.07
+        self.half_width = self.np_random.uniform(low=0.03, high=0.05) if self.random_size else 0.04  # aka radius
 
         if self.using_comfortable:
             if self.using_comfortable_range:
@@ -184,35 +182,19 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             init_palm_pos, init_palm_quat, obj_init_xyz = self.get_reset_poses_old()
 
         if self.init_noise:
-            obj_init_xyz += np.append(self.np_random.uniform(low=-0.012, high=0.012, size=2), 0)
-
+            obj_init_xyz += np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
 
         if self.isBox:
-            dim = [self.half_width*0.8, self.half_width*0.8, self.half_height]
+            dim = [self.half_width*0.8, self.half_width*0.8, self.half_height]     # TODO
             self.obj_id = self.create_prim_2_grasp(p.GEOM_BOX, dim, obj_init_xyz)
-            # if self.small:
-            #     self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/box_small.urdf'),
-            #                                  obj_init_xyz, useFixedBase=0)
-            # else:
-            #     self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/box.urdf'),
-            #                                  obj_init_xyz, useFixedBase=0)
         else:
-            dim = [self.half_width, self.half_height*2.0]   # TODO
+            dim = [self.half_width, self.half_height*2.0]
             self.obj_id = self.create_prim_2_grasp(p.GEOM_CYLINDER, dim, obj_init_xyz)
-            #
-            # if self.small:
-            #     self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder_small.urdf'),
-            #                                  obj_init_xyz, useFixedBase=0)
-            # else:
-            #     self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
-            #                                  obj_init_xyz, useFixedBase=0)
 
-        # self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'),
-        #                           [0, 0, 0], useFixedBase=1)
-        self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.25, 0.1, 0.0],
-                              useFixedBase=1)  # TODO
+        self.bottom_obj_id = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.25, 0.1, 0.0],
+                                        useFixedBase=1)
         p.changeDynamics(self.obj_id, -1, lateralFriction=1.0)
-        p.changeDynamics(self.floorId, -1, lateralFriction=1.0)
+        p.changeDynamics(self.bottom_obj_id, -1, lateralFriction=1.0)
 
         self.robot = InmoovShadowNew(init_noise=self.init_noise, timestep=self._timeStep, np_random=self.np_random,
                                      conservative_clip=False)
@@ -221,57 +203,15 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             self.robot.reset_with_certain_arm_q(arm_q)
         else:
             self.robot.reset(list(init_palm_pos), init_palm_quat)       # reset at last to test collision
-        #
-        # tmp_id = p.loadURDF(os.path.join(currentdir,
-        #                     "assets/inmoov_ros/inmoov_description/robots/inmoov_arm_v2_2_reaching_BB.urdf"),
-        #                          [-0.30, 0.348, 0.272], p.getQuaternionFromEuler([0,0,0]),
-        #                          # flags=p.URDF_USE_INERTIA_FROM_FILE,        # TODO
-        #                          flags=p.URDF_USE_SELF_COLLISION | p.URDF_USE_INERTIA_FROM_FILE
-        #                                | p.URDF_USE_SELF_COLLISION_EXCLUDE_ALL_PARENTS,
-        #                          useFixedBase=1)
-        # arm_dofs = [0, 1, 2, 3, 4, 6, 7]
-        # for ind in range(len(arm_dofs)):
-        #     p.resetJointState(tmp_id, arm_dofs[ind], arm_q[ind], 0.0)
-        # input("press enter")
+
+        self.desired_obj_pos_final = [self.tx, self.ty, self.half_height + self.tz]
 
         self.timer = 0
-        self.lastContact = None
+        self.grasp_phase = True
         self.observation = self.getExtendedObservation()
-
-        # # TODO
-        # obj_p, obj_q = p.getBasePositionAndOrientation(self.cylinderId)
-        # th_tip_p, th_tip_q = self.robot.get_link_pos_quat(self.robot.fin_tips[4])
-        # inv_p, inv_q = p.invertTransform(th_tip_p, th_tip_q)
-        # print(p.multiplyTransforms(inv_p, inv_q, obj_p, [0,0,0,1]))
-        # # ((0.031040966510772705, -0.038185857236385345, 0.08783391863107681),
-        # # (0.030863940715789795, -0.03799811005592346, 0.08814594149589539
-        #
-        # obj_p, obj_q = p.getBasePositionAndOrientation(self.cylinderId)
-        # th_tip_p, th_tip_q = self.robot.get_link_pos_quat(self.robot.fin_tips[3])
-        # inv_p, inv_q = p.invertTransform(th_tip_p, th_tip_q)
-        # print(p.multiplyTransforms(inv_p, inv_q, obj_p, [0,0,0,1]))
-        # # (0.02415177971124649, -0.05398867651820183, 0.0798909068107605)
-        # # (0.023912787437438965, -0.05410301685333252, 0.07958468049764633)
-        # input("press enter")
-
         return np.array(self.observation)
 
-    def step(self, action):
-        if self.timer > 100*self.frameSkip:
-            p.setCollisionFilterPair(self.obj_id, self.floorId, -1, -1, enableCollision=0)
-            # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
-            #     p.setCollisionFilterPair(self.floorId, self.robot.arm_id, -1, i, enableCollision=0)
-
-        for _ in range(self.frameSkip):
-            # action is in -1,1
-            if action is not None:
-                self.act = action
-                self.robot.apply_action(self.act * self.action_scale)
-            p.stepSimulation()
-            if self.renders:
-                time.sleep(self._timeStep)
-            self.timer += 1
-
+    def calc_reward_grasp_phase(self):
         reward = 3.0
 
         # rewards is height of target object
@@ -326,10 +266,177 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         clAngV = np.array(clVels[1])
         reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.2
 
-        if clPos[2] < -0.0 and self.timer > 300: # object dropped, do not penalize dropping when 0 gravity
+        if clPos[2] < -0.0 and self.timer > 300:    # object dropped
             reward += -15.
+        return reward
 
-        return self.getExtendedObservation(), reward, False, {}
+    def calc_reward_place_phase(self):
+        reward = 0.
+        clPos, clQuat = p.getBasePositionAndOrientation(self.obj_id)
+        clVels = p.getBaseVelocity(self.obj_id)
+        clLinV = np.array(clVels[0])
+        clAngV = np.array(clVels[1])
+
+        z_axis, _ = p.multiplyTransforms([0, 0, 0], clQuat, [0, 0, 1], [0, 0, 0, 1])          # R_cl * unitz[0,0,1]
+        rotMetric = np.array(z_axis).dot(np.array([0, 0, 1]))
+
+        # TODO:tmp change to xy metric, allow it to free drop
+        xyzMetric = 1 - (np.minimum(np.linalg.norm(np.array(self.desired_obj_pos_final[:2]) - np.array(clPos[:2])), 0.2) / 0.2)
+        linV_R = np.linalg.norm(clLinV)
+        angV_R = np.linalg.norm(clAngV)
+        velMetric = 1 - np.minimum(linV_R + angV_R / 2.0, 5.0) / 5.0
+
+        reward += rotMetric * 5
+        reward += xyzMetric * 5
+        reward += velMetric * 5
+
+        total_nf = 0
+        cps_floor = p.getContactPoints(self.obj_id, self.bottom_obj_id, -1, -1)
+        for cp in cps_floor:
+            total_nf += cp[9]
+        if np.abs(total_nf) > (self.obj_mass*9.):       # mg
+            # meaningful_c = True
+            reward += 5.0
+        # else:
+        #     meaningful_c = False
+        #     # reward += np.abs(total_nf) / 10.
+
+        # not used when placing on floor
+        btm_vels = p.getBaseVelocity(self.bottom_obj_id)
+        btm_linv = np.array(btm_vels[0])
+        btm_angv = np.array(btm_vels[1])
+        reward += np.maximum(-np.linalg.norm(btm_linv) - np.linalg.norm(btm_angv), -10.0) * 0.3
+
+        if rotMetric > 0.9 and xyzMetric > 0.8 and velMetric > 0.8:     # close to placing
+            # print("close enough", self.timer)
+            for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
+                cps = p.getContactPoints(self.obj_id, self.robot.arm_id, -1, i)
+                if len(cps) == 0:
+                    reward += 0.5   # the fewer links in contact, the better
+            palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
+            dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(clPos)), 0.3)
+            reward += dist * 10.0       # palm away from obj
+            for i in self.robot.fin_tips[:4]:
+                tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
+                reward += np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.25) * 2.5  # 4 finger tips
+            tip_pos = p.getLinkState(self.robot.arm_id, self.robot.fin_tips[4])[0]  # thumb tip
+            reward += np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.25) * 5.0   # away form obj
+
+        return reward
+
+    def step(self, action):
+        if self.grasp_phase:
+            if self.timer == 100 * self.frameSkip:
+                p.setCollisionFilterPair(self.obj_id, self.bottom_obj_id, -1, -1, enableCollision=0)
+                # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
+                #     p.setCollisionFilterPair(self.bottom_obj_id, self.robot.arm_id, -1, i, enableCollision=0)
+        if not self.grasp_phase:
+            if self.timer == 0:
+                p.setCollisionFilterPair(self.obj_id, self.bottom_obj_id, -1, -1, enableCollision=1)
+                # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
+                #     p.setCollisionFilterPair(self.bottom_obj_id, self.robot.arm_id, -1, i, enableCollision=1)
+
+        for _ in range(self.frameSkip):
+            # action is not in -1,1
+            if action is not None:
+                self.act = action
+                self.robot.apply_action(self.act * self.action_scale)
+            p.stepSimulation()
+            if self.renders:
+                time.sleep(self._timeStep)
+            self.timer += 1
+
+        done = False
+
+        if self.grasp_phase:
+            r = self.calc_reward_grasp_phase()
+            obs = self.getExtendedObservation()
+            if self.timer == 135 * self.frameSkip:
+                if not self.cotrain_place:
+                    done = True
+                else:
+                    obj_xyz, _ = p.getBasePositionAndOrientation(self.obj_id)
+                    cp_obj = p.getContactPoints(bodyA=self.obj_id)
+                    # print(obj_xyz)
+                    # print(len(cp_obj))
+                    # if True:
+                    # if len(cp_obj) > 0 and obj_xyz[2] > 0.0:
+                    if len(cp_obj) > 0 and obj_xyz[2] > self.half_height:      # contact with hand   # TODO: assume skinny obj
+                        # continue train placing
+                        self.grasp_phase = False
+                        self.timer = 0
+                        done = False
+                        r += 200        # TODO: next stage bonus
+                    else:
+                        done = True
+        else:
+            # placing stage
+            r = self.calc_reward_place_phase()
+            obs = self.getExtendedObservation()  # call last obs before test period
+            if self.timer == 100 * self.frameSkip:
+                self.execute_release_traj()
+
+                obj_xyz, _ = p.getBasePositionAndOrientation(self.obj_id)
+                dist = np.linalg.norm(np.array(self.desired_obj_pos_final) - np.array(obj_xyz))
+                if dist < 0.05:
+                    r += 1500
+                    # print("success")
+
+                # total_nf = 0
+                # cps_floor = p.getContactPoints(self.obj_id, self.bottom_obj_id, -1, -1)
+                # for cp in cps_floor:
+                #     total_nf += cp[9]
+                # if np.abs(total_nf) > (self.obj_mass * 6.):  # mg
+                #     meaningful_c = True
+                # else:
+                #     meaningful_c = False
+                # _, upOrnNow = p.getBasePositionAndOrientation(self.obj_id)
+                # # btmPosNow, _ = p.getBasePositionAndOrientation(self.bottom_obj_id)
+                # z_axis, _ = p.multiplyTransforms([0, 0, 0], upOrnNow, [0, 0, 1], [0, 0, 0, 1])  # R_cl * unitz[0,0,1]
+                # rotMetric = np.array(z_axis).dot(np.array([0, 0, 1]))
+                #
+                # if meaningful_c and rotMetric > 0.6:  # TODO:tmp is this good for floor placing as well?
+                #     r += 1500
+
+                done = True
+        ###
+        # if cotrain
+        # if at 400 already lost cyl (no contact between hand or cyl btm not above 0), done
+        # else, change phase var -1 (grasp) -> 1 (place), reset timer (not used outside anyways)
+
+        return obs, r, done, {}
+
+    def execute_release_traj(self):
+
+        cur_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
+        self.robot.tar_fin_q = cur_q
+        for test_t in range(120):
+            thumb_pose = list(cur_q[-5:])     # do not modify thumb
+            open_up_q = np.array([0.1, 0.1, 0.1] * 4 + thumb_pose)
+            devi = open_up_q - cur_q
+            if test_t < 100:
+                self.robot.apply_action(np.array([0.0] * 7 + list(devi / 100.)))
+            p.stepSimulation()
+            if self.renders:
+                time.sleep(self._timeStep)
+
+        self.robot.tar_arm_q = self.robot.get_q_dq(self.robot.arm_dofs)[0]
+        self.robot.tar_fin_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
+        tar_wrist_xyz = np.array(self.robot.get_link_pos_quat(self.robot.ee_id)[0])
+        obj_xyz, _ = p.getBasePositionAndOrientation(self.obj_id)   # TODO:tmp
+        dir = tar_wrist_xyz[:2] - [obj_xyz[0], obj_xyz[1]]
+        dir = dir / np.linalg.norm(dir)
+        dir = np.array(list(dir) + [0.0])
+        ik_q = None
+        for test_t in range(200):
+            if test_t < 180:
+                tar_wrist_xyz += 0.0006 * dir
+                ik_q = p.calculateInverseKinematics(self.robot.arm_id, self.robot.ee_id, list(tar_wrist_xyz))
+            self.robot.tar_arm_q = np.array(ik_q[:len(self.robot.arm_dofs)])
+            self.robot.apply_action(np.array([0.0] * len(self.action_scale)))
+            p.stepSimulation()
+            if self.renders:
+                time.sleep(self._timeStep)
 
     def getExtendedObservation(self):
         self.observation = self.robot.get_robot_observation()
@@ -361,36 +468,21 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
                 curContact.extend([-1.0])
         self.observation.extend(curContact)
 
-        # curContact = []
-        # for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
-        #     cps = p.getContactPoints(self.cylinderId, self.robot.arm_id, -1, i)
-        #     if len(cps) > 0:
-        #         curContact.extend([1.0])
-        #         # print("touch!!!")
-        #     else:
-        #         curContact.extend([-1.0])
-        # self.observation.extend(curContact)
-
         if self.up:
             xy = np.array([self.tx, self.ty])
             self.observation.extend(list(xy + self.np_random.uniform(low=-0.01, high=0.01, size=2)))
             self.observation.extend(list(xy + self.np_random.uniform(low=-0.01, high=0.01, size=2)))
             self.observation.extend(list(xy + self.np_random.uniform(low=-0.01, high=0.01, size=2)))
 
-        shape_info = 1. if self.isBox else -1.
-        self.observation.extend([shape_info])
-            # self.observation.extend(list(xy))
-            # self.observation.extend(list(xy))
-            # self.observation.extend(list(xy))
-        # if self.lastContact is not None:
-        #     self.observation.extend(self.lastContact)
-        # else:   # first step
-        #     self.observation.extend(curContact)
-        # self.lastContact = curContact.copy()
+        if self.random_shape:
+            shape_info = 1. if self.isBox else -1.
+            self.observation.extend([shape_info])
 
-        # print("obv", self.observation)
-        # print("max", np.max(np.abs(np.array(self.observation))))
-        # print("min", np.min(np.abs(np.array(self.observation))))
+        if self.cotrain_place:
+            stage = 1. if self.grasp_phase else -1.
+            self.observation.extend([stage + self.np_random.uniform(low=-0.01, high=0.01),
+                                     stage + self.np_random.uniform(low=-0.01, high=0.01),
+                                     stage])
 
         return self.observation
 

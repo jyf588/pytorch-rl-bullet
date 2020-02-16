@@ -152,6 +152,11 @@ class InmoovShadowHandGraspEnvV3(gym.Env):
         return np.array(self.observation)
 
     def step(self, action):
+        if self.timer > 100*self.frameSkip:
+            p.setCollisionFilterPair(self.cylinderId, self.floorId, -1, -1, enableCollision=0)
+            # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
+            #     p.setCollisionFilterPair(self.floorId, self.robot.arm_id, -1, i, enableCollision=0)
+
         for _ in range(self.frameSkip):
             # action is in -1,1
             if action is not None:
@@ -218,11 +223,6 @@ class InmoovShadowHandGraspEnvV3(gym.Env):
 
         if clPos[2] < -0.0 and self.timer > 300: # object dropped, do not penalize dropping when 0 gravity
             reward += -15.
-
-        if self.timer > 300:
-            p.setCollisionFilterPair(self.cylinderId, self.floorId, -1, -1, enableCollision=0)
-            # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
-            #     p.setCollisionFilterPair(self.floorId, self.robot.arm_id, -1, i, enableCollision=0)
 
         return self.getExtendedObservation(), reward, False, {}
 

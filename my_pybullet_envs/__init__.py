@@ -4,8 +4,8 @@ from .allegro_hand_env import AllegroHandPickEnv
 from .allegro_hand_nofloor_env import AllegroHandGraspEnv
 from .inmoov_hand_nofloor_env import InmoovHandGraspEnv
 from .shadow_hand_grasp_env import ShadowHandGraspEnv
-from .inmoov_shadow_hand_grasp_env import InmoovShadowHandGraspEnv
-from .inmoov_shadow_hand_grasp_env_tmp import InmoovShadowHandGraspEnvTmp
+# from .inmoov_shadow_hand_grasp_env import InmoovShadowHandGraspEnv
+# from .inmoov_shadow_hand_grasp_env_tmp import InmoovShadowHandGraspEnvTmp
 from .shadow_hand_place_env import ShadowHandPlaceEnv
 from .shadow_hand_grasp_env_velc import ShadowHandGraspEnvVelC
 # from .shadow_hand_grasp_env_pc_simple import ShadowHandGraspEnvPC
@@ -17,6 +17,7 @@ from .inmoov_shadow_place_env_v3 import InmoovShadowHandPlaceEnvV3
 from .inmoov_shadow_grasp_env_v3 import InmoovShadowHandGraspEnvV3
 from .inmoov_shadow_place_env_v4 import InmoovShadowHandPlaceEnvV4
 from .inmoov_shadow_grasp_env_v4 import InmoovShadowHandGraspEnvV4
+from .inmoov_shadow_grasp_place_env_v1 import InmoovShadowHandGraspPlaceEnvV1
 
 def register(id, *args, **kvargs):
   if id in registry.env_specs:
@@ -106,18 +107,6 @@ register(
 )
 
 register(
-    id='InmoovShadowHandGraspBulletEnv-v0',
-    entry_point='my_pybullet_envs:InmoovShadowHandGraspEnv',
-    max_episode_steps=400,
-)
-
-register(
-    id='InmoovShadowHandGraspBulletEnvTmp-v0',
-    entry_point='my_pybullet_envs:InmoovShadowHandGraspEnvTmp',
-    max_episode_steps=800,
-)
-
-register(
     id='ShadowHandDemoBulletEnv-v1',
     entry_point='my_pybullet_envs:InmoovShadowHandDemoEnvNew',
     max_episode_steps=8000,
@@ -128,6 +117,12 @@ register(
 #     entry_point='my_pybullet_envs:InmoovShadowHandDemoFixedGraspEnv',
 #     max_episode_steps=400,
 # )
+
+register(
+    id='InmoovHandGraspPlaceBulletEnv-v1',
+    entry_point='my_pybullet_envs:InmoovShadowHandGraspPlaceEnvV1',
+    max_episode_steps=300,      # large enough, controlled by done
+)
 
 def getList():
   btenvs = ['- ' + spec.id for spec in gym.envs.registry.all() if spec.id.find('Bullet') >= 0]
