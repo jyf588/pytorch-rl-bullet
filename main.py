@@ -55,7 +55,7 @@ def main():
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
-        base_kwargs={'recurrent': args.recurrent_policy})
+        base_kwargs={'recurrent': args.recurrent_policy, 'hidden_size': args.hidden_size})
     actor_critic.to(device)
 
     dummy = gym.make(args.env_name, renders=False, **extra_dict)

@@ -484,6 +484,10 @@ class InmoovShadowHandGraspPlaceEnvV1(gym.Env):
                                      stage + self.np_random.uniform(low=-0.01, high=0.01),
                                      stage])
 
+        self.observation.extend([self.timer/300. + self.np_random.uniform(low=-0.01, high=0.01),
+                                 self.timer/300. + self.np_random.uniform(low=-0.01, high=0.01),
+                                 self.timer/300.])
+
         return self.observation
 
     def append_final_state(self):

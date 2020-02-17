@@ -98,6 +98,10 @@ def get_args():
         default=0.2,
         help='ppo clip parameter (default: 0.2)')
     parser.add_argument(
+        '--hidden_size',
+        type=int,
+        default=64)
+    parser.add_argument(
         '--log-interval',
         type=int,
         default=10,
