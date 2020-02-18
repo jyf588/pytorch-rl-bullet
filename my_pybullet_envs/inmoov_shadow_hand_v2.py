@@ -257,7 +257,12 @@ class InmoovShadowNew:
                         jac_r[0][:n_arm_dofs], jac_r[1][:n_arm_dofs], jac_r[2][:n_arm_dofs]])
         return jac
 
-    def get_robot_observation(self, withVel=False):
+    def get_norm_diff_tar(self):
+        diff_fin = np.array(self.tar_fin_q) - self.get_q_dq(self.fin_actdofs)[0]
+        diff_arm = np.array(self.tar_arm_q) - self.get_q_dq(self.arm_dofs)[0]
+        return np.linalg.norm(np.concatenate((diff_fin, diff_arm)))
+
+    def get_robot_observation(self, withVel=False, diff_tar=False):
         obs = []
 
         links = [self.ee_id] + self.fin_tips
@@ -277,9 +282,12 @@ class InmoovShadowNew:
         obs.extend(list(self.get_q_dq(self.fin_actdofs)[0]))    # no finger vel
 
         # tar pos
-        obs.extend(list(self.tar_arm_q))
-        # print("tar arm q", self.tar_arm_q)
-        obs.extend(list(self.tar_fin_q))
+        if diff_tar:
+            obs.extend(list(np.array(self.tar_arm_q) - self.get_q_dq(self.arm_dofs)[0]))
+            obs.extend(list(np.array(self.tar_fin_q) - self.get_q_dq(self.fin_actdofs)[0]))
+        else:
+            obs.extend(list(self.tar_arm_q))
+            obs.extend(list(self.tar_fin_q))
 
         return obs
 

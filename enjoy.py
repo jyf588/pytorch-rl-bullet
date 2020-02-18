@@ -98,6 +98,7 @@ env = make_vec_envs(
 # print(render_func)
 
 # We need to use the same statistics for normalization as used in training
+# args.env_name = 'InmoovHandPlaceBulletEnv-v4'
 if args.iter >= 0:
     path = os.path.join(args.load_dir, args.env_name + "_" + str(args.iter) + ".pt")
 else:

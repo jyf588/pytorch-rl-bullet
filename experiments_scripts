@@ -930,21 +930,33 @@ python main.py --env-name "InmoovHandGraspPlaceBulletEnv-v1" --algo ppo --use-ga
 
 # warm start to use more accurate phys?
 
-2/17 17:41
+2/16 17:41
 # try baseline tf, # add phase timing info
 python -m run_my --alg=ppo2 --env=InmoovHandGraspPlaceBulletEnv-v1 --network=mlp --num_timesteps=2e7 --seed=10000 --num_env=4 --log_path=./log --save_path=./data
 python -m run_my --alg=ppo2 --env=InmoovHandGraspPlaceBulletEnv-v1 --network=mlp --num_timesteps=2e7 --seed=10001 --num_env=4 --log_path=./log --save_path=./data
 # what are the default params? in learn()?
 
-2/17 20:26
+2/16 20:26
 # change to phys iter 50
 python -m run_my --alg=ppo2 --env=InmoovHandGraspPlaceBulletEnv-v1 --network=mlp --num_timesteps=3e6 --seed=10001 --num_env=4 --log_path=./log --save_path=./data/grasp_place_10001
 python -m run_my --alg=ppo2 --env=InmoovHandGraspPlaceBulletEnv-v1 --network=mlp --num_timesteps=3e6 --seed=10000 --num_env=4 --log_path=./log --save_path=./data/grasp_place_10000
 
-2/17 21:40
+2/16 21:40
 # no phys change
 # try spin up
 python script_bullet.py --env_name InmoovHandGraspPlaceBulletEnv-v1
+
+
+2/17 18:00
+# rot_metric * 20
+# tar pos diff obs
+# scale up obj obs 3.0
+# no UP
+# p.setPhysicsEngineParameter(numSolverIterations=50) should not be too different
+python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --log-interval 1 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_box_l_1_place_0217_0  --seed 8003
+python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --log-interval 1 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_box_l_1_place_0217_1  --seed 8004
+
+
 
 # later, delete palm away reward?
 
