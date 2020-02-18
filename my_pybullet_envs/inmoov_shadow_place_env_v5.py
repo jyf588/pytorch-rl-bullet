@@ -239,8 +239,6 @@ class InmoovShadowHandPlaceEnvV5(gym.Env):
     def __del__(self):
         p.disconnect()
 
-
-
     def step(self, action):
         for _ in range(self.frameSkip):
             # action is not in -1,1
@@ -252,6 +250,10 @@ class InmoovShadowHandPlaceEnvV5(gym.Env):
             if self.renders:
                 time.sleep(self._timeStep * 0.5)
             self.timer += 1
+
+        # if upright, reward
+        # if no contact, reward
+        # if use small force, reward
 
         reward = 0.
         clPos, clQuat = p.getBasePositionAndOrientation(self.obj_id)
@@ -282,7 +284,7 @@ class InmoovShadowHandPlaceEnvV5(gym.Env):
         cps_floor = p.getContactPoints(self.obj_id, self.bottom_obj_id, -1, -1)
         for cp in cps_floor:
             total_nf += cp[9]
-        if np.abs(total_nf) > (self.obj_mass*9.):       # mg        # TODO:tmp contact force hack
+        if np.abs(total_nf) > (self.obj_mass*7.):       # mg        # TODO:tmp contact force hack
             meaningful_c = True
             reward += 5.0
         else:
@@ -295,10 +297,6 @@ class InmoovShadowHandPlaceEnvV5(gym.Env):
         btm_angv = np.array(btm_vels[1])
         reward += np.maximum(-np.linalg.norm(btm_linv) - np.linalg.norm(btm_angv), -10.0) * 0.3
         # print(np.maximum(-np.linalg.norm(btm_linv) - np.linalg.norm(btm_angv), -10.0) * 0.3)
-
-        # if upright, reward
-        # if no contact, reward
-        # if use small force, reward
 
         diff_norm = self.robot.get_norm_diff_tar()
         reward += 15. / (diff_norm + 1.)
@@ -324,83 +322,9 @@ class InmoovShadowHandPlaceEnvV5(gym.Env):
 
         # print("r_total", reward)
 
-        #     # # print("close enough", self.timer)
-        #     # for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
-        #     #     cps = p.getContactPoints(self.obj_id, self.robot.arm_id, -1, i)
-        #     #     if len(cps) == 0:
-        #     #         reward += 0.5   # the fewer links in contact, the better
-        #     # palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
-        #     # dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(clPos)), 0.3)
-        #     # reward += dist * 10.0       # palm away from obj
-        #     # for i in self.robot.fin_tips[:4]:
-        #     #     tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
-        #     #     reward += np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.25) * 2.5  # 4 finger tips
-        #     # tip_pos = p.getLinkState(self.robot.arm_id, self.robot.fin_tips[4])[0]  # thumb tip
-        #     # reward += np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(clPos)), 0.25) * 5.0   # away form obj
-        #
-        # # succeed = False
-        obs = self.getExtendedObservation()     # call last obs before test period
-        # if self.timer == 300:
-        #     # this is slightly different from mountain car's sparse reward,
-        #     # where you are only rewarded when reaching a certain state
-        #     # this is saying you must be at certain state at certain time (after test)
-        #     # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
-        #     #     p.setCollisionFilterPair(self.obj_id, self.robot.arm_id, -1, i, enableCollision=0)
-        #     #     p.setCollisionFilterPair(self.bottom_obj_id, self.robot.arm_id, -1, i, enableCollision=0)
-        #     self.execute_release_traj()
-        #
-        #     total_nf = 0
-        #     cps_floor = p.getContactPoints(self.obj_id, self.bottom_obj_id, -1, -1)
-        #     for cp in cps_floor:
-        #         total_nf += cp[9]
-        #     if np.abs(total_nf) > (self.obj_mass * 6.):  # mg
-        #         meaningful_c = True
-        #     else:
-        #         meaningful_c = False
-        #     _, upOrnNow = p.getBasePositionAndOrientation(self.obj_id)
-        #     # btmPosNow, _ = p.getBasePositionAndOrientation(self.bottom_obj_id)
-        #     z_axis, _ = p.multiplyTransforms([0, 0, 0], upOrnNow, [0, 0, 1], [0, 0, 0, 1])  # R_cl * unitz[0,0,1]
-        #     rotMetric = np.array(z_axis).dot(np.array([0, 0, 1]))
-        #     # dist = np.linalg.norm(np.array(btmPosNow) + [0., 0., self.tz/2+self.half_obj_height] - upPosNow)  # TODO
-        #     # dist = np.linalg.norm(np.array(self.desired_obj_pos_final) - np.array(upPosNow))
-        #     # reward += 3000 * np.exp(-(dist/0.03)**2)
-        #
-        #     if meaningful_c and rotMetric > 0.6:        # TODO:tmp is this good for floor placing as well?
-        #         # succeed = True
-        #         reward += 1500
+        obs = self.getExtendedObservation()
 
         return obs, reward, False, {}
-
-    def execute_release_traj(self):
-
-        cur_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
-        self.robot.tar_fin_q = cur_q
-        for test_t in range(120):
-            thumb_pose = list(cur_q[-5:])     # do not modify thumb
-            open_up_q = np.array([0.1, 0.1, 0.1] * 4 + thumb_pose)
-            devi = open_up_q - cur_q
-            if test_t < 100:
-                self.robot.apply_action(np.array([0.0] * 7 + list(devi / 100.)))
-            p.stepSimulation()
-            if self.renders:
-                time.sleep(self._timeStep)
-
-        self.robot.tar_arm_q = self.robot.get_q_dq(self.robot.arm_dofs)[0]
-        self.robot.tar_fin_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
-        tar_wrist_xyz = np.array(self.robot.get_link_pos_quat(self.robot.ee_id)[0])
-        dir = tar_wrist_xyz[:2] - [self.tx, self.ty]
-        dir = dir / np.linalg.norm(dir)
-        dir = np.array(list(dir) + [0.0])
-        ik_q = None
-        for test_t in range(200):
-            if test_t < 180:
-                tar_wrist_xyz += 0.0006 * dir
-                ik_q = p.calculateInverseKinematics(self.robot.arm_id, self.robot.ee_id, list(tar_wrist_xyz))
-            self.robot.tar_arm_q = np.array(ik_q[:len(self.robot.arm_dofs)])
-            self.robot.apply_action(np.array([0.0] * len(self.action_scale)))
-            p.stepSimulation()
-            if self.renders:
-                time.sleep(self._timeStep)
 
     def obj6DtoObs(self, o_pos, o_orn):
         objObs = []
@@ -413,7 +337,10 @@ class InmoovShadowHandPlaceEnvV5(gym.Env):
 
     def obj6DtoObs_UpVec(self, o_pos, o_orn):
         objObs = []
-        o_pos = np.array(o_pos) * 3.0       # TODO:tmp, scale up
+        o_pos = np.array(o_pos)
+        if self.up:                         # TODO:tmp
+            o_pos -= [self.tx, self.ty, 0]
+        o_pos = o_pos * 3.0       # TODO:tmp, scale up
         o_rotmat = np.array(p.getMatrixFromQuaternion(o_orn))
         o_upv = [o_rotmat[2], o_rotmat[5], o_rotmat[8]]
         objObs.extend(list(self.perturb(o_pos, r=0.005)))

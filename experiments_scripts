@@ -956,6 +956,17 @@ python script_bullet.py --env_name InmoovHandGraspPlaceBulletEnv-v1
 python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --log-interval 1 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_box_l_1_place_0217_0  --seed 8003
 python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --log-interval 1 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_box_l_1_place_0217_1  --seed 8004
 
+2/17 19:48
+# try small cyl
+python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --log-interval 1 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_cyl_s_1_place_0217_2  --seed 8005 --is_box 0 --is_small 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --log-interval 1 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_cyl_s_1_place_0217_3  --seed 8006 --is_box 0 --is_small 1
+# test python enjoy.py --env-name InmoovHandPlaceBulletEnv-v5 --load-dir trained_models_0120_cyl_s_1_place_0217_3/ppo/ --non-det 0 --seed=189 --is_box 0 --is_small 1 --renders 0 --exclude_hard 0
+
+2/17 21:19
+# try up comfortable
+python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --log-interval 1 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_cyl_s_1_place_0217_4  --seed 8005 --is_box 0 --is_small 1 --up 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --log-interval 1 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_cyl_s_1_place_0217_5  --seed 8006 --is_box 0 --is_small 1 --up 1
+
 
 
 # later, delete palm away reward?
