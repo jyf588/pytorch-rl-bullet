@@ -63,14 +63,16 @@ def main():
     try:
         os.makedirs(save_path)
     except FileExistsError:
-        input("warning: path existed")
+        print("warning: path existed")
+        # input("warning: path existed")
     except OSError:
         exit()
     pathname = os.path.join(save_path, "source_test.py")
     text_file = open(pathname, "w+")
     text_file.write(dummy.getSourceCode())
     text_file.close()
-    input("source file stored press enter")
+    print("source file stored")
+    # input("source file stored press enter")
     dummy.close()
 
     if args.algo == 'a2c':

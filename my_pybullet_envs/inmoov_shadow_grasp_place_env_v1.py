@@ -27,7 +27,11 @@ class InmoovShadowHandGraspPlaceEnvV1(gym.Env):
                  random_size=False,
                  using_comfortable=False,
                  using_comfortable_range=False,
-                 cotrain_place=True):
+                 cotrain_place=True,
+                 place_floor=False,
+                 use_gt_6d=True,
+                 gt_only_init=False,
+                 ):
         # TODO: use obj 6D later
         self.renders = renders
         self.init_noise = init_noise
@@ -39,6 +43,9 @@ class InmoovShadowHandGraspPlaceEnvV1(gym.Env):
         self.vary_angle_range = 0.6
         self.cotrain_place = cotrain_place
         self.obj_mass = 3.5
+        self.place_floor = place_floor
+        self.use_gt_6d = use_gt_6d
+        self.gt_only_init = gt_only_init
 
         self._timeStep = 1. / 240.
         if self.renders:
@@ -62,7 +69,8 @@ class InmoovShadowHandGraspPlaceEnvV1(gym.Env):
         else:
             self.tx = 0.
             self.ty = 0.    # constants
-        self.tz = 0         # TODO: placing floor
+        self.tz = 0         # TODO: variable z
+        self.btm_obj_height = 0.18  # TODO: hard coded here
         self.grasp_phase = True
 
         self.reset()    # and update init
@@ -190,11 +198,23 @@ class InmoovShadowHandGraspPlaceEnvV1(gym.Env):
         else:
             dim = [self.half_width, self.half_height*2.0]
             self.obj_id = self.create_prim_2_grasp(p.GEOM_CYLINDER, dim, obj_init_xyz)
-
-        self.bottom_obj_id = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.25, 0.1, 0.0],
-                                        useFixedBase=1)
         p.changeDynamics(self.obj_id, -1, lateralFriction=1.0)
-        p.changeDynamics(self.bottom_obj_id, -1, lateralFriction=1.0)
+
+        if self.place_floor:
+            self.bottom_obj_id =p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.25, 0.2, 0.0],
+                                             useFixedBase=1)
+            p.changeDynamics(self.bottom_obj_id, -1, lateralFriction=1.0)
+        else:
+            btm_xyz = np.array([self.tx, self.ty, -self.btm_obj_height/2.0])
+            if self.init_noise:
+                btm_xyz += np.append(self.np_random.uniform(low=-0.01, high=0.01, size=2), 0)
+            self.bottom_obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
+                                            btm_xyz, useFixedBase=0)
+            self.floor_id = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'),
+                                       [0.25, 0.2, -self.btm_obj_height],
+                                       useFixedBase=1)
+            p.changeDynamics(self.bottom_obj_id, -1, lateralFriction=1.0)
+            p.changeDynamics(self.floor_id, -1, lateralFriction=1.0)
 
         self.robot = InmoovShadowNew(init_noise=self.init_noise, timestep=self._timeStep, np_random=self.np_random,
                                      conservative_clip=False)
@@ -208,6 +228,9 @@ class InmoovShadowHandGraspPlaceEnvV1(gym.Env):
 
         self.timer = 0
         self.grasp_phase = True
+        # init obj pose
+        self.t_pos, self.t_orn = p.getBasePositionAndOrientation(self.obj_id)
+        self.b_pos, self.b_orn = p.getBasePositionAndOrientation(self.bottom_obj_id)
         self.observation = self.getExtendedObservation()
         return np.array(self.observation)
 
@@ -219,7 +242,7 @@ class InmoovShadowHandGraspPlaceEnvV1(gym.Env):
         palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
         dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(clPos)), 0.5)
         reward += -dist * 2.0
-        reward += -np.minimum(np.linalg.norm(np.array([self.tx, self.ty, 0.1]) - np.array(clPos)), 0.4) * 4.0
+        reward += -np.minimum(np.linalg.norm(np.array([self.tx, self.ty]) - np.array(clPos)[:2]), 0.4) * 4.0
 
         for i in self.robot.fin_tips[:4]:
             tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
@@ -270,7 +293,7 @@ class InmoovShadowHandGraspPlaceEnvV1(gym.Env):
             reward += -15.
         return reward
 
-    def calc_reward_place_phase(self):
+    def calc_reward_place_phase_old(self):
         reward = 0.
         clPos, clQuat = p.getBasePositionAndOrientation(self.obj_id)
         clVels = p.getBaseVelocity(self.obj_id)
@@ -324,6 +347,79 @@ class InmoovShadowHandGraspPlaceEnvV1(gym.Env):
 
         return reward
 
+    def calc_reward_place_phase(self):
+        # if upright, reward
+        # if no contact, reward
+        # if use small force, reward
+
+        reward = 0.
+        clPos, clQuat = p.getBasePositionAndOrientation(self.obj_id)
+        clVels = p.getBaseVelocity(self.obj_id)
+        clLinV = np.array(clVels[0])
+        clAngV = np.array(clVels[1])
+
+        # we only care about the upright(z) direction
+        z_axis, _ = p.multiplyTransforms([0, 0, 0], clQuat, [0, 0, 1], [0, 0, 0, 1])          # R_cl * unitz[0,0,1]
+        rotMetric = np.array(z_axis).dot(np.array([0, 0, 1]))
+
+        # enlarge 0.15 -> 0.45
+        # xyzMetric = 1 - (np.minimum(np.linalg.norm(np.array(self.desired_obj_pos_final) - np.array(clPos)), 0.45) / 0.15)
+        # TODO:tmp change to xy metric, allow it to free drop
+        xyzMetric = 1 - (np.minimum(np.linalg.norm(np.array(self.desired_obj_pos_final[:2]) - np.array(clPos[:2])), 0.45) / 0.15)
+        linV_R = np.linalg.norm(clLinV)
+        angV_R = np.linalg.norm(clAngV)
+        velMetric = 1 - np.minimum(linV_R + angV_R / 2.0, 5.0) / 5.0
+
+        reward += np.maximum(rotMetric * 20 - 15, 0.)
+        # print(np.maximum(rotMetric * 20 - 15, 0.))
+        reward += xyzMetric * 5
+        # print(xyzMetric * 5)
+        reward += velMetric * 5
+        # print(velMetric * 5)
+
+        total_nf = 0
+        cps_floor = p.getContactPoints(self.obj_id, self.bottom_obj_id, -1, -1)
+        for cp in cps_floor:
+            total_nf += cp[9]
+        if np.abs(total_nf) > (self.obj_mass*7.):       # mg        # TODO:tmp contact force hack
+            meaningful_c = True
+            reward += 5.0
+        else:
+            meaningful_c = False
+        #     # reward += np.abs(total_nf) / 10.
+
+        # not used when placing on floor
+        btm_vels = p.getBaseVelocity(self.bottom_obj_id)
+        btm_linv = np.array(btm_vels[0])
+        btm_angv = np.array(btm_vels[1])
+        reward += np.maximum(-np.linalg.norm(btm_linv) - np.linalg.norm(btm_angv), -10.0) * 0.3
+        # print(np.maximum(-np.linalg.norm(btm_linv) - np.linalg.norm(btm_angv), -10.0) * 0.3)
+
+        diff_norm = self.robot.get_norm_diff_tar()
+        reward += 15. / (diff_norm + 1.)
+        # print(15. / (diff_norm + 1.))
+
+        anyHandContact = False
+        hand_r = 0
+        for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
+            cps = p.getContactPoints(self.obj_id, self.robot.arm_id, -1, i)
+            if len(cps) == 0:
+                hand_r += 1.0   # the fewer links in contact, the better
+            else:
+                anyHandContact = True
+        # print(hand_r)
+        reward += (hand_r - 15)
+
+        if rotMetric > 0.9 and xyzMetric > 0.8 and velMetric > 0.8 and meaningful_c:     # close to placing
+            reward += 5.0
+            # print("upright")
+            if not anyHandContact:
+                reward += 20
+                # print("no hand con")
+
+        # print("r_total", reward)
+        return reward
+
     def step(self, action):
         if self.grasp_phase:
             if self.timer == 100 * self.frameSkip:
@@ -351,7 +447,7 @@ class InmoovShadowHandGraspPlaceEnvV1(gym.Env):
         if self.grasp_phase:
             r = self.calc_reward_grasp_phase()
             obs = self.getExtendedObservation()
-            if self.timer == 135 * self.frameSkip:
+            if self.timer == 140 * self.frameSkip:
                 if not self.cotrain_place:
                     done = True
                 else:
@@ -366,7 +462,7 @@ class InmoovShadowHandGraspPlaceEnvV1(gym.Env):
                         self.grasp_phase = False
                         self.timer = 0
                         done = False
-                        r += 200        # TODO: next stage bonus
+                        r += 100        # TODO: next stage bonus
                     else:
                         done = True
         else:
@@ -374,85 +470,78 @@ class InmoovShadowHandGraspPlaceEnvV1(gym.Env):
             r = self.calc_reward_place_phase()
             obs = self.getExtendedObservation()  # call last obs before test period
             if self.timer == 100 * self.frameSkip:
-                self.execute_release_traj()
-
-                obj_xyz, _ = p.getBasePositionAndOrientation(self.obj_id)
-                dist = np.linalg.norm(np.array(self.desired_obj_pos_final) - np.array(obj_xyz))
-                if dist < 0.05:
-                    r += 1500
-                    # print("success")
-
-                # total_nf = 0
-                # cps_floor = p.getContactPoints(self.obj_id, self.bottom_obj_id, -1, -1)
-                # for cp in cps_floor:
-                #     total_nf += cp[9]
-                # if np.abs(total_nf) > (self.obj_mass * 6.):  # mg
-                #     meaningful_c = True
-                # else:
-                #     meaningful_c = False
-                # _, upOrnNow = p.getBasePositionAndOrientation(self.obj_id)
-                # # btmPosNow, _ = p.getBasePositionAndOrientation(self.bottom_obj_id)
-                # z_axis, _ = p.multiplyTransforms([0, 0, 0], upOrnNow, [0, 0, 1], [0, 0, 0, 1])  # R_cl * unitz[0,0,1]
-                # rotMetric = np.array(z_axis).dot(np.array([0, 0, 1]))
-                #
-                # if meaningful_c and rotMetric > 0.6:  # TODO:tmp is this good for floor placing as well?
-                #     r += 1500
-
-                done = True
-        ###
-        # if cotrain
-        # if at 400 already lost cyl (no contact between hand or cyl btm not above 0), done
-        # else, change phase var -1 (grasp) -> 1 (place), reset timer (not used outside anyways)
+                done = True     # TODO: or just set tl=240
 
         return obs, r, done, {}
 
-    def execute_release_traj(self):
+    # def execute_release_traj(self):
+    #
+    #     cur_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
+    #     self.robot.tar_fin_q = cur_q
+    #     for test_t in range(120):
+    #         thumb_pose = list(cur_q[-5:])     # do not modify thumb
+    #         open_up_q = np.array([0.1, 0.1, 0.1] * 4 + thumb_pose)
+    #         devi = open_up_q - cur_q
+    #         if test_t < 100:
+    #             self.robot.apply_action(np.array([0.0] * 7 + list(devi / 100.)))
+    #         p.stepSimulation()
+    #         if self.renders:
+    #             time.sleep(self._timeStep)
+    #
+    #     self.robot.tar_arm_q = self.robot.get_q_dq(self.robot.arm_dofs)[0]
+    #     self.robot.tar_fin_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
+    #     tar_wrist_xyz = np.array(self.robot.get_link_pos_quat(self.robot.ee_id)[0])
+    #     obj_xyz, _ = p.getBasePositionAndOrientation(self.obj_id)   # TODO:tmp
+    #     dir = tar_wrist_xyz[:2] - [obj_xyz[0], obj_xyz[1]]
+    #     dir = dir / np.linalg.norm(dir)
+    #     dir = np.array(list(dir) + [0.0])
+    #     ik_q = None
+    #     for test_t in range(200):
+    #         if test_t < 180:
+    #             tar_wrist_xyz += 0.0006 * dir
+    #             ik_q = p.calculateInverseKinematics(self.robot.arm_id, self.robot.ee_id, list(tar_wrist_xyz))
+    #         self.robot.tar_arm_q = np.array(ik_q[:len(self.robot.arm_dofs)])
+    #         self.robot.apply_action(np.array([0.0] * len(self.action_scale)))
+    #         p.stepSimulation()
+    #         if self.renders:
+    #             time.sleep(self._timeStep)
 
-        cur_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
-        self.robot.tar_fin_q = cur_q
-        for test_t in range(120):
-            thumb_pose = list(cur_q[-5:])     # do not modify thumb
-            open_up_q = np.array([0.1, 0.1, 0.1] * 4 + thumb_pose)
-            devi = open_up_q - cur_q
-            if test_t < 100:
-                self.robot.apply_action(np.array([0.0] * 7 + list(devi / 100.)))
-            p.stepSimulation()
-            if self.renders:
-                time.sleep(self._timeStep)
+    def perturb(self, arr, r=0.02):
+        r = np.abs(r)
+        return np.copy(np.array(arr) + self.np_random.uniform(low=-r, high=r, size=len(arr)))
 
-        self.robot.tar_arm_q = self.robot.get_q_dq(self.robot.arm_dofs)[0]
-        self.robot.tar_fin_q = self.robot.get_q_dq(self.robot.fin_actdofs)[0]
-        tar_wrist_xyz = np.array(self.robot.get_link_pos_quat(self.robot.ee_id)[0])
-        obj_xyz, _ = p.getBasePositionAndOrientation(self.obj_id)   # TODO:tmp
-        dir = tar_wrist_xyz[:2] - [obj_xyz[0], obj_xyz[1]]
-        dir = dir / np.linalg.norm(dir)
-        dir = np.array(list(dir) + [0.0])
-        ik_q = None
-        for test_t in range(200):
-            if test_t < 180:
-                tar_wrist_xyz += 0.0006 * dir
-                ik_q = p.calculateInverseKinematics(self.robot.arm_id, self.robot.ee_id, list(tar_wrist_xyz))
-            self.robot.tar_arm_q = np.array(ik_q[:len(self.robot.arm_dofs)])
-            self.robot.apply_action(np.array([0.0] * len(self.action_scale)))
-            p.stepSimulation()
-            if self.renders:
-                time.sleep(self._timeStep)
+    def obj6DtoObs_UpVec(self, o_pos, o_orn):
+        objObs = []
+        o_pos = np.array(o_pos)
+        if self.up:                         # TODO:tmp
+            o_pos -= [self.tx, self.ty, 0]
+        o_pos = o_pos * 3.0       # TODO:tmp, scale up
+        o_rotmat = np.array(p.getMatrixFromQuaternion(o_orn))
+        o_upv = [o_rotmat[2], o_rotmat[5], o_rotmat[8]]
+        objObs.extend(list(self.perturb(o_pos, r=0.005)))
+        objObs.extend(list(self.perturb(o_pos, r=0.005)))
+        objObs.extend(list(self.perturb(o_upv, r=0.005)))
+        objObs.extend(list(self.perturb(o_upv, r=0.005)))
+        return objObs
 
     def getExtendedObservation(self):
         self.observation = self.robot.get_robot_observation()
 
-        # clPos, clOrn = p.getBasePositionAndOrientation(self.cylinderId)
-        # clPos = np.array(clPos)
-        # clOrnMat = p.getMatrixFromQuaternion(clOrn)
-        # clOrnMat = np.array(clOrnMat)
-        #
-        # self.observation.extend(list(clPos))
-        # # self.observation.extend(list(clOrnMat))
-        # self.observation.extend(list(clOrn))
-        #
-        # clVels = p.getBaseVelocity(self.cylinderId)
-        # self.observation.extend(clVels[0])
-        # self.observation.extend(clVels[1])
+        if self.use_gt_6d:
+            if self.obj_id is None:
+                self.observation.extend(self.obj6DtoObs_UpVec([0,0,0], [0,0,0,1]))  # TODO
+            else:
+                if self.gt_only_init:
+                    clPos, clOrn = self.t_pos, self.t_orn
+                else:
+                    clPos, clOrn = p.getBasePositionAndOrientation(self.obj_id)
+                self.observation.extend(self.obj6DtoObs_UpVec(clPos, clOrn))    # TODO
+            if not self.place_floor and not self.gt_only_init:  # if stacking & real-time, include bottom 6D
+                if self.bottom_obj_id is None:
+                    self.observation.extend(self.obj6DtoObs_UpVec([0,0,0], [0,0,0,1]))    # TODO
+                else:
+                    clPos, clOrn = p.getBasePositionAndOrientation(self.bottom_obj_id)
+                    self.observation.extend(self.obj6DtoObs_UpVec(clPos, clOrn))  # TODO
 
         curContact = []
         for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
@@ -478,15 +567,15 @@ class InmoovShadowHandGraspPlaceEnvV1(gym.Env):
             shape_info = 1. if self.isBox else -1.
             self.observation.extend([shape_info])
 
+        stage = 1. if self.grasp_phase else -1.
         if self.cotrain_place:
-            stage = 1. if self.grasp_phase else -1.
             self.observation.extend([stage + self.np_random.uniform(low=-0.01, high=0.01),
                                      stage + self.np_random.uniform(low=-0.01, high=0.01),
                                      stage])
 
-        self.observation.extend([self.timer/300. + self.np_random.uniform(low=-0.01, high=0.01),
-                                 self.timer/300. + self.np_random.uniform(low=-0.01, high=0.01),
-                                 self.timer/300.])
+        self.observation.extend([self.timer/300.*stage + self.np_random.uniform(low=-0.01, high=0.01),
+                                 self.timer/300.*stage + self.np_random.uniform(low=-0.01, high=0.01),
+                                 self.timer/300.*stage])
 
         return self.observation
 

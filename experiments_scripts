@@ -963,9 +963,51 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --l
 # test python enjoy.py --env-name InmoovHandPlaceBulletEnv-v5 --load-dir trained_models_0120_cyl_s_1_place_0217_3/ppo/ --non-det 0 --seed=189 --is_box 0 --is_small 1 --renders 0 --exclude_hard 0
 
 2/17 21:19
-# try up comfortable
+# try up
 python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --log-interval 1 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_cyl_s_1_place_0217_4  --seed 8005 --is_box 0 --is_small 1 --up 1
 python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --log-interval 1 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_cyl_s_1_place_0217_5  --seed 8006 --is_box 0 --is_small 1 --up 1
+# test: python enjoy.py --env-name InmoovHandPlaceBulletEnv-v5 --load-dir trained_models_0120_cyl_s_1_place_0217_4/ppo/ --non-det 0 --seed=189 --is_box 0 --is_small 1 --renders 1 --exclude_hard 0 --up 1
+
+2/17 23:38
+# scripts/train_0217_script_0.sh
+# scripts/train_0217_script_0.sh
+# up for large box
+python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 5000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_box_l_1_place_0217_2  --seed 8007 --is_box 1 --is_small 0 --up 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 5000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_box_l_1_place_0217_3  --seed 8008 --is_box 1 --is_small 0 --up 1
+
+# up for small box
+python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 5000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_box_s_1_place_0217_0  --seed 8009 --is_box 1 --is_small 1 --up 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 5000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_box_s_1_place_0217_1  --seed 8010 --is_box 1 --is_small 1 --up 1
+
+# up for large cyl
+python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 5000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_cyl_l_1_place_0217_0  --seed 8011 --is_box 0 --is_small 0 --up 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v5" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 5000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0120_cyl_l_1_place_0217_1  --seed 8012 --is_box 0 --is_small 0 --up 1
+
+# non-up, cotrain pick and place new, on floor
+python main.py --env-name "InmoovHandGraspPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0217_0 --seed 10100 --up 0 --using_comfortable 0 --place_floor 1
+python main.py --env-name "InmoovHandGraspPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0217_1 --seed 10101 --up 0 --using_comfortable 0 --place_floor 1
+
+# non-up, cotrain pick and place new, stack
+python main.py --env-name "InmoovHandGraspPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0217_2 --seed 10102 --up 0 --using_comfortable 0 --place_floor 0
+python main.py --env-name "InmoovHandGraspPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0217_3 --seed 10103 --up 0 --using_comfortable 0 --place_floor 0
+
+# up, cotrain pick and place new, on floor
+python main.py --env-name "InmoovHandGraspPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0217_4 --seed 10104 --up 1 --using_comfortable 1 --place_floor 1
+python main.py --env-name "InmoovHandGraspPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0217_5 --seed 10105 --up 1 --using_comfortable 1 --place_floor 1
+
+2/18 16:03
+
+# up, cotrain pick and place new, stack
+python main.py --env-name "InmoovHandGraspPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0217_6 --seed 10106 --up 1 --using_comfortable 1 --place_floor 0
+python main.py --env-name "InmoovHandGraspPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0217_7 --seed 10107 --up 1 --using_comfortable 1 --place_floor 0
+
+# up, cotrain pick and place new, stack, comfotable range
+python main.py --env-name "InmoovHandGraspPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0217_8 --seed 10108 --up 1 --using_comfortable 1 --place_floor 0 --using_comfortable_range 1
+python main.py --env-name "InmoovHandGraspPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0217_9 --seed 10109 --up 1 --using_comfortable 1 --place_floor 0 --using_comfortable_range 1
+
+# up, cotrain pick and place new, stack, random size
+python main.py --env-name "InmoovHandGraspPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0217_10 --seed 10106 --up 1 --using_comfortable 1 --place_floor 0 --random_size 1
+python main.py --env-name "InmoovHandGraspPlaceBulletEnv-v1" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0217_11 --seed 10106 --up 1 --using_comfortable 1 --place_floor 0 --random_size 1
 
 
 
