@@ -20,8 +20,8 @@ class InmoovShadowHandPlaceEnvV4(gym.Env):
                  renders=False,
                  init_noise=True,
                  up=True,
-                 is_box=True,
-                 is_small=False,
+                 is_box=False,
+                 is_small=True,
                  place_floor=False,
                  use_gt_6d=False,
                  gt_only_init=True,
@@ -194,7 +194,7 @@ class InmoovShadowHandPlaceEnvV4(gym.Env):
 
     def reset(self):
         p.resetSimulation()
-        # p.setPhysicsEngineParameter(numSolverIterations=200)
+        p.setPhysicsEngineParameter(numSolverIterations=50)
         p.setTimeStep(self._timeStep)
         p.setGravity(0, 0, -10)
         self.timer = 0
@@ -269,7 +269,7 @@ class InmoovShadowHandPlaceEnvV4(gym.Env):
         angV_R = np.linalg.norm(clAngV)
         velMetric = 1 - np.minimum(linV_R + angV_R / 2.0, 5.0) / 5.0
 
-        reward += rotMetric * 5
+        reward += np.maximum(rotMetric * 20 - 15, 0.)
         reward += xyzMetric * 5
         reward += velMetric * 5
 
