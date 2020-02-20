@@ -242,7 +242,7 @@ class InmoovShadowHandGraspPlaceEnvV1(gym.Env):
         palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
         dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(clPos)), 0.5)
         reward += -dist * 2.0
-        reward += -np.minimum(np.linalg.norm(np.array([self.tx, self.ty]) - np.array(clPos)[:2]), 0.4) * 4.0
+        reward += -np.minimum(np.linalg.norm(np.array([self.tx, self.ty, 0.1]) - np.array(clPos)), 0.4) * 6.0
 
         for i in self.robot.fin_tips[:4]:
             tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
@@ -462,7 +462,7 @@ class InmoovShadowHandGraspPlaceEnvV1(gym.Env):
                         self.grasp_phase = False
                         self.timer = 0
                         done = False
-                        r += 100        # TODO: next stage bonus
+                        r += 200        # TODO: next stage bonus
                     else:
                         done = True
         else:

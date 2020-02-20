@@ -25,17 +25,22 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
                  renders=True,
                  init_noise=True,
                  up=True,
-                 # is_box=False,
+                 random_shape=False,
+                 random_size=True,
+                 default_box=True,      # if not random shape, false: cylinder as default
                  using_comfortable=True,
                  using_comfortable_range=False):
         self.renders = renders
         self.init_noise = init_noise
         self.up = up
-        # self.isBox = is_box
-        # self.small = small
+        self.random_shape = random_shape
+        self.random_size = random_size
+        self.default_box = default_box
         self.using_comfortable = using_comfortable
         self.using_comfortable_range = using_comfortable_range
+
         self.vary_angle_range = 0.6
+        self.obj_mass = 3.5
 
         self._timeStep = 1. / 240.
         if self.renders:
@@ -50,12 +55,15 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
 
         self.final_states = []  # wont be cleared unless call clear function
 
-        # TODO: tune this is not principled
         self.frameSkip = 3
         self.action_scale = np.array([0.004] * 7 + [0.008] * 17)  # shadow hand is 22-5=17dof
 
-        self.tx = None
-        self.ty = None
+        if self.up:
+            self.tx = None  # assigned later
+            self.ty = None
+        else:
+            self.tx = 0.
+            self.ty = 0.    # constants
 
         self.reset()    # and update init
 
@@ -147,7 +155,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         if shape == p.GEOM_BOX:
             visualShapeId = p.createVisualShape(shapeType=shape, halfExtents=dim)
             collisionShapeId = p.createCollisionShape(shapeType=shape, halfExtents=dim)
-            id = p.createMultiBody(baseMass=3.5, baseInertialFramePosition=[0, 0, 0],
+            id = p.createMultiBody(baseMass=self.obj_mass, baseInertialFramePosition=[0, 0, 0],
                               baseCollisionShapeIndex=collisionShapeId,
                               baseVisualShapeIndex=visualShapeId,
                               basePosition=init_xyz)
@@ -156,7 +164,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             visualShapeId = p.createVisualShape(shape, dim[0], [1,1,1], dim[1])
             # collisionShapeId = p.createCollisionShape(shapeType=shape, radius=dim[0], length=dim[1])
             collisionShapeId = p.createCollisionShape(shape, dim[0], [1, 1, 1], dim[1])
-            id = p.createMultiBody(baseMass=3.5, baseInertialFramePosition=[0, 0, 0],
+            id = p.createMultiBody(baseMass=self.obj_mass, baseInertialFramePosition=[0, 0, 0],
                               baseCollisionShapeIndex=collisionShapeId,
                               baseVisualShapeIndex=visualShapeId,
                               basePosition=init_xyz)
@@ -170,10 +178,9 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         p.setTimeStep(self._timeStep)
         p.setGravity(0, 0, -10)
 
-        # self.small = bool(self.np_random.randint(2))
-        self.isBox = bool(self.np_random.randint(2))
-        self.half_height = self.np_random.uniform(low=0.055, high=0.09)
-        self.half_width = self.np_random.uniform(low=0.03, high=0.05)   # aka radius
+        self.isBox = bool(self.np_random.randint(2)) if self.random_shape else self.default_box
+        self.half_height = self.np_random.uniform(low=0.055, high=0.09) if self.random_size else 0.07
+        self.half_width = self.np_random.uniform(low=0.03, high=0.05) if self.random_size else 0.04  # aka radius
 
         if self.using_comfortable:
             if self.using_comfortable_range:
@@ -184,32 +191,19 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             init_palm_pos, init_palm_quat, obj_init_xyz = self.get_reset_poses_old()
 
         if self.init_noise:
-            obj_init_xyz += np.append(self.np_random.uniform(low=-0.012, high=0.012, size=2), 0)
+            obj_init_xyz += np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
 
 
         if self.isBox:
-            dim = [self.half_width*0.8, self.half_width*0.8, self.half_height]
+            dim = [self.half_width*0.8, self.half_width*0.8, self.half_height]    # TODO
             self.obj_id = self.create_prim_2_grasp(p.GEOM_BOX, dim, obj_init_xyz)
-            # if self.small:
-            #     self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/box_small.urdf'),
-            #                                  obj_init_xyz, useFixedBase=0)
-            # else:
-            #     self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/box.urdf'),
-            #                                  obj_init_xyz, useFixedBase=0)
         else:
-            dim = [self.half_width, self.half_height*2.0]   # TODO
+            dim = [self.half_width, self.half_height*2.0]
             self.obj_id = self.create_prim_2_grasp(p.GEOM_CYLINDER, dim, obj_init_xyz)
-            #
-            # if self.small:
-            #     self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder_small.urdf'),
-            #                                  obj_init_xyz, useFixedBase=0)
-            # else:
-            #     self.cylinderId = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
-            #                                  obj_init_xyz, useFixedBase=0)
 
         # self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'),
         #                           [0, 0, 0], useFixedBase=1)
-        self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.25, 0.1, 0.0],
+        self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.25, 0.2, 0.0],
                               useFixedBase=1)  # TODO
         p.changeDynamics(self.obj_id, -1, lateralFriction=1.0)
         p.changeDynamics(self.floorId, -1, lateralFriction=1.0)
@@ -375,22 +369,15 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             xy = np.array([self.tx, self.ty])
             self.observation.extend(list(xy + self.np_random.uniform(low=-0.01, high=0.01, size=2)))
             self.observation.extend(list(xy + self.np_random.uniform(low=-0.01, high=0.01, size=2)))
-            self.observation.extend(list(xy + self.np_random.uniform(low=-0.01, high=0.01, size=2)))
+            self.observation.extend(list(xy))
 
-        shape_info = 1. if self.isBox else -1.
-        self.observation.extend([shape_info])
-            # self.observation.extend(list(xy))
-            # self.observation.extend(list(xy))
-            # self.observation.extend(list(xy))
-        # if self.lastContact is not None:
-        #     self.observation.extend(self.lastContact)
-        # else:   # first step
-        #     self.observation.extend(curContact)
-        # self.lastContact = curContact.copy()
+        if self.random_shape:
+            shape_info = 1. if self.isBox else -1.
+            self.observation.extend([shape_info])
 
-        # print("obv", self.observation)
-        # print("max", np.max(np.abs(np.array(self.observation))))
-        # print("min", np.min(np.abs(np.array(self.observation))))
+        self.observation.extend([self.timer/300 + self.np_random.uniform(low=-0.01, high=0.01),
+                                 self.timer/300 + self.np_random.uniform(low=-0.01, high=0.01),
+                                 self.timer/300])
 
         return self.observation
 
