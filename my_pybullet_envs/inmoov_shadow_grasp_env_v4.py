@@ -174,7 +174,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
 
     def reset(self):
         p.resetSimulation()
-        # p.setPhysicsEngineParameter(numSolverIterations=200)
+        p.setPhysicsEngineParameter(numSolverIterations=200)
         p.setTimeStep(self._timeStep)
         p.setGravity(0, 0, -10)
 
@@ -375,9 +375,14 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             shape_info = 1. if self.isBox else -1.
             self.observation.extend([shape_info])
 
-        self.observation.extend([self.timer/300 + self.np_random.uniform(low=-0.01, high=0.01),
-                                 self.timer/300 + self.np_random.uniform(low=-0.01, high=0.01),
-                                 self.timer/300])
+        if self.random_size:
+            self.observation.extend([self.half_height*4 + self.np_random.uniform(low=-0.02, high=0.02)*2,
+                                     self.half_height*4 + self.np_random.uniform(low=-0.02, high=0.02)*2,
+                                     self.half_height*4])
+
+        # self.observation.extend([self.timer/300 + self.np_random.uniform(low=-0.01, high=0.01),
+        #                          self.timer/300 + self.np_random.uniform(low=-0.01, high=0.01),
+        #                          self.timer/300])
 
         return self.observation
 
