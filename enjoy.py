@@ -10,6 +10,8 @@ import torch
 import gym
 import my_pybullet_envs
 
+import pickle
+
 from a2c_ppo_acktr.envs import VecPyTorch, make_vec_envs
 from a2c_ppo_acktr.utils import get_render_func, get_vec_normalize
 
@@ -49,8 +51,10 @@ parser.add_argument(
 parser.add_argument(
     '--n_trials',
     type=int,
-    default=2000,
-    help='The number of trials to run.')
+    default=10000,
+    help='The number of trials to run.')    # TODO
+
+save_final_state_pkl = True
 
 args, unknown = parser.parse_known_args()  # this is an 'internal' method
 # which returns 'parsed', the same as what parse_args() would return
@@ -91,6 +95,8 @@ env = make_vec_envs(
     device=device,
     allow_early_resets=False,
     **extra_dict)
+# dont know why there are so many wrappers in make_vec_envs...
+env_core = env.venv.venv.envs[0].env.env
 
 # # Get a render function
 # render_func = get_render_func(env)
@@ -147,6 +153,8 @@ control_step = 0
 n_success, n_trials = 0, 0
 start_time = time.time()
 
+list_length = 0
+
 while n_trials < args.n_trials:
     with torch.no_grad():
         value, action, _, recurrent_hidden_states = actor_critic.act(
@@ -166,25 +174,49 @@ while n_trials < args.n_trials:
 
     reward_total += reward
 
+    collect_start = 85
+    collect_end = 100
+    if save_final_state_pkl and not done and collect_start <= control_step < collect_end:   # TODO: timer/r, need to change if Pi different
+        # input("press enter")
+        env_core.append_final_state()
+        print(len(env_core.final_states))
     if done:
         if reward_total > args.success_reward_thresh:
             n_success += 1
+        else:
+            if save_final_state_pkl:
+                pop_length = len(env_core.final_states) - list_length
+                for i in range(0,  pop_length):
+                    env_core.final_states.pop()
+
         n_trials += 1
         print(f"{args.load_dir}\t"
             f"tr: {reward_total.numpy()[0][0]:.1f}\t"
             f"Avg Success: {n_success / n_trials * 100: .2f} ({n_success}/{n_trials})"
             f"(Avg. time/trial: {(time.time() - start_time)/n_trials:.2f})")
         reward_total = 0.
+        control_step = 0
+        if save_final_state_pkl:
+            list_length = len(env_core.final_states)
 
     masks.fill_(0.0 if done else 1.0)
 
-    if args.env_name.find('Bullet') > -1:
-        if torsoId > -1:
-            distance = 5
-            yaw = 0
-            humanPos, humanOrn = p.getBasePositionAndOrientation(torsoId)
-            p.resetDebugVisualizerCamera(distance, yaw, -20, humanPos)
+    # if args.env_name.find('Bullet') > -1:
+    #     if torsoId > -1:
+    #         distance = 5
+    #         yaw = 0
+    #         humanPos, humanOrn = p.getBasePositionAndOrientation(torsoId)
+    #         p.resetDebugVisualizerCamera(distance, yaw, -20, humanPos)
 
     # if render_func is not None:
     #     render_func('human')
     # p.getCameraImage()
+
+with open('my_pybullet_envs/assets/place_init_dist/final_states_0219_box_2.pickle', 'wb') as handle:      # TODO: change name
+    o_pos_pf_ave, o_quat_pf_ave_ri = env_core.calc_average_obj_in_palm_rot_invariant()
+    _, o_quat_pf_ave = env_core.calc_average_obj_in_palm()
+    print(o_pos_pf_ave, o_quat_pf_ave_ri)
+    stored_info = {'init_states': env_core.final_states, 'ave_obj_pos_in_palm': o_pos_pf_ave,
+                   'ave_obj_quat_in_palm_rot_ivr': o_quat_pf_ave_ri,
+                   'ave_obj_quat_in_palm': o_quat_pf_ave}
+    pickle.dump(stored_info, handle, protocol=pickle.HIGHEST_PROTOCOL)
