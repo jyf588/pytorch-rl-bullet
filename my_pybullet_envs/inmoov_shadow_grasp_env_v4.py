@@ -147,7 +147,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             init_palm_pos = np.array(init_palm_pos) + np.array([self.tx, self.ty, 0])
         return init_palm_pos, init_palm_quat, cyl_init_pos
 
-    def create_prim_2_grasp(self, shape, dim, init_xyz):
+    def create_prim_2_grasp(self, shape, dim, init_xyz, init_quat=(0,0,0,1)):
         # shape: p.GEOM_SPHERE or p.GEOM_BOX or p.GEOM_CYLINDER
         # dim: halfExtents (vec3) for box, (radius, length)vec2 for cylinder
         # init_xyz vec3 of obj location
@@ -158,7 +158,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             id = p.createMultiBody(baseMass=self.obj_mass, baseInertialFramePosition=[0, 0, 0],
                               baseCollisionShapeIndex=collisionShapeId,
                               baseVisualShapeIndex=visualShapeId,
-                              basePosition=init_xyz)
+                              basePosition=init_xyz, baseOrientation=init_quat)
         elif shape == p.GEOM_CYLINDER:
             # visualShapeId = p.createVisualShape(shapeType=shape, radius=dim[0], length=dim[1])
             visualShapeId = p.createVisualShape(shape, dim[0], [1,1,1], dim[1])
@@ -167,9 +167,9 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             id = p.createMultiBody(baseMass=self.obj_mass, baseInertialFramePosition=[0, 0, 0],
                               baseCollisionShapeIndex=collisionShapeId,
                               baseVisualShapeIndex=visualShapeId,
-                              basePosition=init_xyz)
+                              basePosition=init_xyz, baseOrientation=init_quat)
         elif shape == p.GEOM_SPHERE:
-            pass        # TODO
+            pass        # TODO: ball
         return id
 
     def reset(self):
@@ -195,16 +195,14 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
 
 
         if self.isBox:
-            dim = [self.half_width*0.8, self.half_width*0.8, self.half_height]    # TODO
-            self.obj_id = self.create_prim_2_grasp(p.GEOM_BOX, dim, obj_init_xyz)
+            self.dim = [self.half_width*0.8, self.half_width*0.8, self.half_height]    # TODO
+            self.obj_id = self.create_prim_2_grasp(p.GEOM_BOX, self.dim, obj_init_xyz)
         else:
-            dim = [self.half_width, self.half_height*2.0]
-            self.obj_id = self.create_prim_2_grasp(p.GEOM_CYLINDER, dim, obj_init_xyz)
+            self.dim = [self.half_width, self.half_height*2.0]
+            self.obj_id = self.create_prim_2_grasp(p.GEOM_CYLINDER, self.dim, obj_init_xyz)
 
-        # self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/plane.urdf'),
-        #                           [0, 0, 0], useFixedBase=1)
         self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.25, 0.2, 0.0],
-                              useFixedBase=1)  # TODO
+                              useFixedBase=1)
         p.changeDynamics(self.obj_id, -1, lateralFriction=1.0)
         p.changeDynamics(self.floorId, -1, lateralFriction=1.0)
 
@@ -263,7 +261,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
                 self.robot.apply_action(self.act * self.action_scale)
             p.stepSimulation()
             if self.renders:
-                time.sleep(self._timeStep)
+                time.sleep(self._timeStep * 0.5)
             self.timer += 1
 
         reward = 3.0
@@ -319,6 +317,9 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         clLinV = np.array(clVels[0])
         clAngV = np.array(clVels[1])
         reward += np.maximum(-np.linalg.norm(clLinV) - np.linalg.norm(clAngV), -10.0) * 0.2
+        #
+        # if self.timer == 300:
+        #     self.append_final_state()
 
         if clPos[2] < -0.0 and self.timer > 300: # object dropped, do not penalize dropping when 0 gravity
             reward += -15.
@@ -326,7 +327,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         return self.getExtendedObservation(), reward, False, {}
 
     def getExtendedObservation(self):
-        self.observation = self.robot.get_robot_observation()
+        self.observation = self.robot.get_robot_observation()       # TODO: should change to diff_tar as well
 
         # clPos, clOrn = p.getBasePositionAndOrientation(self.cylinderId)
         # clPos = np.array(clPos)
@@ -398,12 +399,20 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
 
         fin_q, _ = self.robot.get_q_dq(self.robot.all_findofs)
 
-        state = {'obj_pos_in_palm': o_p_hf, 'obj_quat_in_palm': o_q_hf,
-                 'all_fin_q': fin_q, 'fin_tar_q': self.robot.tar_fin_q}
-        # print(state)
-        # print(self.robot.get_joints_last_tau(self.robot.all_findofs))
-        # self.robot.get_wrist_wrench()
-        self.final_states.append(state)
+        # also store the shape info here
+
+        unitz_hf = p.multiplyTransforms([0, 0, 0], o_q_hf, [0, 0, 1], [0, 0, 0, 1])[0]
+        # TODO: a heuritics that if obj up_vec points outside palm, then probably holding bottom & bad
+        if unitz_hf[1] < -0.2:
+            return
+        else:
+            state = {'obj_pos_in_palm': o_p_hf, 'obj_quat_in_palm': o_q_hf,
+                     'all_fin_q': fin_q, 'fin_tar_q': self.robot.tar_fin_q,
+                     'obj_dim': self.dim, 'obj_shape': p.GEOM_BOX if self.isBox else p.GEOM_CYLINDER}   # TODO: ball
+            # print(state)
+            # print(self.robot.get_joints_last_tau(self.robot.all_findofs))
+            # self.robot.get_wrist_wrench()
+            self.final_states.append(state)
 
     def clear_final_states(self):
         self.final_states = []
