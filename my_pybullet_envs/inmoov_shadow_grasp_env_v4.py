@@ -403,7 +403,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
 
         unitz_hf = p.multiplyTransforms([0, 0, 0], o_q_hf, [0, 0, 1], [0, 0, 0, 1])[0]
         # TODO: a heuritics that if obj up_vec points outside palm, then probably holding bottom & bad
-        if unitz_hf[1] < -0.2:
+        if unitz_hf[1] < -0.3:
             return
         else:
             state = {'obj_pos_in_palm': o_p_hf, 'obj_quat_in_palm': o_q_hf,

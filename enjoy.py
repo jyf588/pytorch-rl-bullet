@@ -212,7 +212,7 @@ while n_trials < args.n_trials:
     #     render_func('human')
     # p.getCameraImage()
 
-with open('my_pybullet_envs/assets/place_init_dist/final_states_0219_box_2.pickle', 'wb') as handle:      # TODO: change name
+with open('my_pybullet_envs/assets/place_init_dist/final_states_0219_cyl_0.pickle', 'wb') as handle:      # TODO: change name
     o_pos_pf_ave, o_quat_pf_ave_ri = env_core.calc_average_obj_in_palm_rot_invariant()
     _, o_quat_pf_ave = env_core.calc_average_obj_in_palm()
     print(o_pos_pf_ave, o_quat_pf_ave_ri)
