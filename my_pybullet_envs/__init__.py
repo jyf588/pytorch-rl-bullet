@@ -16,9 +16,11 @@ from .inmoov_shadow_demo_env_v2 import InmoovShadowHandDemoEnvNew
 from .inmoov_shadow_place_env_v3 import InmoovShadowHandPlaceEnvV3
 from .inmoov_shadow_grasp_env_v3 import InmoovShadowHandGraspEnvV3
 from .inmoov_shadow_place_env_v4 import InmoovShadowHandPlaceEnvV4
+from .inmoov_shadow_place_env_v4_det import InmoovShadowHandPlaceEnvV4Det
 from .inmoov_shadow_grasp_env_v4 import InmoovShadowHandGraspEnvV4
 from .inmoov_shadow_place_env_v5 import InmoovShadowHandPlaceEnvV5
 from .inmoov_shadow_grasp_place_env_v1 import InmoovShadowHandGraspPlaceEnvV1
+from .inmoov_shadow_place_env_v6 import InmoovShadowHandPlaceEnvV6
 
 
 def register(id, *args, **kvargs):
@@ -91,6 +93,12 @@ register(
 )
 
 register(
+    id='InmoovHandPlaceBulletEnv-v6',
+    entry_point='my_pybullet_envs:InmoovShadowHandPlaceEnvV6',
+    max_episode_steps=100,
+)
+
+register(
     id='ShadowHandGraspBulletEnv-v0',
     entry_point='my_pybullet_envs:ShadowHandGraspEnv',
     max_episode_steps=400,
@@ -130,6 +138,12 @@ register(
     id='InmoovHandGraspPlaceBulletEnv-v1',
     entry_point='my_pybullet_envs:InmoovShadowHandGraspPlaceEnvV1',
     max_episode_steps=300,      # large enough, controlled by done
+)
+
+register(
+    id='InmoovHandPlaceBulletEnvDet-v4',
+    entry_point='my_pybullet_envs:InmoovShadowHandPlaceEnvV4Det',
+    max_episode_steps=100,      # large enough, controlled by done
 )
 
 def getList():

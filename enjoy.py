@@ -53,8 +53,11 @@ parser.add_argument(
     type=int,
     default=10000,
     help='The number of trials to run.')    # TODO
+parser.add_argument(
+    '--save_final_states',
+    type=int,
+    default=0)
 
-save_final_state_pkl = True
 
 args, unknown = parser.parse_known_args()  # this is an 'internal' method
 # which returns 'parsed', the same as what parse_args() would return
@@ -77,7 +80,7 @@ args_dict = vars(args)
 args_w_extra_dict = vars(args_w_extra)
 extra_dict = {k: args_w_extra_dict[k] for k in set(args_w_extra_dict) - set(args_dict)}
 
-# TODO
+save_final_state_pkl = bool(args.save_final_states)
 is_cuda = True
 device = 'cuda' if is_cuda else 'cpu'
 
@@ -212,7 +215,7 @@ while n_trials < args.n_trials:
     #     render_func('human')
     # p.getCameraImage()
 
-with open('my_pybullet_envs/assets/place_init_dist/final_states_0219_cyl_0.pickle', 'wb') as handle:      # TODO: change name
+with open('my_pybullet_envs/assets/place_init_dist/final_states_0219_cyl_2.pickle', 'wb') as handle:      # TODO: change name
     o_pos_pf_ave, o_quat_pf_ave_ri = env_core.calc_average_obj_in_palm_rot_invariant()
     _, o_quat_pf_ave = env_core.calc_average_obj_in_palm()
     print(o_pos_pf_ave, o_quat_pf_ave_ri)

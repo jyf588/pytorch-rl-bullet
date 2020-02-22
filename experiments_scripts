@@ -1021,11 +1021,39 @@ python main.py --env-name "InmoovHandGraspBulletEnv-v4" --algo ppo --use-gae --l
 # retry with p.setPhysicsEngineParameter(numSolverIterations=200)
 python main.py --env-name "InmoovHandGraspBulletEnv-v4" --algo ppo --use-gae --log-interval 10 --num-steps 1340 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_box_2 --seed 9005 --up 1 --using_comfortable 1 --random_shape 0 --random_size 1 --default_box 1
 python main.py --env-name "InmoovHandGraspBulletEnv-v4" --algo ppo --use-gae --log-interval 10 --num-steps 1340 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_box_3 --seed 9006 --up 1 --using_comfortable 1 --random_shape 0 --random_size 1 --default_box 1
+# 2 finishes training
 2/20 00:21
 # cylinder variable size
 python main.py --env-name "InmoovHandGraspBulletEnv-v4" --algo ppo --use-gae --log-interval 10 --num-steps 1340 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_0 --seed 9007 --up 1 --using_comfortable 1 --random_shape 0 --random_size 1 --default_box 0
 python main.py --env-name "InmoovHandGraspBulletEnv-v4" --algo ppo --use-gae --log-interval 10 --num-steps 1340 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_1 --seed 9008 --up 1 --using_comfortable 1 --random_shape 0 --random_size 1 --default_box 0
+# 0 finishes training, 1 gets killed halfway
 
+
+2/20 14:24
+# try PPO on sparse/delayed reward but det env.
+python main.py --env-name "InmoovHandPlaceBulletEnvDet-v4" --algo ppo --use-gae --log-interval 1 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0220_detplace_cyl_s_0 --seed 8888 --det_env 1
+python main.py --env-name "InmoovHandPlaceBulletEnvDet-v4" --algo ppo --use-gae --log-interval 1 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_detplace_cyl_s_1 --seed 8889 --det_env 1
+
+2/20 19:14
+# stacking up for BOX variable size
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_box_2_place_0220_0  --seed 8100 --random_shape 0 --random_size 1 --default_box 1 --up 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_box_2_place_0220_1  --seed 8101 --random_shape 0 --random_size 1 --default_box 1 --up 1
+# 1 730iter, 0 610
+# testing: python enjoy.py --env-name InmoovHandPlaceBulletEnv-v6 --load-dir trained_models_0219_box_2_place_0220_0/ppo/ --non-det 0 --seed=1890 --random_shape 0 --random_size 1 --default_box 1 --up 1 --renders 0 --exclude_hard 0 --iter 610
+
+# stacking up for CYL variable size
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_0_place_0220_0  --seed 8102 --random_shape 0 --random_size 1 --default_box 0 --up 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_0_place_0220_1  --seed 8103 --random_shape 0 --random_size 1 --default_box 0 --up 1
+
+2/21 10:43
+# cyl grapsing again
+python main.py --env-name "InmoovHandGraspBulletEnv-v4" --algo ppo --use-gae --log-interval 10 --num-steps 1340 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_2 --seed 9009 --up 1 --using_comfortable 1 --random_shape 0 --random_size 1 --default_box 0
+# better than previous two
+
+2/21 13:44
+# stacking up for BOX variable size, without rt 6d
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_box_2_place_0220_2_init6d  --seed 8104 --random_shape 0 --random_size 1 --default_box 1 --up 1 --gt_only_init 1
+# iter 740. drops from RT 86% to 70%
 
 
 # later, delete palm away reward?
