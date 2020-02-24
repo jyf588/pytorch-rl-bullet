@@ -196,7 +196,7 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         self.tz = self.btm_obj_height if not self.place_floor else 0.0
         while True:
             if self.up:
-                self.tx = self.np_random.uniform(low=0, high=0.25)
+                self.tx = self.np_random.uniform(low=0, high=0.3)
                 self.ty = self.np_random.uniform(low=-0.1, high=0.5)
                 # self.tx = self.np_random.uniform(low=0, high=0.2)
                 # self.ty = self.np_random.uniform(low=-0.2, high=0.0)
@@ -214,7 +214,7 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
 
     def reset(self):
         p.resetSimulation()
-        p.setPhysicsEngineParameter(numSolverIterations=50)
+        p.setPhysicsEngineParameter(numSolverIterations=200)
         p.setTimeStep(self._timeStep)
         p.setGravity(0, 0, -10)
         self.timer = 0
@@ -235,7 +235,7 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         else:
             btm_xyz = np.array([self.tx, self.ty, self.tz/2.0])
             if self.init_noise:
-                btm_xyz += np.append(self.np_random.uniform(low=-0.01, high=0.01, size=2), 0)   # TODO: 0.02
+                btm_xyz += np.append(self.np_random.uniform(low=-0.015, high=0.015, size=2), 0)
             self.bottom_obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
                                             btm_xyz, useFixedBase=0)
             self.floor_id = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.25, 0.2, 0.0],
@@ -304,7 +304,7 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         cps_floor = p.getContactPoints(self.obj_id, self.bottom_obj_id, -1, -1)
         for cp in cps_floor:
             total_nf += cp[9]
-        if np.abs(total_nf) > (self.obj_mass*7.):       # mg        # TODO:tmp contact force hack
+        if np.abs(total_nf) > (self.obj_mass*4.):       # mg        # TODO:tmp contact force hack
             meaningful_c = True
             reward += 5.0
         else:
@@ -363,10 +363,10 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         o_pos = o_pos * 3.0       # TODO:tmp, scale up
         o_rotmat = np.array(p.getMatrixFromQuaternion(o_orn))
         o_upv = [o_rotmat[2], o_rotmat[5], o_rotmat[8]]
-        objObs.extend(list(self.perturb(o_pos, r=0.005)))
-        objObs.extend(list(self.perturb(o_pos, r=0.005)))
-        objObs.extend(list(self.perturb(o_upv, r=0.005)))
-        objObs.extend(list(self.perturb(o_upv, r=0.005)))
+        objObs.extend(list(self.perturb(o_pos, r=0.04)))
+        objObs.extend(list(self.perturb(o_pos, r=0.04)))
+        objObs.extend(list(self.perturb(o_upv, r=0.04)))
+        objObs.extend(list(self.perturb(o_upv, r=0.04)))
         return objObs
 
     # change to tar pos fin pos diff
@@ -407,9 +407,10 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
 
         if self.up:
             xy = np.array([self.tx, self.ty])   # TODO: tx, ty wrt world origin
-            self.observation.extend(list(self.perturb(xy, r=0.005)))
-            self.observation.extend(list(self.perturb(xy, r=0.005)))
-            self.observation.extend(list(self.perturb(xy, r=0.005)))
+            self.observation.extend(list(self.perturb(xy, r=0.01)))
+            self.observation.extend(list(self.perturb(xy, r=0.01)))
+            self.observation.extend(list(xy))
+            # this is the vision module one also used for reset/planning
 
         if self.random_shape:
             shape_info = 1. if self.is_box else -1.
@@ -418,7 +419,8 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         if self.random_size:
             self.observation.extend([self.half_height*4 + self.np_random.uniform(low=-0.02, high=0.02)*2,
                                      self.half_height*4 + self.np_random.uniform(low=-0.02, high=0.02)*2,
-                                     self.half_height*4])
+                                     self.half_height*4 + self.np_random.uniform(low=-0.02, high=0.02)*2])
+            # this is the true half_height, vision module one will be noisy
 
         # if self.lastContact is not None:
         #     self.observation.extend(self.lastContact)
