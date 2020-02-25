@@ -1083,18 +1083,22 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --l
 python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_2_place_0220_1  --seed 8108 --random_shape 0 --random_size 1 --default_box 0 --up 1
 ## 1 looks good, ~89%
 
-# later, delete palm away reward?
+2/24 15:55
+# try c_range cyl grasping again
+python main.py --env-name "InmoovHandGraspBulletEnv-v4" --algo ppo --use-gae --log-interval 10 --num-steps 1340 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_5_range --seed 9012 --up 1 --using_comfortable 1 --random_shape 0 --random_size 1 --default_box 0 --using_comfortable_range 1
+
+2/24 18:43
+# try another time, c_range cyl grasping
+python main.py --env-name "InmoovHandGraspBulletEnv-v4" --algo ppo --use-gae --log-interval 10 --num-steps 1340 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_6_range --seed 9015 --up 1 --using_comfortable 1 --random_shape 0 --random_size 1 --default_box 0 --using_comfortable_range 1
+# placing with simulated vision
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_box_2_place_0224_0  --seed 8110 --random_shape 0 --random_size 1 --default_box 1 --up 1  --vision_skip 8
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_box_2_place_0224_1  --seed 8111 --random_shape 0 --random_size 1 --default_box 1 --up 1  --vision_skip 8
+## 0 at 77%, 1 at 72%
+# grasping spheres
+python main.py --env-name "InmoovHandGraspBulletEnv-v4" --algo ppo --use-gae --log-interval 10 --num-steps 1340 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0224_sph_0 --seed 9020 --up 1 --using_comfortable 1 --random_shape 0 --random_size 1 --default_box -1
+python main.py --env-name "InmoovHandGraspBulletEnv-v4" --algo ppo --use-gae --log-interval 10 --num-steps 1340 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0224_sph_1 --seed 9021 --up 1 --using_comfortable 1 --random_shape 0 --random_size 1 --default_box -1
 
 
-# maybe go back to fixed cylinder,3
-# even larger frame skip?
-# train from grasping?
-
-# try curriculum learning ......
-
-
-
-# try a larger/open wider init finger pose.
 
 
 # put both on object and on floor

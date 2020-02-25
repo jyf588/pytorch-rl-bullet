@@ -25,7 +25,8 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
                  use_gt_6d=True,
                  gt_only_init=False,
                  grasp_pi_name=None,
-                 exclude_hard=True
+                 exclude_hard=True,
+                 vision_skip=1
                  ):
         self.renders = renders
         self.init_noise = init_noise
@@ -39,6 +40,9 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         self.use_gt_6d = use_gt_6d
         self.gt_only_init = gt_only_init
         self.exclude_hard = exclude_hard
+
+        self.vision_skip = vision_skip
+        self.vision_counter = 0
 
         self.hard_orn_thres = 0.9
         self.obj_mass = 3.5
@@ -218,6 +222,7 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         p.setTimeStep(self._timeStep)
         p.setGravity(0, 0, -10)
         self.timer = 0
+        self.vision_counter = 0
 
         self.robot = InmoovShadowNew(init_noise=False, timestep=self._timeStep, np_random=self.np_random)
 
@@ -247,7 +252,9 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
 
         # init obj pose
         self.t_pos, self.t_orn = p.getBasePositionAndOrientation(self.obj_id)
+        self.last_t_pos, self.last_t_orn = p.getBasePositionAndOrientation(self.obj_id)
         self.b_pos, self.b_orn = p.getBasePositionAndOrientation(self.bottom_obj_id)
+        self.last_b_pos, self.last_b_orn = p.getBasePositionAndOrientation(self.bottom_obj_id)
         self.observation = self.getExtendedObservation()
 
         return np.array(self.observation)
@@ -376,19 +383,42 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         self.observation = self.robot.get_robot_observation(diff_tar=True)
 
         if self.use_gt_6d:
+            self.vision_counter += 1
             if self.obj_id is None:
                 self.observation.extend(self.obj6DtoObs_UpVec([0,0,0], [0,0,0,1]))  # TODO
             else:
                 if self.gt_only_init:
                     clPos, clOrn = self.t_pos, self.t_orn
                 else:
-                    clPos, clOrn = p.getBasePositionAndOrientation(self.obj_id)
+                    # model both delayed and low-freq vision input
+                    # every vision_skip steps, update cur 6D
+                    # but feed policy with last-time updated 6D
+                    if self.vision_counter % self.vision_skip == 0:
+                        self.last_t_pos, self.last_t_orn = self.t_pos, self.t_orn
+                        self.t_pos, self.t_orn = p.getBasePositionAndOrientation(self.obj_id)
+                    clPos, clOrn = self.last_t_pos, self.last_t_orn
+
+                    # print("feed into", clPos, clOrn)
+                    # clPos_act, clOrn_act = p.getBasePositionAndOrientation(self.obj_id)
+                    # print("act",  clPos_act, clOrn_act)
+
                 self.observation.extend(self.obj6DtoObs_UpVec(clPos, clOrn))    # TODO
             if not self.place_floor and not self.gt_only_init:  # if stacking & real-time, include bottom 6D
                 if self.bottom_obj_id is None:
                     self.observation.extend(self.obj6DtoObs_UpVec([0,0,0], [0,0,0,1]))    # TODO
                 else:
-                    clPos, clOrn = p.getBasePositionAndOrientation(self.bottom_obj_id)
+                    # model both delayed and low-freq vision input
+                    # every vision_skip steps, update cur 6D
+                    # but feed policy with last-time updated 6D
+                    if self.vision_counter % self.vision_skip == 0:
+                        self.last_b_pos, self.last_b_orn = self.b_pos, self.b_orn
+                        self.b_pos, self.b_orn = p.getBasePositionAndOrientation(self.bottom_obj_id)
+                    clPos, clOrn = self.last_b_pos, self.last_b_orn
+
+                    # print("b feed into", clPos, clOrn)
+                    # clPos_act, clOrn_act = p.getBasePositionAndOrientation(self.bottom_obj_id)
+                    # print("b act", clPos_act, clOrn_act)
+
                     self.observation.extend(self.obj6DtoObs_UpVec(clPos, clOrn))  # TODO
 
         curContact = []

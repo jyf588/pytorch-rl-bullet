@@ -27,7 +27,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
                  up=True,
                  random_shape=False,
                  random_size=True,
-                 default_box=True,      # if not random shape, false: cylinder as default
+                 default_box=1,      # if not random shape, 1 box, 0 cyl, -1 sphere, bad legacy naming
                  using_comfortable=True,
                  using_comfortable_range=False):
         self.renders = renders
@@ -151,26 +151,25 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         # shape: p.GEOM_SPHERE or p.GEOM_BOX or p.GEOM_CYLINDER
         # dim: halfExtents (vec3) for box, (radius, length)vec2 for cylinder
         # init_xyz vec3 of obj location
-        id = None
+        visual_shape_id = None
+        collision_shape_id = None
         if shape == p.GEOM_BOX:
-            visualShapeId = p.createVisualShape(shapeType=shape, halfExtents=dim)
-            collisionShapeId = p.createCollisionShape(shapeType=shape, halfExtents=dim)
-            id = p.createMultiBody(baseMass=self.obj_mass, baseInertialFramePosition=[0, 0, 0],
-                              baseCollisionShapeIndex=collisionShapeId,
-                              baseVisualShapeIndex=visualShapeId,
-                              basePosition=init_xyz, baseOrientation=init_quat)
+            visual_shape_id = p.createVisualShape(shapeType=shape, halfExtents=dim)
+            collision_shape_id = p.createCollisionShape(shapeType=shape, halfExtents=dim)
         elif shape == p.GEOM_CYLINDER:
-            # visualShapeId = p.createVisualShape(shapeType=shape, radius=dim[0], length=dim[1])
-            visualShapeId = p.createVisualShape(shape, dim[0], [1,1,1], dim[1])
-            # collisionShapeId = p.createCollisionShape(shapeType=shape, radius=dim[0], length=dim[1])
-            collisionShapeId = p.createCollisionShape(shape, dim[0], [1, 1, 1], dim[1])
-            id = p.createMultiBody(baseMass=self.obj_mass, baseInertialFramePosition=[0, 0, 0],
-                              baseCollisionShapeIndex=collisionShapeId,
-                              baseVisualShapeIndex=visualShapeId,
-                              basePosition=init_xyz, baseOrientation=init_quat)
+            # visual_shape_id = p.createVisualShape(shapeType=shape, radius=dim[0], length=dim[1])
+            visual_shape_id = p.createVisualShape(shape, dim[0], [1,1,1], dim[1])
+            # collision_shape_id = p.createCollisionShape(shapeType=shape, radius=dim[0], length=dim[1])
+            collision_shape_id = p.createCollisionShape(shape, dim[0], [1, 1, 1], dim[1])
         elif shape == p.GEOM_SPHERE:
-            pass        # TODO: ball
-        return id
+            visual_shape_id = p.createVisualShape(shape, radius=dim[0])
+            collision_shape_id = p.createCollisionShape(shape, radius=dim[0])
+
+        sid = p.createMultiBody(baseMass=self.obj_mass, baseInertialFramePosition=[0, 0, 0],
+                               baseCollisionShapeIndex=collision_shape_id,
+                               baseVisualShapeIndex=visual_shape_id,
+                               basePosition=init_xyz, baseOrientation=init_quat)
+        return sid
 
     def reset(self):
         p.resetSimulation()
@@ -178,9 +177,13 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         p.setTimeStep(self._timeStep)
         p.setGravity(0, 0, -10)
 
-        self.isBox = bool(self.np_random.randint(2)) if self.random_shape else self.default_box
+        # self.isBox = bool(self.np_random.randint(2)) if self.random_shape else self.default_box
+
+        self.shape_ind = self.np_random.randint(3) - 1 if self.random_shape else self.default_box
         self.half_height = self.np_random.uniform(low=0.055, high=0.09) if self.random_size else 0.07
         self.half_width = self.np_random.uniform(low=0.03, high=0.05) if self.random_size else 0.04  # aka radius
+        if self.shape_ind == -1:
+            self.half_height *= 0.75        # TODO
 
         if self.using_comfortable:
             if self.using_comfortable_range:
@@ -193,12 +196,15 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         if self.init_noise:
             obj_init_xyz += np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
 
-        if self.isBox:
+        if self.shape_ind == 1:
             self.dim = [self.half_width*0.8, self.half_width*0.8, self.half_height]    # TODO
             self.obj_id = self.create_prim_2_grasp(p.GEOM_BOX, self.dim, obj_init_xyz)
-        else:
+        elif self.shape_ind == 0:
             self.dim = [self.half_width, self.half_height*2.0]
             self.obj_id = self.create_prim_2_grasp(p.GEOM_CYLINDER, self.dim, obj_init_xyz)
+        elif self.shape_ind == -1:
+            self.dim = [self.half_height]
+            self.obj_id = self.create_prim_2_grasp(p.GEOM_SPHERE, self.dim, obj_init_xyz)
 
         self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.2, 0.2, 0.0],
                               useFixedBase=1)
@@ -325,8 +331,15 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             # this is the vision module one also used for reset/planning
 
         if self.random_shape:
-            shape_info = 1. if self.isBox else -1.
-            self.observation.extend([shape_info])
+            if self.shape_ind == 1:
+                shape_info = [1, -1, -1]
+            elif self.shape_ind == 0:
+                shape_info = [-1, 1, -1]
+            elif self.shape_ind == -1:
+                shape_info = [-1, -1, 1]
+            else:
+                shape_info = [-1, -1, -1]
+            self.observation.extend(shape_info)
 
         if self.random_size:
             self.observation.extend([self.half_height*4 + self.np_random.uniform(low=-0.02, high=0.02)*2,
@@ -359,9 +372,17 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         if unitz_hf[1] < -0.3:
             return
         else:
+            if self.shape_ind == 1:
+                shape = p.GEOM_BOX
+            elif self.shape_ind == 0:
+                shape = p.GEOM_CYLINDER
+            elif self.shape_ind == -1:
+                shape = p.GEOM_SPHERE
+            else:
+                shape = None
             state = {'obj_pos_in_palm': o_p_hf, 'obj_quat_in_palm': o_q_hf,
                      'all_fin_q': fin_q, 'fin_tar_q': self.robot.tar_fin_q,
-                     'obj_dim': self.dim, 'obj_shape': p.GEOM_BOX if self.isBox else p.GEOM_CYLINDER}   # TODO: ball
+                     'obj_dim': self.dim, 'obj_shape': shape}   # TODO: ball
             # print(state)
             # print(self.robot.get_joints_last_tau(self.robot.all_findofs))
             # self.robot.get_wrist_wrench()
