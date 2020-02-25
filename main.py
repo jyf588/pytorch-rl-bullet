@@ -123,7 +123,7 @@ def main():
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
 
-    episode_rewards = deque(maxlen=10)
+    episode_rewards = deque(maxlen=10000)
 
     start = time.time()
     num_updates = int(
@@ -230,6 +230,8 @@ def main():
             ob_rms = utils.get_vec_normalize(envs).ob_rms
             evaluate(actor_critic, ob_rms, args.env_name, args.seed,
                      args.num_processes, eval_log_dir, device)
+
+        episode_rewards.clear()
 
 
 if __name__ == "__main__":

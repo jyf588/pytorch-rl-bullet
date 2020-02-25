@@ -19,6 +19,8 @@ from my_pybullet_envs.inmoov_shadow_demo_env_v3 import InmoovShadowHandDemoEnvV3
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 homedir = os.path.expanduser("~")
 
+# TODO: delete numpy data files if they are there, which side?
+
 
 # TODOs
 # A modified bullet/const classes
@@ -98,7 +100,7 @@ g_tx = 0.2
 g_ty = 0.35
 p_tz = 0.0  # TODO: placing on floor
 # Ground-truth scene:
-obj1 = {'shape':'box','color':'yellow','position':[0.15,-0.18,0,0],'size': 'large'} #ref 1
+obj1 = {'shape':'box','color':'yellow','position':[0.15,-0.28,0,0],'size': 'large'} #ref 1
 # obj2 = {'shape':'box','color':'red','position': [g_tx,g_ty,0,0],'size': 'small'} # target
 obj2 = {'shape':'cylinder','color':'green','position': [g_tx,g_ty,0,0],'size': 'large'} # target
 obj3 = {'shape':'cylinder','color':'blue','position':[0.1,0.7,0,0],'size': 'large'} # ref 2
@@ -289,7 +291,7 @@ print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 ##########################----- SEND MOVE COMMAND TO OPENRAVE
 Qmove_init = np.concatenate((env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0],env_core.robot.get_q_dq(env_core.robot.arm_dofs)[1])) # OpenRave initial condition
 file_path = homedir+'/container_data/PB_MOVE.npz'
-np.savez(file_path, [], Qmove_init, Qdestin)
+np.savez(file_path, OBJECTS, Qmove_init, Qdestin)
 
 
 # Wait for command from OpenRave
