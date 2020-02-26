@@ -215,11 +215,12 @@ while n_trials < args.n_trials:
     #     render_func('human')
     # p.getCameraImage()
 
-with open('my_pybullet_envs/assets/place_init_dist/final_states_0219_cyl_2.pickle', 'wb') as handle:      # TODO: change name
-    o_pos_pf_ave, o_quat_pf_ave_ri = env_core.calc_average_obj_in_palm_rot_invariant()
-    _, o_quat_pf_ave = env_core.calc_average_obj_in_palm()
-    print(o_pos_pf_ave, o_quat_pf_ave_ri)
-    stored_info = {'init_states': env_core.final_states, 'ave_obj_pos_in_palm': o_pos_pf_ave,
-                   'ave_obj_quat_in_palm_rot_ivr': o_quat_pf_ave_ri,
-                   'ave_obj_quat_in_palm': o_quat_pf_ave}
-    pickle.dump(stored_info, handle, protocol=pickle.HIGHEST_PROTOCOL)
+if save_final_state_pkl:
+    with open('my_pybullet_envs/assets/place_init_dist/final_states_0219_cyl_2.pickle', 'wb') as handle:      # TODO: change name
+        o_pos_pf_ave, o_quat_pf_ave_ri = env_core.calc_average_obj_in_palm_rot_invariant()
+        _, o_quat_pf_ave = env_core.calc_average_obj_in_palm()
+        print(o_pos_pf_ave, o_quat_pf_ave_ri)
+        stored_info = {'init_states': env_core.final_states, 'ave_obj_pos_in_palm': o_pos_pf_ave,
+                       'ave_obj_quat_in_palm_rot_ivr': o_quat_pf_ave_ri,
+                       'ave_obj_quat_in_palm': o_quat_pf_ave}
+        pickle.dump(stored_info, handle, protocol=pickle.HIGHEST_PROTOCOL)
