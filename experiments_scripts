@@ -1098,6 +1098,57 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --l
 python main.py --env-name "InmoovHandGraspBulletEnv-v4" --algo ppo --use-gae --log-interval 10 --num-steps 1340 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0224_sph_0 --seed 9020 --up 1 --using_comfortable 1 --random_shape 0 --random_size 1 --default_box -1
 python main.py --env-name "InmoovHandGraspBulletEnv-v4" --algo ppo --use-gae --log-interval 10 --num-steps 1340 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0224_sph_1 --seed 9021 --up 1 --using_comfortable 1 --random_shape 0 --random_size 1 --default_box -1
 
+2/25 10:49
+# decrease vision skip (8->4), increase frameskip (3->6, control freq 40Hz), each control scale ./2
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_box_2_place_0225_0  --seed 8112 --random_shape 0 --random_size 1 --default_box 1 --up 1  --vision_skip 4 --control_skip 6
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_box_2_place_0224_1  --seed 8113 --random_shape 0 --random_size 1 --default_box 1 --up 1  --vision_skip 4 --control_skip 6
+0: 83%
+# decrease vision skip 4->2 to see if it helps
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_box_2_place_0225_2  --seed 8114 --random_shape 0 --random_size 1 --default_box 1 --up 1  --vision_skip 2 --control_skip 6
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_box_2_place_0225_3  --seed 8115 --random_shape 0 --random_size 1 --default_box 1 --up 1  --vision_skip 2 --control_skip 6
+testing 2 (78%): python enjoy.py --env-name InmoovHandPlaceBulletEnv-v6 --load-dir trained_models_0219_box_2_place_0225_2/ppo/ --non-det 0 --seed=1897 --random_shape 0 --random_size 1 --default_box 1 --up 1 --renders 1 --exclude_hard 0 --vision_skip 2 --control_skip 6
+
+2/26 00:46
+# make sure placing still works with minor mods like half_height_est
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_box_2_place_0226_0  --seed 8116 --random_shape 0 --random_size 1 --default_box 1 --up 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_box_2_place_0226_1  --seed 8117 --random_shape 0 --random_size 1 --default_box 1 --up 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_2_place_0226_0  --seed 8118 --random_shape 0 --random_size 1 --default_box 0 --up 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_2_place_0226_1  --seed 8119 --random_shape 0 --random_size 1 --default_box 0 --up 1
+
+2/26 10:00
+# exclude_hard change back to true
+# half_height_est 0.005
+# turn off vision delay
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_2_place_0226_2  --seed 8120 --random_shape 0 --random_size 1 --default_box 0 --up 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_2_place_0226_3  --seed 8121 --random_shape 0 --random_size 1 --default_box 0 --up 1
+
+# the only remaining thing seems obs noise
+2/26 12:00
+# turn off obj obs noise
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_2_place_0226_4  --seed 8122 --random_shape 0 --random_size 1 --default_box 0 --up 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_2_place_0226_5  --seed 8123 --random_shape 0 --random_size 1 --default_box 0 --up 1
+
+2/26 16:00
+# warm start..
+dir = "./trained_models_0219_cyl_2_place_0226_5_ws_wnoise_4/ppo/" etc.
+
+2/26 20:37
+# exclude_hard change back to true
+# half_height_est 0.01 but all obs noise turned off first
+# vision delay 1
+# see if both seeds can now succeed..
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_2_place_0227_0  --seed 8124 --random_shape 0 --random_size 1 --default_box 0 --up 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_2_place_0227_1  --seed 8125 --random_shape 0 --random_size 1 --default_box 0 --up 1
+# control skip 6, vision delay 1 (1/40s)
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_2_place_0227_2  --seed 8126 --random_shape 0 --random_size 1 --default_box 0 --up 1 --control_skip 6
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_2_place_0227_3  --seed 8127 --random_shape 0 --random_size 1 --default_box 0 --up 1 --control_skip 6
+# control skip 6, vision delay 2 (1/20s)
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_2_place_0227_4  --seed 8128 --random_shape 0 --random_size 1 --default_box 0 --up 1 --control_skip 6 --vision_skip 2
+python main.py --env-name "InmoovHandPlaceBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 1200 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0219_cyl_2_place_0227_5  --seed 8129 --random_shape 0 --random_size 1 --default_box 0 --up 1 --control_skip 6 --vision_skip 2
+# make sure grasping still works
+python main.py --env-name "InmoovHandGraspBulletEnv-v4" --algo ppo --use-gae --log-interval 10 --num-steps 1340 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0227_box_0 --seed 9013 --up 1 --using_comfortable 1 --random_shape 0 --random_size 1 --default_box 1
+python main.py --env-name "InmoovHandGraspBulletEnv-v4" --algo ppo --use-gae --log-interval 10 --num-steps 1340 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0227_cyl_0 --seed 9014 --up 1 --using_comfortable 1 --random_shape 0 --random_size 1 --default_box 0
+# for thw above, need to curriculum train with obs noise.
 
 
 

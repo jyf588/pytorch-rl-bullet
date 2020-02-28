@@ -16,7 +16,7 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
 
     def __init__(self,
                  renders=False,
-                 init_noise=True,
+                 init_noise=True,   # variation during reset
                  up=False,
                  random_shape=False,
                  random_size=True,
@@ -26,7 +26,9 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
                  gt_only_init=False,
                  grasp_pi_name=None,
                  exclude_hard=True,
-                 vision_skip=1
+                 vision_skip=1,
+                 control_skip=3,
+                 obs_noise=False    # noisy (imperfect) observation
                  ):
         self.renders = renders
         self.init_noise = init_noise
@@ -40,6 +42,7 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         self.use_gt_6d = use_gt_6d
         self.gt_only_init = gt_only_init
         self.exclude_hard = exclude_hard
+        self.obs_noise = obs_noise
 
         self.vision_skip = vision_skip
         self.vision_counter = 0
@@ -76,8 +79,9 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         self.viewer = None
         self.timer = 0
 
-        self.frameSkip = 3
-        self.action_scale = np.array([0.004] * 7 + [0.008] * 17)  # shadow hand is 22-5=17dof
+        self.control_skip = int(control_skip)
+        # shadow hand is 22-5=17dof
+        self.action_scale = np.array([0.012 / self.control_skip] * 7 + [0.024 / self.control_skip] * 17)
 
         self.tx = -1    # dummy
         self.ty = -1    # dummy
@@ -181,6 +185,7 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
 
     def get_optimal_init_arm_q(self, desired_obj_pos):
         # TODO: desired obj init pos -> should add clearance to z.
+        # uses (self.o_pos_pf_ave, self.o_quat_pf_ave), so set mean stats to load properly
         arm_q = None
         cost = 1e30
         ref = np.array([0.] * 3 + [-1.57] + [0.] * 3)
@@ -200,7 +205,7 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         self.tz = self.btm_obj_height if not self.place_floor else 0.0
         while True:
             if self.up:
-                self.tx = self.np_random.uniform(low=0, high=0.3)
+                self.tx = self.np_random.uniform(low=0, high=0.25)
                 self.ty = self.np_random.uniform(low=-0.1, high=0.5)
                 # self.tx = self.np_random.uniform(low=0, high=0.2)
                 # self.ty = self.np_random.uniform(low=-0.2, high=0.0)
@@ -267,7 +272,7 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         p.disconnect()
 
     def step(self, action):
-        for _ in range(self.frameSkip):
+        for _ in range(self.control_skip):
             # action is not in -1,1
             if action is not None:
                 # action = np.clip(np.array(action), -1, 1)   # TODO
@@ -365,15 +370,27 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
     def obj6DtoObs_UpVec(self, o_pos, o_orn):
         objObs = []
         o_pos = np.array(o_pos)
-        if self.up:                         # TODO:tmp
+        if self.up:                         # TODO: center o_pos
             o_pos -= [self.tx, self.ty, 0]
-        o_pos = o_pos * 3.0       # TODO:tmp, scale up
+        # TODO: scale up since we do not have obs normalization
+        if self.obs_noise:
+            o_pos = self.perturb(o_pos, r=0.02) * 3.0
+        else:
+            o_pos = o_pos * 3.0
+        # o_pos = [0., 0, 0]
+
         o_rotmat = np.array(p.getMatrixFromQuaternion(o_orn))
         o_upv = [o_rotmat[2], o_rotmat[5], o_rotmat[8]]
-        objObs.extend(list(self.perturb(o_pos, r=0.04)))
-        objObs.extend(list(self.perturb(o_pos, r=0.04)))
-        objObs.extend(list(self.perturb(o_upv, r=0.04)))
-        objObs.extend(list(self.perturb(o_upv, r=0.04)))
+        if self.obs_noise:
+            o_upv = self.perturb(o_upv, r=0.03)
+        else:
+            o_upv = o_upv
+        # o_upv = [0, 0, 1]
+
+        objObs.extend(list(self.perturb(o_pos, r=0.005)))
+        objObs.extend(list(o_pos))
+        objObs.extend(list(self.perturb(o_upv, r=0.005)))
+        objObs.extend(list(o_upv))
         return objObs
 
     # change to tar pos fin pos diff
@@ -398,6 +415,8 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
                         self.t_pos, self.t_orn = p.getBasePositionAndOrientation(self.obj_id)
                     clPos, clOrn = self.last_t_pos, self.last_t_orn
 
+                    # clPos, clOrn = p.getBasePositionAndOrientation(self.obj_id)
+
                     # print("feed into", clPos, clOrn)
                     # clPos_act, clOrn_act = p.getBasePositionAndOrientation(self.obj_id)
                     # print("act",  clPos_act, clOrn_act)
@@ -419,6 +438,8 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
                     # clPos_act, clOrn_act = p.getBasePositionAndOrientation(self.bottom_obj_id)
                     # print("b act", clPos_act, clOrn_act)
 
+                    # clPos, clOrn = p.getBasePositionAndOrientation(self.bottom_obj_id)
+
                     self.observation.extend(self.obj6DtoObs_UpVec(clPos, clOrn))  # TODO
 
         curContact = []
@@ -436,31 +457,25 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         self.observation.extend(curContact)
 
         if self.up:
+            # self.tx, self.ty is the vision module one also used for reset/planning
             xy = np.array([self.tx, self.ty])   # TODO: tx, ty wrt world origin
-            self.observation.extend(list(self.perturb(xy, r=0.01)))
-            self.observation.extend(list(self.perturb(xy, r=0.01)))
+            self.observation.extend(list(self.perturb(xy, r=0.005)))
+            self.observation.extend(list(self.perturb(xy, r=0.005)))
             self.observation.extend(list(xy))
-            # this is the vision module one also used for reset/planning
 
         if self.random_shape:
             shape_info = 1. if self.is_box else -1.
             self.observation.extend([shape_info])
 
         if self.random_size:
-            self.observation.extend([self.half_height*4 + self.np_random.uniform(low=-0.02, high=0.02)*2,
-                                     self.half_height*4 + self.np_random.uniform(low=-0.02, high=0.02)*2,
-                                     self.half_height*4 + self.np_random.uniform(low=-0.02, high=0.02)*2])
-            # this is the true half_height, vision module one will be noisy
-
-        # if self.lastContact is not None:
-        #     self.observation.extend(self.lastContact)
-        # else:   # first step
-        #     self.observation.extend(curContact)
-        # self.lastContact = curContact.copy()
-
-        # print("obv", self.observation)
-        # print("max", np.max(np.abs(np.array(self.observation))))
-        # print("min", np.min(np.abs(np.array(self.observation))))
+            # self.half_height is the true half_height, vision module one will be noisy
+            if self.obs_noise:
+                half_height_est = self.half_height + self.np_random.uniform(low=-0.01, high=0.01)
+            else:
+                half_height_est = self.half_height
+            self.observation.extend([half_height_est * 4 + self.np_random.uniform(low=-0.01, high=0.01),
+                                     half_height_est * 4 + self.np_random.uniform(low=-0.01, high=0.01),
+                                     half_height_est * 4])
 
         return self.observation
 

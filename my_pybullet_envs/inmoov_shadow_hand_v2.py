@@ -47,7 +47,11 @@
 # v2_2 urdf
 # does not like IK, so wrist_x bound will not be used for now.
 
-#TODO: replace p with sim?
+# TODO: replace p with sim?
+# TODO: test mu
+# TODO: compute fk for getLinkPos
+# TODO: mass scales of arm.
+
 
 import pybullet_utils.bullet_client as bc
 import pybullet as p
@@ -104,7 +108,7 @@ class InmoovShadowNew:
             p.changeDynamics(self.arm_id, i, jointDamping=0.0, linearDamping=0.0, angularDamping=0.0)
 
         self.scale_mass_inertia(-1, self.ee_id, 0.01)
-        self.scale_mass_inertia(self.ee_id, p.getNumJoints(self.arm_id), 10.0)   # TODO 5.0
+        self.scale_mass_inertia(self.ee_id, p.getNumJoints(self.arm_id), 10.0)
 
         for i in range(self.ee_id, p.getNumJoints(self.arm_id)):
             p.changeDynamics(self.arm_id, i, lateralFriction=1.7)       # TODO 1.6
@@ -276,7 +280,6 @@ class InmoovShadowNew:
                 obs.extend(angVel)
 
         a_q, a_dq = self.get_q_dq(self.arm_dofs)
-        # print("arm q", a_q)
         obs.extend(list(a_q))
         obs.extend(list(a_dq))
         obs.extend(list(self.get_q_dq(self.fin_actdofs)[0]))    # no finger vel

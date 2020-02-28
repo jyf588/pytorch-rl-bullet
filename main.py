@@ -52,11 +52,19 @@ def main():
     envs = make_vec_envs(args.env_name, args.seed, args.num_processes,
                          args.gamma, args.log_dir, device, False, renders=False, **extra_dict)
 
-    actor_critic = Policy(
-        envs.observation_space.shape,
-        envs.action_space,
-        base_kwargs={'recurrent': args.recurrent_policy, 'hidden_size': args.hidden_size})
-    actor_critic.to(device)
+    if args.warm_start == '':
+        actor_critic = Policy(
+            envs.observation_space.shape,
+            envs.action_space,
+            base_kwargs={'recurrent': args.recurrent_policy, 'hidden_size': args.hidden_size})
+        actor_critic.to(device)
+    else:
+        # args.warm_start = "./trained_models_0219_cyl_2_place_0226_5/ppo/InmoovHandPlaceBulletEnv-v6.pt"
+        # TODO: assume no state normalize ob_rms
+        if args.cuda:
+            actor_critic, _ = torch.load(args.warm_start)
+        else:
+            actor_critic, _ = torch.load(args.warm_start, map_location='cpu')
 
     dummy = gym.make(args.env_name, renders=False, **extra_dict)
     save_path = os.path.join(args.save_dir, args.algo)

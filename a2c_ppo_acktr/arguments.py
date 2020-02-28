@@ -153,6 +153,10 @@ def get_args():
         action='store_true',
         default=False,
         help='use a linear schedule on the learning rate')
+    parser.add_argument(
+        '--warm-start',
+        default='',
+        help='policy pathname to warm start')
 
     args, unknown = parser.parse_known_args()  # this is an 'internal' method
     # which returns 'parsed', the same as what parse_args() would return

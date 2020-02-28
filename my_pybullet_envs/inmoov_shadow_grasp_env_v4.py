@@ -16,7 +16,8 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 # episode length 400
 
 # TODO: txyz will be given by vision module. tz is zero for grasping, obj frame at bottom.
-
+# should change how we used half_height (align with tx ty)
+# for placing, how to use top & btm obj 6D should be changed as well
 
 class InmoovShadowHandGraspEnvV4(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
@@ -29,7 +30,9 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
                  random_size=True,
                  default_box=1,      # if not random shape, 1 box, 0 cyl, -1 sphere, bad legacy naming
                  using_comfortable=True,
-                 using_comfortable_range=False):
+                 using_comfortable_range=False,
+                 control_skip=3,
+                 obs_noise=False):
         self.renders = renders
         self.init_noise = init_noise
         self.up = up
@@ -38,6 +41,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         self.default_box = default_box
         self.using_comfortable = using_comfortable
         self.using_comfortable_range = using_comfortable_range
+        self.obs_noise = obs_noise
 
         self.vary_angle_range = 0.6
         self.obj_mass = 3.5
@@ -55,8 +59,9 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
 
         self.final_states = []  # wont be cleared unless call clear function
 
-        self.frameSkip = 3
-        self.action_scale = np.array([0.004] * 7 + [0.008] * 17)  # shadow hand is 22-5=17dof
+        self.control_skip = int(control_skip)
+        # shadow hand is 22-5=17dof
+        self.action_scale = np.array([0.012 / self.control_skip] * 7 + [0.024 / self.control_skip] * 17)
 
         if self.up:
             self.tx = None  # assigned later
@@ -92,7 +97,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             #     cyl_init_pos = [0, 0, 0.0651]
             # else:
             #     cyl_init_pos = [0, 0, 0.091]
-            self.tx = self.np_random.uniform(low=0, high=0.3)
+            self.tx = self.np_random.uniform(low=0, high=0.25)
             self.ty = self.np_random.uniform(low=-0.1, high=0.5)
             # self.tx = 0.14
             # self.ty = 0.3
@@ -115,7 +120,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             #     cyl_init_pos = [0, 0, 0.0651]
             # else:
             #     cyl_init_pos = [0, 0, 0.091]
-            self.tx = self.np_random.uniform(low=0, high=0.3)
+            self.tx = self.np_random.uniform(low=0, high=0.25)
             self.ty = self.np_random.uniform(low=-0.1, high=0.5)
             # self.tx = 0.1
             # self.ty = 0.0
@@ -226,12 +231,12 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         return np.array(self.observation)
 
     def step(self, action):
-        if self.timer > 100*self.frameSkip:
+        if self.timer > 100*self.control_skip:
             p.setCollisionFilterPair(self.obj_id, self.floorId, -1, -1, enableCollision=0)
             # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
             #     p.setCollisionFilterPair(self.floorId, self.robot.arm_id, -1, i, enableCollision=0)
 
-        for _ in range(self.frameSkip):
+        for _ in range(self.control_skip):
             # action is in -1,1
             if action is not None:
                 self.act = action
@@ -325,8 +330,8 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
 
         if self.up:
             xy = np.array([self.tx, self.ty])
-            self.observation.extend(list(xy + self.np_random.uniform(low=-0.01, high=0.01, size=2)))
-            self.observation.extend(list(xy + self.np_random.uniform(low=-0.01, high=0.01, size=2)))
+            self.observation.extend(list(xy + self.np_random.uniform(low=-0.005, high=0.005, size=2)))
+            self.observation.extend(list(xy + self.np_random.uniform(low=-0.005, high=0.005, size=2)))
             self.observation.extend(list(xy))
             # this is the vision module one also used for reset/planning
 
@@ -342,10 +347,14 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             self.observation.extend(shape_info)
 
         if self.random_size:
-            self.observation.extend([self.half_height*4 + self.np_random.uniform(low=-0.02, high=0.02)*2,
-                                     self.half_height*4 + self.np_random.uniform(low=-0.02, high=0.02)*2,
-                                     self.half_height*4 + self.np_random.uniform(low=-0.02, high=0.02)*2])
-            # this is the true half_height, vision module one will be noisy
+            # self.half_height is the true half_height, vision module one will be noisy
+            if self.obs_noise:
+                half_height_est = self.half_height + self.np_random.uniform(low=-0.01, high=0.01)
+            else:
+                half_height_est = self.half_height
+            self.observation.extend([half_height_est * 4 + self.np_random.uniform(low=-0.01, high=0.01),
+                                     half_height_est * 4 + self.np_random.uniform(low=-0.01, high=0.01),
+                                     half_height_est * 4])
 
         # self.observation.extend([self.timer/300 + self.np_random.uniform(low=-0.01, high=0.01),
         #                          self.timer/300 + self.np_random.uniform(low=-0.01, high=0.01),
@@ -382,7 +391,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
                 shape = None
             state = {'obj_pos_in_palm': o_p_hf, 'obj_quat_in_palm': o_q_hf,
                      'all_fin_q': fin_q, 'fin_tar_q': self.robot.tar_fin_q,
-                     'obj_dim': self.dim, 'obj_shape': shape}   # TODO: ball
+                     'obj_dim': self.dim, 'obj_shape': shape}
             # print(state)
             # print(self.robot.get_joints_last_tau(self.robot.all_findofs))
             # self.robot.get_wrist_wrench()
