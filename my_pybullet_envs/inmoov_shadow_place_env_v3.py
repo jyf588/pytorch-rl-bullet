@@ -545,10 +545,15 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                     joint_name2angle[joint_name] = joint_angle
                 self.poses.append(
                     {
-                        "top": {"position": top_pos, "orientation": top_orn},
-                        "bottom": {
-                            "position": bot_pos,
-                            "orientation": bot_orn,
+                        "objects": {
+                            "top": {
+                                "position": top_pos,
+                                "orientation": top_orn,
+                            },
+                            "bottom": {
+                                "position": bot_pos,
+                                "orientation": bot_orn,
+                            },
                         },
                         "robot": joint_name2angle,
                     }
