@@ -534,13 +534,15 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                 bot_pos, bot_orn = p.getBasePositionAndOrientation(
                     self.bottom_obj_id
                 )
-                joint_ids = list(range(p.getNumJoints(self.robot.arm_id)))
-                joint_angles = [
-                    joint_state[0]
-                    for joint_state in p.getJointStates(
-                        bodyUniqueId=self.robot.arm_id, jointIndices=joint_ids
-                    )
-                ]
+                joint_name2angle = {}
+                for joint_idx in range(p.getNumJoints(self.robot.arm_id)):
+                    joint_name = p.getJointInfo(self.robot.arm_id, joint_idx)[
+                        1
+                    ].decode("utf-8")
+                    joint_angle = p.getJointState(
+                        bodyUniqueId=self.robot.arm_id, jointIndex=joint_idx
+                    )[0]
+                    joint_name2angle[joint_name] = joint_angle
                 self.poses.append(
                     {
                         "top": {"position": top_pos, "orientation": top_orn},
@@ -548,7 +550,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                             "position": bot_pos,
                             "orientation": bot_orn,
                         },
-                        "robot": {"joint_angles": joint_angles},
+                        "robot": joint_name2angle,
                     }
                 )
                 with open(f"/home/michelle/poses.json", "w") as f:
