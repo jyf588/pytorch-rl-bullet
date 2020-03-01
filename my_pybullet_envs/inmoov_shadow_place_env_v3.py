@@ -535,9 +535,12 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                     self.bottom_obj_id
                 )
                 joint_ids = list(range(p.getNumJoints(self.robot.arm_id)))
-                joint_angles = p.getJointStates(
-                    bodyUniqueId=self.robot.arm_id, jointIndices=joint_ids
-                )[0]
+                joint_angles = [
+                    joint_state[0]
+                    for joint_state in p.getJointStates(
+                        bodyUniqueId=self.robot.arm_id, jointIndices=joint_ids
+                    )
+                ]
                 self.poses.append(
                     {
                         "top": {"position": top_pos, "orientation": top_orn},
