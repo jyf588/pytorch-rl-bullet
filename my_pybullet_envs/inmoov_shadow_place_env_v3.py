@@ -35,7 +35,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
         use_gt_6d=True,
         gt_only_init=True,
         grasp_pi_name=None,
-        save_poses=False,
+        save_poses=True,
     ):
         self.renders = renders
         self.init_noise = init_noise
@@ -534,6 +534,10 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                 bot_pos, bot_orn = p.getBasePositionAndOrientation(
                     self.bottom_obj_id
                 )
+                joint_ids = list(range(p.getNumJoints(self.robot.arm_id)))
+                joint_angles = p.getJointStates(
+                    bodyUniqueId=self.robot.arm_id, jointIndices=joint_ids
+                )[0]
                 self.poses.append(
                     {
                         "top": {"position": top_pos, "orientation": top_orn},
@@ -541,6 +545,7 @@ class InmoovShadowHandPlaceEnvV3(gym.Env):
                             "position": bot_pos,
                             "orientation": bot_orn,
                         },
+                        "robot": {"joint_angles": joint_angles},
                     }
                 )
                 with open(f"/home/michelle/poses.json", "w") as f:
