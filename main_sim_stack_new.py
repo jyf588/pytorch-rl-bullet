@@ -47,14 +47,18 @@ homedir = os.path.expanduser("~")
 # 4. different release traj
 # 5. 4 grid / 6 grid
 
+# TODO:tmp add a flag to always load the same transporting traj
+FIX_MOVE = True
+FIX_MOVE_PATH = os.path.join(homedir, "container_data/OR_MOVE.npy")
+
 # constants
 # DEMO_ENV_NAME = 'ShadowHandDemoBulletEnv-v1'        # TODO: no longer used
-GRASP_PI = '0219_cyl_2'
-# GRASP_PI = '0219_box_2'
+# GRASP_PI = '0219_cyl_2'
+GRASP_PI = '0219_box_2'
 GRASP_DIR = "./trained_models_%s/ppo/" % GRASP_PI
 GRASP_PI_ENV_NAME = 'InmoovHandGraspBulletEnv-v4'
-PLACE_PI = '0219_cyl_2_place_0220_1'
-# PLACE_PI = '0219_box_2_place_0220_3'
+# PLACE_PI = '0219_cyl_2_place_0220_1'
+PLACE_PI = '0219_box_2_place_0220_3'
 PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 PLACE_PI_ENV_NAME = 'InmoovHandPlaceBulletEnv-v6'
 
@@ -103,16 +107,16 @@ p_tz = 0.18  # TODO: placing on cyl
 obj1 = {'shape':'box','color':'yellow','position':[0.15,0.7,0,0],'size': 'large'} #ref 1
 # obj2 = {'shape':'box','color':'red','position': [g_tx,g_ty,0,0],'size': 'small'} # target
 # obj2 = {'shape':'cylinder','color':'green','position': [g_tx,g_ty,0,0],'size': 'small'} # target
-obj2 = {'shape':'cylinder','color':'green','position': [g_tx,g_ty,0,0],'size': 'large'} # target
+obj2 = {'shape':'box','color':'green','position': [g_tx,g_ty,0,0],'size': 'small'} # target
 obj3 = {'shape':'cylinder','color':'blue','position':[0.2,-0.05,0,0],'size': 'large'} # ref 2
-# obj4 = {'shape':'cylinder','color':'yellow','position':[0.1,0.7,0,0],'size': 'small'} #irrelevant
-# objs = [obj1, obj2, obj3, obj4]
-objs = [obj1, obj2, obj3]
+obj4 = {'shape':'box','color':'yellow','position':[0.0,0.1,0,0],'size': 'large'} #irrelevant
+objs = [obj1, obj2, obj3, obj4]
+# objs = [obj1, obj2, obj3]
 Target_ind = 1  # TODO:tmp
 # command
 # sentence = "Put the small red box between the blue cylinder and yellow box"
 # sentence = "Put the small green cylinder on top of the blue cylinder"
-sentence = "Put the large green cylinder on top of the blue cylinder"
+sentence = "Put the small green box on top of the blue cylinder"
 
 BULLET_SOLVER_ITER = 200
 
@@ -245,7 +249,7 @@ oid1 = obj_ids[Target_ind]   # TODO:tmp
 
 env_core.robot.reset_with_certain_arm_q(Qreach)     # TODO
 
-g_obs = env_core.get_robot_contact_txty_halfh_obs(g_tx, g_ty, 0.09)    # TODO: hardcoded
+g_obs = env_core.get_robot_contact_txty_halfh_obs(g_tx, g_ty, 0.065)    # TODO: hardcoded
 g_obs = wrap_over_grasp_obs(g_obs)
 
 # grasp!
@@ -257,7 +261,7 @@ for i in range(GRASP_END_STEP):
 
     env_core.step(unwrap_action(action))
     # g_obs = env_core.get_robot_contact_txty_obs(g_tx, g_ty)
-    g_obs = env_core.get_robot_contact_txty_halfh_obs(g_tx, g_ty, 0.09)  # TODO: hardcoded
+    g_obs = env_core.get_robot_contact_txty_halfh_obs(g_tx, g_ty, 0.065)  # TODO: hardcoded
     g_obs = wrap_over_grasp_obs(g_obs)
 
     # print(g_obs)
@@ -278,30 +282,33 @@ print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 # input("after grasping")
 
 ##########################----- SEND MOVE COMMAND TO OPENRAVE
-Qmove_init = np.concatenate((env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0],env_core.robot.get_q_dq(env_core.robot.arm_dofs)[1])) # OpenRave initial condition
-file_path = homedir+'/container_data/PB_MOVE.npz'
-np.savez(file_path, OBJECTS, Qmove_init, Qdestin)
-
-
-# Wait for command from OpenRave
-file_path = homedir+'/container_data/OR_MOVE.npy'
-assert not os.path.exists(file_path)
-while not os.path.exists(file_path):
-    time.sleep(0.01)
-if os.path.isfile(file_path):
-    Traj2 = np.load(file_path)
-    print("loaded")
-    try:
-        os.remove(file_path)
-        print("deleted")
-        # input("press enter")
-    except OSError as e:  # name the Exception `e`
-        print("Failed with:", e.strerror)  # look what it says
-        # input("press enter")
+if FIX_MOVE:
+    Traj2 = np.load(FIX_MOVE_PATH)
 else:
-    raise ValueError("%s isn't a file!" % file_path)
-print("Trajectory obtained from OpenRave!")
-# input("press enter")
+    Qmove_init = np.concatenate((env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0],env_core.robot.get_q_dq(env_core.robot.arm_dofs)[1])) # OpenRave initial condition
+    file_path = homedir+'/container_data/PB_MOVE.npz'
+    np.savez(file_path, OBJECTS, Qmove_init, Qdestin)
+
+
+    # Wait for command from OpenRave
+    file_path = homedir+'/container_data/OR_MOVE.npy'
+    assert not os.path.exists(file_path)
+    while not os.path.exists(file_path):
+        time.sleep(0.01)
+    if os.path.isfile(file_path):
+        Traj2 = np.load(file_path)
+        print("loaded")
+        try:
+            os.remove(file_path)
+            print("deleted")
+            # input("press enter")
+        except OSError as e:  # name the Exception `e`
+            print("Failed with:", e.strerror)  # look what it says
+            # input("press enter")
+    else:
+        raise ValueError("%s isn't a file!" % file_path)
+    print("Trajectory obtained from OpenRave!")
+    # input("press enter")
 
 
 ##################################---- EXECUTE PLANNED MOVING TRAJECTORY
@@ -317,13 +324,13 @@ print("palm", env_core.robot.get_link_pos_quat(env_core.robot.ee_id))
 env_core.diffTar = True     # TODO:tmp!!!
 
 t_pos, t_quat = p.getBasePositionAndOrientation(oid1)   # TODO!!!
-b_pos, b_quat = p.getBasePositionAndOrientation(obj_ids[-1])    #  TODO!!!
+b_pos, b_quat = p.getBasePositionAndOrientation(obj_ids[2])    #  TODO!!!
 # TODO: an unly hack to force Bullet compute forward kinematics
-p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(p_tx, p_ty, t_pos, t_quat,b_pos, b_quat, 0.09)  # TODO:hardcoded
-p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(p_tx, p_ty, t_pos, t_quat,b_pos, b_quat, 0.09)
+p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(p_tx, p_ty, t_pos, t_quat,b_pos, b_quat, 0.065)  # TODO:hardcoded
+p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(p_tx, p_ty, t_pos, t_quat,b_pos, b_quat, 0.065)
 p_obs = wrap_over_grasp_obs(p_obs)
 print("pobs", p_obs)
-input("ready to place")
+# input("ready to place")
 # place!
 for i in range(PLACE_END_STEP):
     with torch.no_grad():
@@ -332,8 +339,8 @@ for i in range(PLACE_END_STEP):
 
     env_core.step(unwrap_action(action))
     t_pos, t_quat = p.getBasePositionAndOrientation(oid1)   # real time update TODO!!!
-    b_pos, b_quat = p.getBasePositionAndOrientation(obj_ids[-1])  # real time update TODO!!!
-    p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, 0.09)
+    b_pos, b_quat = p.getBasePositionAndOrientation(obj_ids[2])  # real time update TODO!!!
+    p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, 0.065)
     p_obs = wrap_over_grasp_obs(p_obs)
 
     # print(action)

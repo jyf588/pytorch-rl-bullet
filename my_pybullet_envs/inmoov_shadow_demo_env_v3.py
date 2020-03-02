@@ -93,7 +93,7 @@ class InmoovShadowHandDemoEnvV3():
                 self.robot.apply_action(self.act * self.action_scale)
             p.stepSimulation()
             if self.renders:
-                time.sleep(self._timeStep*2)
+                time.sleep(self._timeStep*0.6)
             self.timer += 1
 
     def get_robot_contact_obs(self):
