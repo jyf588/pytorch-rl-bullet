@@ -23,6 +23,7 @@ from my_pybullet_envs.inmoov_shadow_place_env_v6 import (
 from my_pybullet_envs.inmoov_shadow_demo_env_v3 import (
     InmoovShadowHandDemoEnvV3,
 )
+from pose_saver import PoseSaver
 
 currentdir = os.path.dirname(
     os.path.abspath(inspect.getfile(inspect.currentframe()))
@@ -156,8 +157,8 @@ sentence = "Put the small green box on top of the blue cylinder"
 BULLET_SOLVER_ITER = 200
 
 # Whether to save object and robot poses to a JSON file.
-SAVE_POSES = False
-poses = []
+SAVE_POSES = True
+pose_saver = PoseSaver(path=os.path.join(homedir, "main_sim_stack_new.json"))
 
 
 def planning(Traj, i_g_obs, recurrent_hidden_states, masks):
@@ -435,6 +436,10 @@ for i in range(PLACE_END_STEP):
     # input("press enter g_obs")
 
     masks.fill_(1.0)
+    pose_saver.get_poses(oids=obj_ids, robot_id=env_core.robot.arm_id)
+
+if SAVE_POSES:
+    pose_saver.save()
 
 # execute_release_traj()
 for ind in range(0, 100):
