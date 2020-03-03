@@ -446,11 +446,12 @@ for i in range(PLACE_END_STEP):
     masks.fill_(1.0)
     pose_saver.get_poses()
 
-if SAVE_POSES:
-    pose_saver.save()
 
 # execute_release_traj()
 for ind in range(0, 100):
     p.stepSimulation()
     time.sleep(1.0 / 240.0)
+    pose_saver.get_poses()
 
+if SAVE_POSES:
+    pose_saver.save()
