@@ -155,6 +155,10 @@ sentence = "Put the small green box on top of the blue cylinder"
 
 BULLET_SOLVER_ITER = 200
 
+# Whether to save object and robot poses to a JSON file.
+SAVE_POSES = False
+poses = []
+
 
 def planning(Traj, i_g_obs, recurrent_hidden_states, masks):
     print("end of traj", Traj[-1, 0:7])
