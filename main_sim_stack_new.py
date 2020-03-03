@@ -158,10 +158,9 @@ BULLET_SOLVER_ITER = 200
 
 # Whether to save object and robot poses to a JSON file.
 SAVE_POSES = True
-pose_saver = PoseSaver(path=os.path.join(homedir, "main_sim_stack_new.json"))
 
 
-def planning(Traj, i_g_obs, recurrent_hidden_states, masks):
+def planning(Traj, i_g_obs, recurrent_hidden_states, masks, pose_saver):
     print("end of traj", Traj[-1, 0:7])
     for ind in range(0, len(Traj)):
         tar_armq = Traj[ind, 0:7]
@@ -169,12 +168,14 @@ def planning(Traj, i_g_obs, recurrent_hidden_states, masks):
         env_core.robot.apply_action([0.0] * 24)
         p.stepSimulation()
         time.sleep(1.0 / 240.0)
+        pose_saver.get_poses()
 
     for _ in range(50):
         # print(env_core.robot.tar_arm_q)
         env_core.robot.tar_arm_q = tar_armq
         env_core.robot.apply_action([0.0] * 24)  # stay still for a while
         p.stepSimulation()
+        pose_saver.get_poses()
         # print("act", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
     #     #time.sleep(1. / 240.)
 
@@ -312,6 +313,12 @@ env_core = InmoovShadowHandDemoEnvV3(noisy_obs=NOISY_OBS, seed=args.seed)
 obj_ids = construct_bullet_scene(objs)
 oid1 = obj_ids[Target_ind]  # TODO:tmp
 
+pose_saver = PoseSaver(
+    path=os.path.join(homedir, "main_sim_stack_new.json"),
+    oids=obj_ids,
+    robot_id=env_core.robot.arm_id,
+)
+
 #################### ready to grasp
 
 env_core.robot.reset_with_certain_arm_q(Qreach)  # TODO
@@ -342,6 +349,7 @@ for i in range(GRASP_END_STEP):
     # control_steps += 1
     # input("press enter g_obs")
     masks.fill_(1.0)
+    pose_saver.get_poses()
 
 import copy
 
@@ -389,7 +397,7 @@ else:
 
 
 ##################################---- EXECUTE PLANNED MOVING TRAJECTORY
-planning(Traj2, final_g_obs, recurrent_hidden_states, masks)
+planning(Traj2, final_g_obs, recurrent_hidden_states, masks, pose_saver)
 print("after moving", get_relative_state_for_reset(oid1))
 print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 # input("after moving")
@@ -436,7 +444,7 @@ for i in range(PLACE_END_STEP):
     # input("press enter g_obs")
 
     masks.fill_(1.0)
-    pose_saver.get_poses(oids=obj_ids, robot_id=env_core.robot.arm_id)
+    pose_saver.get_poses()
 
 if SAVE_POSES:
     pose_saver.save()
