@@ -23,6 +23,7 @@ from my_pybullet_envs.inmoov_shadow_place_env_v6 import (
 from my_pybullet_envs.inmoov_shadow_demo_env_v3 import (
     InmoovShadowHandDemoEnvV3,
 )
+from ns_vqa_dart.scene_parse.attr_net.vision_inference import VisionInference
 from pose_saver import PoseSaver
 
 currentdir = os.path.dirname(
