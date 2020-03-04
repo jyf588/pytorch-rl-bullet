@@ -110,8 +110,9 @@ class InmoovShadowNew:
         self.scale_mass_inertia(-1, self.ee_id, 0.01)
         self.scale_mass_inertia(self.ee_id, p.getNumJoints(self.arm_id), 10.0)
 
+        mu = self.np_random.uniform(0.6, 1.3)
         for i in range(self.ee_id, p.getNumJoints(self.arm_id)):
-            p.changeDynamics(self.arm_id, i, lateralFriction=1.7)       # TODO 1.6
+            p.changeDynamics(self.arm_id, i, lateralFriction=mu)
 
         # use np for multi-indexing
         self.ll = np.array([p.getJointInfo(self.arm_id, i)[8] for i in range(p.getNumJoints(self.arm_id))])
@@ -360,6 +361,16 @@ class InmoovShadowNew:
         f_xyz, _ = p.multiplyTransforms([0, 0, 0], p_quat, joint_reaction[:3], [0, 0, 0, 1])
         m_xyz, _ = p.multiplyTransforms([0, 0, 0], p_quat, joint_reaction[3:], [0, 0, 0, 1])
         return list(f_xyz)+list(m_xyz)
+
+    def get_4_finger_deviation(self):
+        #  [9, 10, 11, 14, 15, 16, 19, 20, 21, 25, 26, 27]
+        finger_qs = self.get_q_dq(self.fin_actdofs)[0]
+        f2 = finger_qs[:3]
+        f3 = finger_qs[3:6]
+        f4 = finger_qs[6:9]
+        f5 = finger_qs[9:12]
+        return np.linalg.norm(f5 - f2) + np.linalg.norm(f2 - f3) + np.linalg.norm(f3 - f4) \
+                + np.linalg.norm(f4 - f5)
 
 
 if __name__ == "__main__":
