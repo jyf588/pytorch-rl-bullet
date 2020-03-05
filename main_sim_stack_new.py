@@ -23,7 +23,9 @@ from my_pybullet_envs.inmoov_shadow_place_env_v6 import (
 from my_pybullet_envs.inmoov_shadow_demo_env_v3 import (
     InmoovShadowHandDemoEnvV3,
 )
-from ns_vqa_dart.scene_parse.attr_net.vision_inference import VisionInference
+
+sys.path.append("ns_vqa_dart/")
+from bullet.vision_inference import VisionInference
 from pose_saver import PoseSaver
 
 currentdir = os.path.dirname(
@@ -159,6 +161,8 @@ BULLET_SOLVER_ITER = 200
 
 # Whether to save object and robot poses to a JSON file.
 SAVE_POSES = True
+USE_VISION_MODULE = False
+RENDER = True  # If true, uses OpenGL. Else, uses TinyRenderer.
 
 
 def planning(Traj, i_g_obs, recurrent_hidden_states, masks, pose_saver):
@@ -278,6 +282,13 @@ def construct_bullet_scene(objs):  # TODO: copied from inference code
 
 
 ################# pre-calculation & loading
+if USE_VISION_MODULE:
+    vision_module = VisionInference(
+        checkpoint_path="/home/michelle/outputs/ego_v009/checkpoint_best.pt"
+    )
+    objs = vision_module.predict()
+    print(f"Vision module predictions: {objs}")
+
 [OBJECTS, target_xyz] = NLPmod(sentence, objs)
 print("tar xyz from language", target_xyz)
 p_tx = target_xyz[0]
@@ -291,7 +302,10 @@ p_actor_critic, p_ob_rms, recurrent_hidden_states, masks = load_policy_params(
     PLACE_DIR, PLACE_PI_ENV_NAME
 )
 
-p.connect(p.GUI)
+if RENDER:
+    p.connect(p.GUI)
+else:
+    p.connect(p.DIRECT)
 p.resetSimulation()
 
 sess = ImaginaryArmObjSession()
