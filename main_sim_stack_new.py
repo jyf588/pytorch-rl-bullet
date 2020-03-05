@@ -299,11 +299,17 @@ oid1 = obj_ids[Target_ind]  # TODO:tmp
 
 """Pre-calculation & Loading"""
 if USE_VISION_MODULE:
+    # tar xyz from language [ 0.20458625 -0.0769506   0.12017712  0.        ]
     vision_module = VisionInference(
         p=p,
         checkpoint_path="/home/michelle/outputs/ego_v009/checkpoint_best.pt",
     )
     objs = vision_module.predict(oids=obj_ids)
+
+    # Artificially pad with a fourth dimension because language module expects
+    # it.
+    for i in range(len(objs)):
+        objs[i]["position"] = objs[i]["position"] + [0.0]
     print(f"Vision module predictions: {objs}")
 
 [OBJECTS, target_xyz] = NLPmod(sentence, objs)
