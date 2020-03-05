@@ -281,12 +281,29 @@ def construct_bullet_scene(objs):  # TODO: copied from inference code
     return obj_ids
 
 
-################# pre-calculation & loading
+"""Set up the Bullet world."""
+if RENDER:
+    p.connect(p.GUI)
+else:
+    p.connect(p.DIRECT)
+p.resetSimulation()
+p.resetSimulation()
+p.setPhysicsEngineParameter(numSolverIterations=BULLET_SOLVER_ITER)
+p.setTimeStep(TS)
+p.setGravity(0, 0, -10)
+
+env_core = InmoovShadowHandDemoEnvV3(noisy_obs=NOISY_OBS, seed=args.seed)
+obj_ids = construct_bullet_scene(objs)
+oid1 = obj_ids[Target_ind]  # TODO:tmp
+
+
+"""Pre-calculation & Loading"""
 if USE_VISION_MODULE:
     vision_module = VisionInference(
-        checkpoint_path="/home/michelle/outputs/ego_v009/checkpoint_best.pt"
+        p=p,
+        checkpoint_path="/home/michelle/outputs/ego_v009/checkpoint_best.pt",
     )
-    objs = vision_module.predict()
+    objs = vision_module.predict(oids=obj_ids)
     print(f"Vision module predictions: {objs}")
 
 [OBJECTS, target_xyz] = NLPmod(sentence, objs)
@@ -302,12 +319,6 @@ p_actor_critic, p_ob_rms, recurrent_hidden_states, masks = load_policy_params(
     PLACE_DIR, PLACE_PI_ENV_NAME
 )
 
-if RENDER:
-    p.connect(p.GUI)
-else:
-    p.connect(p.DIRECT)
-p.resetSimulation()
-
 sess = ImaginaryArmObjSession()
 Qreach = np.array(sess.get_most_comfortable_q_and_refangle(g_tx, g_ty)[0])
 
@@ -317,16 +328,6 @@ a.seed(args.seed)
 Qdestin = a.get_optimal_init_arm_q(desired_obj_pos)
 print("place arm q", Qdestin)
 
-################## set up world
-p.resetSimulation()
-p.setPhysicsEngineParameter(numSolverIterations=BULLET_SOLVER_ITER)
-p.setTimeStep(TS)
-p.setGravity(0, 0, -10)
-
-env_core = InmoovShadowHandDemoEnvV3(noisy_obs=NOISY_OBS, seed=args.seed)
-
-obj_ids = construct_bullet_scene(objs)
-oid1 = obj_ids[Target_ind]  # TODO:tmp
 
 pose_saver = PoseSaver(
     path=os.path.join(homedir, "main_sim_stack_new.json"),
