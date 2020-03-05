@@ -281,23 +281,28 @@ def construct_bullet_scene(objs):  # TODO: copied from inference code
     return obj_ids
 
 
-"""Set up the Bullet world."""
+"""Pre-calculation & Loading"""
+# latter 2 returns dummy
+g_actor_critic, g_ob_rms, _, _ = load_policy_params(
+    GRASP_DIR, GRASP_PI_ENV_NAME
+)
+p_actor_critic, p_ob_rms, recurrent_hidden_states, masks = load_policy_params(
+    PLACE_DIR, PLACE_PI_ENV_NAME
+)
+
+"""Start Bullet session."""
 if RENDER:
     p.connect(p.GUI)
 else:
     p.connect(p.DIRECT)
 p.resetSimulation()
-p.resetSimulation()
-p.setPhysicsEngineParameter(numSolverIterations=BULLET_SOLVER_ITER)
-p.setTimeStep(TS)
-p.setGravity(0, 0, -10)
 
-env_core = InmoovShadowHandDemoEnvV3(noisy_obs=NOISY_OBS, seed=args.seed)
+
+"""Load Bullet objects."""
 obj_ids = construct_bullet_scene(objs)
-oid1 = obj_ids[Target_ind]  # TODO:tmp
 
 
-"""Pre-calculation & Loading"""
+"""Vision and language"""
 if USE_VISION_MODULE:
     # tar xyz from language [ 0.20458625 -0.0769506   0.12017712  0.        ]
     vision_module = VisionInference(
@@ -317,14 +322,8 @@ print("tar xyz from language", target_xyz)
 p_tx = target_xyz[0]
 p_ty = target_xyz[1]
 
-# latter 2 returns dummy
-g_actor_critic, g_ob_rms, _, _ = load_policy_params(
-    GRASP_DIR, GRASP_PI_ENV_NAME
-)
-p_actor_critic, p_ob_rms, recurrent_hidden_states, masks = load_policy_params(
-    PLACE_DIR, PLACE_PI_ENV_NAME
-)
 
+"""Imaginary Arm Session"""
 sess = ImaginaryArmObjSession()
 Qreach = np.array(sess.get_most_comfortable_q_and_refangle(g_tx, g_ty)[0])
 
@@ -333,7 +332,20 @@ a = InmoovShadowHandPlaceEnvV6(renders=False, grasp_pi_name=GRASP_PI)
 a.seed(args.seed)
 Qdestin = a.get_optimal_init_arm_q(desired_obj_pos)
 print("place arm q", Qdestin)
+p.resetSimulation()  # Clean up the simulation, since this is only imaginary.
 
+
+"""Setup Bullet world."""
+p.setPhysicsEngineParameter(numSolverIterations=BULLET_SOLVER_ITER)
+p.setTimeStep(TS)
+p.setGravity(0, 0, -10)
+
+# Load bullet objects again, since they were cleared out by the imaginary
+# arm session.
+obj_ids = construct_bullet_scene(objs)
+oid1 = obj_ids[Target_ind]  # TODO:tmp
+
+env_core = InmoovShadowHandDemoEnvV3(noisy_obs=NOISY_OBS, seed=args.seed)
 
 pose_saver = PoseSaver(
     path=os.path.join(homedir, "main_sim_stack_new.json"),
