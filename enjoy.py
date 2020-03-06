@@ -57,6 +57,14 @@ parser.add_argument(
     '--save_final_states',
     type=int,
     default=0)
+parser.add_argument(
+    '--save_final_s',
+    type=int,
+    default=80)
+parser.add_argument(
+    '--save_final_e',
+    type=int,
+    default=100)
 
 
 args, unknown = parser.parse_known_args()  # this is an 'internal' method
@@ -134,6 +142,14 @@ recurrent_hidden_states = torch.zeros(1,
                                       actor_critic.recurrent_hidden_state_size)
 masks = torch.zeros(1, 1)
 
+collect_start = args.save_final_s
+collect_end = args.save_final_e
+save_path = None
+if args.save_final_states:
+    grasp_pi_name = args.load_dir[15:args.load_dir.find('/')]
+    save_path = 'my_pybullet_envs/assets/place_init_dist/final_states_' + grasp_pi_name \
+                 + '_' + str(collect_start) + '_' + str(collect_end) + '.pickle'
+    print("SAVE: ", save_path)
 
 # if render_func is not None:
 #     render_func('human')
@@ -177,8 +193,6 @@ while n_trials < args.n_trials:
 
     reward_total += reward
 
-    collect_start = 85
-    collect_end = 100
     if save_final_state_pkl and not done and collect_start <= control_step < collect_end:   # TODO: timer/r, need to change if Pi different
         # input("press enter")
         env_core.append_final_state()
@@ -216,7 +230,7 @@ while n_trials < args.n_trials:
     # p.getCameraImage()
 
 if save_final_state_pkl:
-    with open('my_pybullet_envs/assets/place_init_dist/final_states_0219_cyl_2.pickle', 'wb') as handle:      # TODO: change name
+    with open(save_path, 'wb') as handle:      # TODO: change name
         o_pos_pf_ave, o_quat_pf_ave_ri = env_core.calc_average_obj_in_palm_rot_invariant()
         _, o_quat_pf_ave = env_core.calc_average_obj_in_palm()
         print(o_pos_pf_ave, o_quat_pf_ave_ri)
