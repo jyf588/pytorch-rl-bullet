@@ -1,0 +1,4 @@
+Additional NLP-related installation instructions to run main_sim_stack_new.py:
+
+pip install spacy nltk
+python -m spacy download en_core_web_sm

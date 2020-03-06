@@ -4,3 +4,6 @@
 [submodule "my_pybullet_envs/assets/shadow_hand_arm"]
 	path = my_pybullet_envs/assets/shadow_hand_arm
 	url = https://github.com/jyf588/shadow_hand_arm.git
+[submodule "ns-vqa-dart"]
+	path = ns_vqa_dart
+	url = git@github.com:jyf588/ns-vqa-dart.git
