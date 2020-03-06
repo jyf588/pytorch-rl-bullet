@@ -1,5 +1,7 @@
 import argparse
+import json
 import pickle
+import pprint
 import os
 import sys
 
@@ -159,11 +161,6 @@ sentence = "Put the small green box on top of the blue cylinder"
 
 BULLET_SOLVER_ITER = 200
 
-# Whether to save object and robot poses to a JSON file.
-SAVE_POSES = True
-USE_VISION_MODULE = False
-RENDER = True  # If true, uses OpenGL. Else, uses TinyRenderer.
-
 
 def planning(Traj, i_g_obs, recurrent_hidden_states, masks, pose_saver):
     print("end of traj", Traj[-1, 0:7])
@@ -281,6 +278,12 @@ def construct_bullet_scene(objs):  # TODO: copied from inference code
     return obj_ids
 
 
+"""Configurations."""
+SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
+USE_VISION_MODULE = True
+RENDER = True  # If true, uses OpenGL. Else, uses TinyRenderer.
+
+
 """Pre-calculation & Loading"""
 # latter 2 returns dummy
 g_actor_critic, g_ob_rms, _, _ = load_policy_params(
@@ -290,37 +293,41 @@ p_actor_critic, p_ob_rms, recurrent_hidden_states, masks = load_policy_params(
     PLACE_DIR, PLACE_PI_ENV_NAME
 )
 
-"""Start Bullet session."""
-if RENDER:
-    p.connect(p.GUI)
-else:
-    p.connect(p.DIRECT)
-p.resetSimulation()
-
-
-"""Load Bullet objects."""
-obj_ids = construct_bullet_scene(objs)
-
 
 """Vision and language"""
 if USE_VISION_MODULE:
-    # tar xyz from language [ 0.20458625 -0.0769506   0.12017712  0.        ]
+    # Construct the bullet scene using DIRECT rendering, because that's what
+    # the vision module was trained on.
+    p.connect(p.DIRECT)
+    obj_ids = construct_bullet_scene(objs)
+
     vision_module = VisionInference(
         p=p,
         checkpoint_path="/home/michelle/outputs/ego_v009/checkpoint_best.pt",
+        camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
     )
     objs = vision_module.predict(oids=obj_ids)
 
     # Artificially pad with a fourth dimension because language module expects
-    # it.
+    # it. Also offset Y predictions with table offset.
     for i in range(len(objs)):
         objs[i]["position"] = objs[i]["position"] + [0.0]
-    print(f"Vision module predictions: {objs}")
+    # formatted_objs = json.dumps(objs, indent=2)
+    print(f"Vision module predictions:")
+    pprint.pprint(objs)
+    p.disconnect()
 
 [OBJECTS, target_xyz] = NLPmod(sentence, objs)
 print("tar xyz from language", target_xyz)
 p_tx = target_xyz[0]
 p_ty = target_xyz[1]
+
+
+"""Start Bullet session."""
+if RENDER:
+    p.connect(p.GUI)
+else:
+    p.connect(p.DIRECT)
 
 
 """Imaginary Arm Session"""
