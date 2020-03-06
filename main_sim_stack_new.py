@@ -151,8 +151,7 @@ obj4 = {
     "position": [0.0, 0.1, 0, 0],
     "size": "large",
 }  # irrelevant
-objs = [obj1, obj2, obj3, obj4]
-# objs = [obj1, obj2, obj3]
+gt_odicts = [obj1, obj2, obj3, obj4]
 Target_ind = 1  # TODO:tmp
 # command
 # sentence = "Put the small red box between the blue cylinder and yellow box"
@@ -242,16 +241,16 @@ def unwrap_action(act_tensor):
     return action.numpy()
 
 
-def construct_bullet_scene(objs):  # TODO: copied from inference code
+def construct_bullet_scene(odicts):  # TODO: copied from inference code
     # p.resetSimulation()
     obj_ids = []
-    for obj in objs:
-        ob_shape = obj["shape"]
-        assert len(obj["position"]) == 4  # x y and z height
+    for odict in odicts:
+        ob_shape = odict["shape"]
+        assert len(odict["position"]) == 4  # x y and z height
 
-        real_loc = np.array(obj["position"][0:3])
+        real_loc = np.array(odict["position"][0:3])
 
-        if obj["size"] == "small":
+        if odict["size"] == "small":
             ob_shape += "_small"
             real_loc += [0, 0, HALF_OBJ_HEIGHT_S + 0.001]
         else:
@@ -263,7 +262,7 @@ def construct_bullet_scene(objs):  # TODO: copied from inference code
         obj_id = p.loadURDF(
             os.path.join(currentdir, urdf_file), real_loc, useFixedBase=0
         )
-        p.changeVisualShape(obj_id, -1, rgbaColor=COLORS[obj["color"]])
+        p.changeVisualShape(obj_id, -1, rgbaColor=COLORS[odict["color"]])
 
         p.changeDynamics(obj_id, -1, lateralFriction=OBJ_MU)
         obj_ids.append(obj_id)
@@ -281,7 +280,7 @@ def construct_bullet_scene(objs):  # TODO: copied from inference code
 """Configurations."""
 SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
 USE_VISION_MODULE = True
-RENDER = True  # If true, uses OpenGL. Else, uses TinyRenderer.
+RENDER = False  # If true, uses OpenGL. Else, uses TinyRenderer.
 
 
 """Pre-calculation & Loading"""
@@ -299,26 +298,35 @@ if USE_VISION_MODULE:
     # Construct the bullet scene using DIRECT rendering, because that's what
     # the vision module was trained on.
     p.connect(p.DIRECT)
-    obj_ids = construct_bullet_scene(objs)
+    obj_ids = construct_bullet_scene(odicts=gt_odicts)
 
     vision_module = VisionInference(
         p=p,
         checkpoint_path="/home/michelle/outputs/ego_v009/checkpoint_best.pt",
         camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
     )
-    objs = vision_module.predict(oids=obj_ids)
+    pred_odicts = vision_module.predict(oids=obj_ids)
 
     # Artificially pad with a fourth dimension because language module expects
     # it. Also offset Y predictions with table offset.
-    for i in range(len(objs)):
-        objs[i]["position"] = objs[i]["position"] + [0.0]
-    # formatted_objs = json.dumps(objs, indent=2)
-    print(f"Vision module predictions:")
-    pprint.pprint(objs)
-    p.disconnect()
+    for i in range(len(pred_odicts)):
+        pred_odicts[i]["position"] = pred_odicts[i]["position"] + [0.0]
 
-[OBJECTS, target_xyz] = NLPmod(sentence, objs)
-print("tar xyz from language", target_xyz)
+        # Print the errors.
+        np.set_printoptions(precision=2)
+        gt_position = np.array(gt_odicts[i]["position"])
+        pred_position = np.array(pred_odicts[i]["position"])
+        position_err = np.abs(gt_position - pred_position) * 100
+        print(f"Object {i} position err (cm): {position_err}")
+    print(f"Vision module predictions:")
+    pprint.pprint(pred_odicts)
+    p.disconnect()
+    language_input_objs = pred_odicts
+else:
+    language_input_objs = gt_odicts
+
+[OBJECTS, target_xyz] = NLPmod(sentence, language_input_objs)
+print("target xyz from language", target_xyz)
 p_tx = target_xyz[0]
 p_ty = target_xyz[1]
 
@@ -349,7 +357,9 @@ p.setGravity(0, 0, -10)
 
 # Load bullet objects again, since they were cleared out by the imaginary
 # arm session.
-obj_ids = construct_bullet_scene(objs)
+print(f"Loading objects:")
+pprint.pprint(gt_odicts)
+obj_ids = construct_bullet_scene(odicts=gt_odicts)
 oid1 = obj_ids[Target_ind]  # TODO:tmp
 
 env_core = InmoovShadowHandDemoEnvV3(noisy_obs=NOISY_OBS, seed=args.seed)
