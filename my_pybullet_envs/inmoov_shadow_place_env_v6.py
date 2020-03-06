@@ -39,6 +39,7 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         vision_skip=1,
         control_skip=3,
         obs_noise=False,  # noisy (imperfect) observation
+        gen_vision_dataset=False,
     ):
         self.renders = renders
         self.init_noise = init_noise
@@ -53,6 +54,7 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         self.gt_only_init = gt_only_init
         self.exclude_hard = exclude_hard
         self.obs_noise = obs_noise
+        self.gen_vision_dataset = gen_vision_dataset
 
         self.vision_skip = vision_skip
         self.vision_counter = 0
