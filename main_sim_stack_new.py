@@ -1,4 +1,5 @@
 import argparse
+import copy
 import json
 import pickle
 import pprint
@@ -161,7 +162,7 @@ sentence = "Put the small green box on top of the blue cylinder"
 BULLET_SOLVER_ITER = 200
 
 
-def planning(Traj, i_g_obs, recurrent_hidden_states, masks, pose_saver):
+def planning(Traj, recurrent_hidden_states, masks, pose_saver):
     print("end of traj", Traj[-1, 0:7])
     for ind in range(0, len(Traj)):
         tar_armq = Traj[ind, 0:7]
@@ -338,8 +339,10 @@ else:
     p.connect(p.DIRECT)
 
 
-"""Imaginary Arm Session"""
+"""Imaginary arm session to get q_reach"""
 sess = ImaginaryArmObjSession()
+
+# TODO: Use vision here.
 Qreach = np.array(sess.get_most_comfortable_q_and_refangle(g_tx, g_ty)[0])
 
 desired_obj_pos = [p_tx, p_ty, PLACE_CLEARANCE + p_tz]
@@ -364,22 +367,24 @@ oid1 = obj_ids[Target_ind]  # TODO:tmp
 
 env_core = InmoovShadowHandDemoEnvV3(noisy_obs=NOISY_OBS, seed=args.seed)
 
+# Initialize a PoseSaver to save poses throughout robot execution.
 pose_saver = PoseSaver(
     path=os.path.join(homedir, "main_sim_stack_new.json"),
     oids=obj_ids,
     robot_id=env_core.robot.arm_id,
 )
 
-#################### ready to grasp
+"""Prepare for grasping. Reach for the object."""
 
 env_core.robot.reset_with_certain_arm_q(Qreach)  # TODO
 
+# TODO: Use vision here?
 g_obs = env_core.get_robot_contact_txty_halfh_obs(
     g_tx, g_ty, 0.065
 )  # TODO: hardcoded
 g_obs = wrap_over_grasp_obs(g_obs)
 
-# grasp!
+"""Grasp"""
 control_steps = 0
 for i in range(GRASP_END_STEP):
     with torch.no_grad():
@@ -389,6 +394,7 @@ for i in range(GRASP_END_STEP):
 
     env_core.step(unwrap_action(action))
     # g_obs = env_core.get_robot_contact_txty_obs(g_tx, g_ty)
+    # TODO: Use vision here?
     g_obs = env_core.get_robot_contact_txty_halfh_obs(
         g_tx, g_ty, 0.065
     )  # TODO: hardcoded
@@ -402,7 +408,6 @@ for i in range(GRASP_END_STEP):
     masks.fill_(1.0)
     pose_saver.get_poses()
 
-import copy
 
 final_g_obs = copy.copy(g_obs)
 del g_obs, g_tx, g_ty, g_actor_critic, g_ob_rms
@@ -413,7 +418,7 @@ print("after grasping", state)
 print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 # input("after grasping")
 
-##########################----- SEND MOVE COMMAND TO OPENRAVE
+"""Send move command to OpenRAVE"""
 if FIX_MOVE:
     Traj2 = np.load(FIX_MOVE_PATH)
 else:
@@ -447,20 +452,21 @@ else:
     # input("press enter")
 
 
-##################################---- EXECUTE PLANNED MOVING TRAJECTORY
-planning(Traj2, final_g_obs, recurrent_hidden_states, masks, pose_saver)
+"""Execute planned moving trajectory"""
+planning(Traj2, recurrent_hidden_states, masks, pose_saver)
 print("after moving", get_relative_state_for_reset(oid1))
 print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 # input("after moving")
 
 print("palm", env_core.robot.get_link_pos_quat(env_core.robot.ee_id))
 
-#################### ready to place
+"""Prepare for placing"""
 
 env_core.diffTar = True  # TODO:tmp!!!
 
 t_pos, t_quat = p.getBasePositionAndOrientation(oid1)  # TODO!!!
 b_pos, b_quat = p.getBasePositionAndOrientation(obj_ids[2])  #  TODO!!!
+
 # TODO: an unly hack to force Bullet compute forward kinematics
 p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
     p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, 0.065
@@ -471,7 +477,9 @@ p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
 p_obs = wrap_over_grasp_obs(p_obs)
 print("pobs", p_obs)
 # input("ready to place")
-# place!
+
+"""Execute placing"""
+
 for i in range(PLACE_END_STEP):
     with torch.no_grad():
         value, action, _, recurrent_hidden_states = p_actor_critic.act(
