@@ -61,14 +61,18 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
 
         self.control_skip = int(control_skip)
         # shadow hand is 22-5=17dof
-        self.action_scale = np.array([0.012 / self.control_skip] * 7 + [0.024 / self.control_skip] * 17)
+        self.action_scale = np.array([0.009 / self.control_skip] * 7 + [0.024 / self.control_skip] * 17)
 
         if self.up:
             self.tx = None  # assigned later
             self.ty = None
+            self.tx_act = None
+            self.ty_act = None
         else:
             self.tx = 0.
             self.ty = 0.    # constants
+            self.tx_act = 0.
+            self.ty_act = 0.
 
         self.reset()    # and update init
 
@@ -97,7 +101,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             #     cyl_init_pos = [0, 0, 0.0651]
             # else:
             #     cyl_init_pos = [0, 0, 0.091]
-            self.tx = self.np_random.uniform(low=0, high=0.25)
+            self.tx = self.np_random.uniform(low=0, high=0.3)
             self.ty = self.np_random.uniform(low=-0.1, high=0.5)
             # self.tx = 0.14
             # self.ty = 0.3
@@ -120,7 +124,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             #     cyl_init_pos = [0, 0, 0.0651]
             # else:
             #     cyl_init_pos = [0, 0, 0.091]
-            self.tx = self.np_random.uniform(low=0, high=0.25)
+            self.tx = self.np_random.uniform(low=0, high=0.3)
             self.ty = self.np_random.uniform(low=-0.1, high=0.5)
             # self.tx = 0.1
             # self.ty = 0.0
@@ -187,6 +191,13 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         self.shape_ind = self.np_random.randint(3) - 1 if self.random_shape else self.default_box
         self.half_height = self.np_random.uniform(low=0.055, high=0.09) if self.random_size else 0.07
         self.half_width = self.np_random.uniform(low=0.03, high=0.05) if self.random_size else 0.04  # aka radius
+        # self.half_height is the true half_height, vision module one will be noisy
+        # Note: only estimate once before grasping.
+        if self.obs_noise:
+            self.half_height_est = self.half_height + self.np_random.uniform(low=-0.01, high=0.01)
+        else:
+            self.half_height_est = self.half_height
+
         if self.shape_ind == -1:
             self.half_height *= 0.75        # TODO
 
@@ -198,8 +209,13 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         else:
             init_palm_pos, init_palm_quat, obj_init_xyz = self.get_reset_poses_old()
 
+        self.tx_act = self.tx
+        self.ty_act = self.ty
         if self.init_noise:
-            obj_init_xyz += np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
+            noise = np.append(self.np_random.uniform(low=-0.02, high=0.02, size=2), 0)
+            self.tx_act += noise[0]
+            self.ty_act += noise[1]
+            obj_init_xyz += noise
 
         if self.shape_ind == 1:
             self.dim = [self.half_width*0.8, self.half_width*0.8, self.half_height]    # TODO
@@ -213,8 +229,11 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
 
         self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.2, 0.2, 0.0],
                               useFixedBase=1)
-        p.changeDynamics(self.obj_id, -1, lateralFriction=1.0)
-        p.changeDynamics(self.floorId, -1, lateralFriction=1.0)
+
+        mu_obj = self.np_random.uniform(0.6, 1.3)
+        mu_f = self.np_random.uniform(0.6, 1.3)
+        p.changeDynamics(self.obj_id, -1, lateralFriction=mu_obj)
+        p.changeDynamics(self.floorId, -1, lateralFriction=mu_f)
 
         self.robot = InmoovShadowNew(init_noise=self.init_noise, timestep=self._timeStep, np_random=self.np_random,
                                      conservative_clip=False)
@@ -231,8 +250,16 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         return np.array(self.observation)
 
     def step(self, action):
+        # if self.timer == 100*self.control_skip:
+        #     self.force_global = [self.np_random.uniform(-20, 20),
+        #                    self.np_random.uniform(-20, 20),
+        #                    -160]
         if self.timer > 100*self.control_skip:
             p.setCollisionFilterPair(self.obj_id, self.floorId, -1, -1, enableCollision=0)
+            # _, quat = p.getBasePositionAndOrientation(self.obj_id)
+            # _, quat_inv = p.invertTransform([0,0,0], quat)
+            # force_local, _ = p.multiplyTransforms([0,0,0], quat_inv, self.force_global, [0,0,0,1])
+            # p.applyExternalForce(self.obj_id, -1, force_local, [0, 0, 0], flags=p.LINK_FRAME)
             # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
             #     p.setCollisionFilterPair(self.floorId, self.robot.arm_id, -1, i, enableCollision=0)
 
@@ -282,6 +309,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         #
         # if self.timer == 300:
         #     self.append_final_state()
+        reward -= self.robot.get_4_finger_deviation() * 0.5
 
         if clPos[2] < -0.0 and self.timer > 300: # object dropped, do not penalize dropping when 0 gravity
             reward += -15.
@@ -330,10 +358,11 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
 
         if self.up:
             xy = np.array([self.tx, self.ty])
-            self.observation.extend(list(xy + self.np_random.uniform(low=-0.005, high=0.005, size=2)))
-            self.observation.extend(list(xy + self.np_random.uniform(low=-0.005, high=0.005, size=2)))
             self.observation.extend(list(xy))
-            # this is the vision module one also used for reset/planning
+            if self.obs_noise:
+                self.observation.extend(list(xy))
+            else:
+                self.observation.extend([self.tx_act, self.ty_act])
 
         if self.random_shape:
             if self.shape_ind == 1:
@@ -347,14 +376,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             self.observation.extend(shape_info)
 
         if self.random_size:
-            # self.half_height is the true half_height, vision module one will be noisy
-            if self.obs_noise:
-                half_height_est = self.half_height + self.np_random.uniform(low=-0.01, high=0.01)
-            else:
-                half_height_est = self.half_height
-            self.observation.extend([half_height_est * 4 + self.np_random.uniform(low=-0.01, high=0.01),
-                                     half_height_est * 4 + self.np_random.uniform(low=-0.01, high=0.01),
-                                     half_height_est * 4])
+            self.observation.extend([self.half_height_est])
 
         # self.observation.extend([self.timer/300 + self.np_random.uniform(low=-0.01, high=0.01),
         #                          self.timer/300 + self.np_random.uniform(low=-0.01, high=0.01),
