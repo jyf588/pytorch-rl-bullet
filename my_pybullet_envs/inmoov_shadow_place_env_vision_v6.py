@@ -12,6 +12,7 @@ import os
 import inspect
 
 from ns_vqa_dart.bullet.renderer import BulletRenderer
+from ns_vqa_dart.bullet.generate_placing import PlacingDatasetGenerator
 
 currentdir = os.path.dirname(
     os.path.abspath(inspect.getfile(inspect.currentframe()))
@@ -37,6 +38,8 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
         gt_only_init=False,
         grasp_pi_name=None,
         exclude_hard=True,
+        gen_vision_dataset=False,
+        dataset_dir="/home/michelle/datasets/placing",
     ):
         self.renders = renders
         self.init_noise = init_noise
@@ -91,6 +94,11 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
         else:
             p.connect(p.DIRECT)
         self.renderer = BulletRenderer(p=p)
+
+        # Vision-related configurations.
+        self.dataset = PlacingDatasetGenerator(
+            p=p, dataset_dir=dataset_dir, camera_offset=[0.0, 0.2, 0.0]
+        )
         self.colors = ["red", "blue", "yellow", "green"]
 
         self.np_random = None
@@ -196,6 +204,8 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
         geom = state["obj_shape"]
         self.is_box = True if geom == p.GEOM_BOX else False
         self.dim = state["obj_dim"]
+        shape = "box" if self.is_box else "cylinder"
+        color = random.choice(self.colors)
 
         # Compute object's half height based on the object shape.
         if self.is_box:
@@ -207,17 +217,30 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
         # because the renderer (below) expects base position.
         base_position = list(o_pos).copy()
         base_position[2] -= self.half_height
+        radius = self.dim[0]
+        height = self.half_height * 2
 
         # Create the primitive object.
         self.obj_id = self.renderer.create_primitive(
             geom=geom,
             base_position=base_position,
             orientation=o_quat,
-            r=self.dim[0],
-            h=self.half_height * 2,
-            color=random.choice(self.colors),
+            r=radius,
+            h=height,
+            color=color,
             check_sizes=True,
             base_mass=self.obj_mass,
+        )
+
+        # Add the top object to the dataset.
+        self.dataset.add_object(
+            shape=shape,
+            color=color,
+            radius=radius,
+            height=height,
+            position=base_position,
+            orientation=o_quat,
+            oid=self.obj_id,
         )
 
         p.changeDynamics(self.obj_id, -1, lateralFriction=1.0)
