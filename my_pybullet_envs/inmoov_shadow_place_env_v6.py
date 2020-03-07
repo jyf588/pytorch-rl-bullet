@@ -6,12 +6,9 @@ import gym, gym.utils.seeding, gym.spaces
 import numpy as np
 import math
 import pickle
-import random
 
 import os
 import inspect
-
-from ns_vqa_dart.bullet.renderer import BulletRenderer
 
 currentdir = os.path.dirname(
     os.path.abspath(inspect.getfile(inspect.currentframe()))
@@ -40,7 +37,6 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         vision_skip=1,
         control_skip=3,
         obs_noise=False,  # noisy (imperfect) observation
-        gen_vision_dataset=False,
     ):
         self.renders = renders
         self.init_noise = init_noise
@@ -56,11 +52,8 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         self.exclude_hard = exclude_hard
         self.obs_noise = obs_noise
 
-        # Vision-related configurations.
         self.vision_skip = vision_skip
         self.vision_counter = 0
-        self.gen_vision_dataset = gen_vision_dataset
-        self.colors = ["red", "blue", "yellow", "green"]
 
         self.hard_orn_thres = 0.9
         self.obj_mass = 3.5
@@ -95,14 +88,10 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         ]
 
         self._timeStep = 1.0 / 240.0
-
-        # Rendering configurations.
         if self.renders:
             p.connect(p.GUI)
         else:
             p.connect(p.DIRECT)
-        self.renderer = BulletRenderer(p=p)
-
         self.np_random = None
         self.robot = None
         self.viewer = None
@@ -180,7 +169,6 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
     def create_prim_2_grasp(
         self, shape, dim, init_xyz, init_quat=(0, 0, 0, 1)
     ):
-        print("**************create_prim_2_grasp**************")
         # shape: p.GEOM_SPHERE or p.GEOM_BOX or p.GEOM_CYLINDER
         # dim: halfExtents (vec3) for box, (radius, length)vec2 for cylinder
         # init_xyz vec3 of obj location
@@ -247,32 +235,18 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         if self.exclude_hard and rotMetric < self.hard_orn_thres:
             return False
 
-        # Initializing the top object.
-        geom = state["obj_shape"]
-        self.is_box = True if geom == p.GEOM_BOX else False  # TODO: ball
+        self.is_box = (
+            True if state["obj_shape"] == p.GEOM_BOX else False
+        )  # TODO: ball
         self.dim = state["obj_dim"]
-
-        # Compute object's half height based on the object shape.
-        if self.is_box:
-            self.half_height = self.dim[-1]  # BOX last dim is half H.
-        else:
-            self.half_height = self.dim[-1] / 2.0  # CYL last dim is H.
-
-        # `o_pos` is the position of the COM; compute the position of the base
-        # because the renderer (below) expects base position.
-        base_position = list(o_pos).copy()
-        base_position[2] -= self.half_height
-
-        self.obj_id = self.renderer.create_primitive(
-            geom=geom,
-            base_position=base_position,
-            orientation=o_quat,
-            r=self.dim[0],
-            h=self.half_height * 2,
-            color=random.choice(self.colors),
-            check_sizes=True,
-            base_mass=self.obj_mass,
+        self.obj_id = self.create_prim_2_grasp(
+            state["obj_shape"], self.dim, o_pos, o_quat
         )
+
+        if self.is_box:
+            self.half_height = self.dim[-1]
+        else:
+            self.half_height = self.dim[-1] / 2.0
 
         p.changeDynamics(self.obj_id, -1, lateralFriction=1.0)
         # self.obj_mass = p.getDynamicsInfo(self.obj_id, -1)[0]
@@ -666,7 +640,6 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
             self.robot.np_random = (
                 self.np_random
             )  # use the same np_randomizer for robot as for env
-        random.seed(seed)
         return [seed]
 
     def getSourceCode(self):
