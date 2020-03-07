@@ -11,8 +11,9 @@ import random
 import os
 import inspect
 
-from ns_vqa_dart.bullet.renderer import BulletRenderer
+from ns_vqa_dart.bullet.dash_object import DashObject
 from ns_vqa_dart.bullet.generate_placing import PlacingDatasetGenerator
+from ns_vqa_dart.bullet.renderer import BulletRenderer
 
 currentdir = os.path.dirname(
     os.path.abspath(inspect.getfile(inspect.currentframe()))
@@ -101,6 +102,11 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
         )
         self.colors = ["red", "blue", "yellow", "green"]
 
+        # Object-related configurations.
+        self.obj_id = None
+        self.bottom_obj_id = None
+        self.bottom_shape = "cylinder"
+
         self.np_random = None
         self.robot = None
         self.viewer = None
@@ -141,9 +147,6 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
         # print(self.init_states[10])
         # print(self.init_states[51])
         # print(self.init_states[89])
-
-        self.obj_id = None
-        self.bottom_obj_id = None
 
         self.seed(
             0
@@ -204,8 +207,6 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
         geom = state["obj_shape"]
         self.is_box = True if geom == p.GEOM_BOX else False
         self.dim = state["obj_dim"]
-        shape = "box" if self.is_box else "cylinder"
-        color = random.choice(self.colors)
 
         # Compute object's half height based on the object shape.
         if self.is_box:
@@ -217,31 +218,23 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
         # because the renderer (below) expects base position.
         base_position = list(o_pos).copy()
         base_position[2] -= self.half_height
-        radius = self.dim[0]
-        height = self.half_height * 2
 
-        # Create the primitive object.
-        self.obj_id = self.renderer.create_primitive(
-            geom=geom,
-            base_position=base_position,
-            orientation=o_quat,
-            r=radius,
-            h=height,
-            color=color,
-            check_sizes=True,
-            base_mass=self.obj_mass,
-        )
-
-        # Add the top object to the dataset.
-        self.dataset.add_object(
-            shape=shape,
-            color=color,
-            radius=radius,
-            height=height,
+        # Define a DashObject for the top object.
+        o = DashObject(
+            shape="box" if self.is_box else "cylinder",
+            color=random.choice(self.colors),
+            radius=self.dim[0],
+            height=self.half_height * 2,
             position=base_position,
             orientation=o_quat,
-            oid=self.obj_id,
         )
+
+        # Render the object, and store the object ID.
+        self.obj_id = self.renderer.render_object(o=o, base_mass=self.obj_mass)
+        o.oid = self.obj_id
+
+        # Add the top object to the dataset.
+        self.dataset.add_object(o)
 
         p.changeDynamics(self.obj_id, -1, lateralFriction=1.0)
         # self.obj_mass = p.getDynamicsInfo(self.obj_id, -1)[0]
@@ -341,6 +334,19 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
             )
             p.changeDynamics(self.bottom_obj_id, -1, lateralFriction=1.0)
             p.changeDynamics(self.floor_id, -1, lateralFriction=1.0)
+
+            # self.renderer.load_urdf()
+
+            # Add the bottom object to the dataset.
+            # self.dataset.add_object(
+            #     shape=self.bottom_shape,
+            #     color=color,
+            #     radius=self.renderer.,
+            #     height=self.renderer.,
+            #     position=list(),
+            #     orientation=o_quat,
+            #     oid=self.obj_id,
+            # )
 
         self.robot.change_hand_friction(1.7)
 
