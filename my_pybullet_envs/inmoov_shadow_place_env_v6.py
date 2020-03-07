@@ -6,6 +6,7 @@ import gym, gym.utils.seeding, gym.spaces
 import numpy as np
 import math
 import pickle
+import random
 
 import os
 import inspect
@@ -54,10 +55,12 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         self.gt_only_init = gt_only_init
         self.exclude_hard = exclude_hard
         self.obs_noise = obs_noise
-        self.gen_vision_dataset = gen_vision_dataset
 
+        # Vision-related configurations.
         self.vision_skip = vision_skip
         self.vision_counter = 0
+        self.gen_vision_dataset = gen_vision_dataset
+        self.colors = ["red", "blue", "yellow", "green"]
 
         self.hard_orn_thres = 0.9
         self.obj_mass = 3.5
@@ -92,10 +95,14 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         ]
 
         self._timeStep = 1.0 / 240.0
+
+        # Rendering configurations.
         if self.renders:
             p.connect(p.GUI)
         else:
             p.connect(p.DIRECT)
+        self.renderer = BulletRenderer(p=p)
+
         self.np_random = None
         self.robot = None
         self.viewer = None
@@ -240,18 +247,32 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         if self.exclude_hard and rotMetric < self.hard_orn_thres:
             return False
 
-        self.is_box = (
-            True if state["obj_shape"] == p.GEOM_BOX else False
-        )  # TODO: ball
+        # Initializing the top object.
+        geom = state["obj_shape"]
+        self.is_box = True if geom == p.GEOM_BOX else False  # TODO: ball
         self.dim = state["obj_dim"]
-        self.obj_id = self.create_prim_2_grasp(
-            state["obj_shape"], self.dim, o_pos, o_quat
-        )
 
+        # Compute object's half height based on the object shape.
         if self.is_box:
-            self.half_height = self.dim[-1]
+            self.half_height = self.dim[-1]  # BOX last dim is half H.
         else:
-            self.half_height = self.dim[-1] / 2.0
+            self.half_height = self.dim[-1] / 2.0  # CYL last dim is H.
+
+        # `o_pos` is the position of the COM; compute the position of the base
+        # because the renderer (below) expects base position.
+        base_position = list(o_pos).copy()
+        base_position[2] -= self.half_height
+
+        self.obj_id = self.renderer.create_primitive(
+            geom=geom,
+            base_position=base_position,
+            orientation=o_quat,
+            r=self.dim[0],
+            h=self.half_height * 2,
+            color=random.choice(self.colors),
+            check_sizes=True,
+            base_mass=self.obj_mass,
+        )
 
         p.changeDynamics(self.obj_id, -1, lateralFriction=1.0)
         # self.obj_mass = p.getDynamicsInfo(self.obj_id, -1)[0]
@@ -645,6 +666,7 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
             self.robot.np_random = (
                 self.np_random
             )  # use the same np_randomizer for robot as for env
+        random.seed(seed)
         return [seed]
 
     def getSourceCode(self):
