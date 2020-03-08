@@ -176,7 +176,7 @@ class InmoovShadowHandPlaceEnvV7(gym.Env):
         if self.is_box:
             self.half_height = self.dim[-1]
         else:
-            self.half_height = self.dim[-1] / 2.0
+            self.half_height = self.dim[-1] / 2.0    # TODO: ball
 
         mu_obj = self.np_random.uniform(0.8, 1.2)
         p.changeDynamics(self.obj_id, -1, lateralFriction=mu_obj)
@@ -365,14 +365,14 @@ class InmoovShadowHandPlaceEnvV7(gym.Env):
 
         return obs, reward, False, {}
 
-    def obj6DtoObs(self, o_pos, o_orn):
-        objObs = []
-        o_pos = np.array(o_pos)
-        o_rotmat = np.array(p.getMatrixFromQuaternion(o_orn))
-        objObs.extend(list(self.perturb(o_pos, r=0.005)))
-        objObs.extend(list(self.perturb(o_pos, r=0.005)))
-        objObs.extend(list(self.perturb(o_rotmat, r=0.005)))
-        return objObs
+    # def obj6DtoObs(self, o_pos, o_orn):
+    #     objObs = []
+    #     o_pos = np.array(o_pos)
+    #     o_rotmat = np.array(p.getMatrixFromQuaternion(o_orn))
+    #     objObs.extend(list(self.perturb(o_pos, r=0.005)))
+    #     objObs.extend(list(self.perturb(o_pos, r=0.005)))
+    #     objObs.extend(list(self.perturb(o_rotmat, r=0.005)))
+    #     return objObs
 
     def obj6DtoObs_UpVec(self, o_pos, o_orn):
         objObs = []
