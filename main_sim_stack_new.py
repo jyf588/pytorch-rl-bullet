@@ -281,7 +281,7 @@ def construct_bullet_scene(odicts):  # TODO: copied from inference code
 """Configurations."""
 SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
 USE_VISION_MODULE = True
-RENDER = False  # If true, uses OpenGL. Else, uses TinyRenderer.
+RENDER = True  # If true, uses OpenGL. Else, uses TinyRenderer.
 
 
 """Pre-calculation & Loading"""
