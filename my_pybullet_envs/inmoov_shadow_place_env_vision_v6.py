@@ -106,14 +106,20 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
             height=0.18,
             position=[0.0, 0.0, 0.0],  # To be overridden.
         )
-        self.table_position = [0.25, 0.2, 0.0]
+        self.table_object = DashObject(
+            shape="tabletop",
+            color="grey",
+            radius=None,
+            height=None,
+            position=[0.25, 0.2, 0.0],
+        )
 
         # Vision-related configurations.
         self.gen_vision_dataset = gen_vision_dataset
         self.dataset = PlacingDatasetGenerator(
             p=p,
             dataset_dir=dataset_dir,
-            camera_offset=[0.0, self.table_position[1], 0.0],
+            camera_offset=[0.0, self.table_object.position[1], 0.0],
         )
 
         self.np_random = None
@@ -326,6 +332,9 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
         else:
             # Load the table.
             self.floor_id = self.load_table()
+            self.renderer.color_object(
+                oid=self.floor_id, color=self.table_object.color
+            )
 
             # Create the bottom object.
             com_position = np.array([self.tx, self.ty, self.tz / 2])
@@ -333,12 +342,16 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
                 com_position += np.append(
                     self.np_random.uniform(low=-0.015, high=0.015, size=2), 0
                 )
+            self.btm_object.color = random.choice(self.colors)
 
             # Render the object.
             self.bottom_obj_id = p.loadURDF(
                 fileName=os.path.join(currentdir, "assets/cylinder.urdf"),
                 basePosition=com_position,
                 useFixedBase=0,
+            )
+            self.renderer.color_object(
+                oid=self.bottom_obj_id, color=self.btm_object.color
             )
             self.btm_object.oid = self.bottom_obj_id
 
@@ -369,7 +382,7 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
     def load_table(self):
         oid = p.loadURDF(
             fileName=os.path.join(currentdir, "assets/tabletop.urdf"),
-            basePosition=self.table_position,
+            basePosition=self.table_object.position,
             useFixedBase=1,
         )
         return oid
