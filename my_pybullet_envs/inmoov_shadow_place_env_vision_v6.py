@@ -39,7 +39,7 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
         gt_only_init=False,
         grasp_pi_name=None,
         exclude_hard=True,
-        gen_vision_dataset=False,
+        gen_vision_dataset=True,
         dataset_dir="/home/michelle/datasets/placing",
     ):
         self.renders = renders
@@ -73,7 +73,6 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
 
         # self.half_obj_height = 0.065 if self.is_small else 0.09
         self.start_clearance = 0.14
-        self.btm_obj_height = 0.18  # always place on larger one
         self.cand_angles = [
             0.0,
             3.14 / 3,
@@ -96,16 +95,26 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
             p.connect(p.DIRECT)
         self.renderer = BulletRenderer(p=p)
 
-        # Vision-related configurations.
-        self.dataset = PlacingDatasetGenerator(
-            p=p, dataset_dir=dataset_dir, camera_offset=[0.0, 0.2, 0.0]
-        )
-        self.colors = ["red", "blue", "yellow", "green"]
-
         # Object-related configurations.
+        self.colors = ["red", "blue", "yellow", "green"]
         self.obj_id = None
         self.bottom_obj_id = None
-        self.bottom_shape = "cylinder"
+        self.btm_object = DashObject(
+            shape="cylinder",
+            color=random.choice(self.colors),
+            radius=0.05,
+            height=0.18,
+            position=[0.0, 0.0, 0.0],  # To be overridden.
+        )
+        self.table_position = [0.25, 0.2, 0.0]
+
+        # Vision-related configurations.
+        self.gen_vision_dataset = gen_vision_dataset
+        self.dataset = PlacingDatasetGenerator(
+            p=p,
+            dataset_dir=dataset_dir,
+            camera_offset=[0.0, self.table_position[1], 0.0],
+        )
 
         self.np_random = None
         self.robot = None
@@ -234,7 +243,7 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
         o.oid = self.obj_id
 
         # Add the top object to the dataset.
-        self.dataset.add_object(o)
+        self.dataset.track_object(o)
 
         p.changeDynamics(self.obj_id, -1, lateralFriction=1.0)
         # self.obj_mass = p.getDynamicsInfo(self.obj_id, -1)[0]
@@ -264,7 +273,7 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
         return arm_q
 
     def sample_valid_arm_q(self):
-        self.tz = self.btm_obj_height if not self.place_floor else 0.0
+        self.tz = self.btm_object.height if not self.place_floor else 0.0
         while True:
             if self.up:
                 self.tx = self.np_random.uniform(low=0, high=0.3)
@@ -297,6 +306,8 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
         p.setTimeStep(self._timeStep)
         p.setGravity(0, 0, -10)
         self.timer = 0
+        if self.gen_vision_dataset:
+            self.dataset.reset()
 
         self.robot = InmoovShadowNew(
             init_noise=False, timestep=self._timeStep, np_random=self.np_random
@@ -310,43 +321,37 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
             init_done = self.reset_robot_object_from_sample(init_state, arm_q)
 
         if self.place_floor:
-            self.bottom_obj_id = p.loadURDF(
-                os.path.join(currentdir, "assets/tabletop.urdf"),
-                [0.25, 0.2, 0.0],
-                useFixedBase=1,
-            )
+            self.bottom_obj_id = self.load_table()
             p.changeDynamics(self.bottom_obj_id, -1, lateralFriction=1.0)
         else:
-            btm_xyz = np.array([self.tx, self.ty, self.tz / 2.0])
-            if self.init_noise:
-                btm_xyz += np.append(
+            # Load the table.
+            self.floor_id = self.load_table()
+
+            # Create the bottom object.
+            com_position = np.array([self.tx, self.ty, self.tz / 2])
+            if self.init_noise:  # Optionally add noise.
+                com_position += np.append(
                     self.np_random.uniform(low=-0.015, high=0.015, size=2), 0
                 )
+
+            # Render the object.
             self.bottom_obj_id = p.loadURDF(
-                os.path.join(currentdir, "assets/cylinder.urdf"),
-                btm_xyz,
+                fileName=os.path.join(currentdir, "assets/cylinder.urdf"),
+                basePosition=com_position,
                 useFixedBase=0,
             )
-            self.floor_id = p.loadURDF(
-                os.path.join(currentdir, "assets/tabletop.urdf"),
-                [0.25, 0.2, 0.0],
-                useFixedBase=1,
-            )
+            self.btm_object.oid = self.bottom_obj_id
+
+            # Convert from COM to base position.
+            base_position = com_position.copy()
+            base_position[2] = 0.0  # Change from center to base Z.
+            self.btm_object.position = base_position
+
+            self.dataset.track_object(self.btm_object)  # Add to the dataset.
+
+            # Change dynamics.
             p.changeDynamics(self.bottom_obj_id, -1, lateralFriction=1.0)
             p.changeDynamics(self.floor_id, -1, lateralFriction=1.0)
-
-            # self.renderer.load_urdf()
-
-            # Add the bottom object to the dataset.
-            # self.dataset.add_object(
-            #     shape=self.bottom_shape,
-            #     color=color,
-            #     radius=self.renderer.,
-            #     height=self.renderer.,
-            #     position=list(),
-            #     orientation=o_quat,
-            #     oid=self.obj_id,
-            # )
 
         self.robot.change_hand_friction(1.7)
 
@@ -360,6 +365,14 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
         self.observation = self.getExtendedObservation()
 
         return np.array(self.observation)
+
+    def load_table(self):
+        oid = p.loadURDF(
+            fileName=os.path.join(currentdir, "assets/tabletop.urdf"),
+            basePosition=self.table_position,
+            useFixedBase=1,
+        )
+        return oid
 
     def sample_init_state(self):
         ran_ind = int(
@@ -478,6 +491,10 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
 
         obs = self.getExtendedObservation()
 
+        # Save the example.
+        if self.gen_vision_dataset:
+            self.dataset.generate_example()
+
         return obs, reward, False, {}
 
     def obj6DtoObs(self, o_pos, o_orn):
@@ -522,9 +539,9 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
                 self.observation.extend(
                     self.obj6DtoObs_UpVec(clPos, clOrn)
                 )  # TODO
-            if (
-                not self.place_floor and not self.gt_only_init
-            ):  # if stacking & real-time, include bottom 6D
+
+            # if stacking & real-time, include bottom 6D
+            if not self.place_floor and not self.gt_only_init:
                 if self.bottom_obj_id is None:
                     self.observation.extend(
                         self.obj6DtoObs_UpVec([0, 0, 0], [0, 0, 0, 1])
