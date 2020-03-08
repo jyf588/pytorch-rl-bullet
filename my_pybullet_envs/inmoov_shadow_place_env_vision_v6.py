@@ -6,16 +6,21 @@ import gym, gym.utils.seeding, gym.spaces
 import numpy as np
 import math
 import pickle
+import random
 
 import os
 import inspect
+
+from ns_vqa_dart.bullet.dash_object import DashObject
+from ns_vqa_dart.bullet.generate_placing import PlacingDatasetGenerator
+from ns_vqa_dart.bullet.renderer import BulletRenderer
 
 currentdir = os.path.dirname(
     os.path.abspath(inspect.getfile(inspect.currentframe()))
 )
 
 
-class InmoovShadowHandPlaceEnvV6(gym.Env):
+class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
     metadata = {
         "render.modes": ["human", "rgb_array"],
         "video.frames_per_second": 50,
@@ -24,7 +29,7 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
     def __init__(
         self,
         renders=False,
-        init_noise=True,  # variation during reset
+        init_noise=True,
         up=False,
         random_shape=False,
         random_size=True,
@@ -34,9 +39,8 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         gt_only_init=False,
         grasp_pi_name=None,
         exclude_hard=True,
-        vision_skip=1,
-        control_skip=3,
-        obs_noise=False,  # noisy (imperfect) observation
+        gen_vision_dataset=True,
+        dataset_dir="/home/michelle/datasets/placing",
     ):
         self.renders = renders
         self.init_noise = init_noise
@@ -50,10 +54,6 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         self.use_gt_6d = use_gt_6d
         self.gt_only_init = gt_only_init
         self.exclude_hard = exclude_hard
-        self.obs_noise = obs_noise
-
-        self.vision_skip = vision_skip
-        self.vision_counter = 0
 
         self.hard_orn_thres = 0.9
         self.obj_mass = 3.5
@@ -73,7 +73,6 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
 
         # self.half_obj_height = 0.065 if self.is_small else 0.09
         self.start_clearance = 0.14
-        self.btm_obj_height = 0.18  # always place on larger one
         self.cand_angles = [
             0.0,
             3.14 / 3,
@@ -88,20 +87,50 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         ]
 
         self._timeStep = 1.0 / 240.0
+
+        # Rendering configurations.
         if self.renders:
             p.connect(p.GUI)
         else:
             p.connect(p.DIRECT)
+        self.renderer = BulletRenderer(p=p)
+
+        # Object-related configurations.
+        self.colors = ["red", "blue", "yellow", "green"]
+        self.obj_id = None
+        self.bottom_obj_id = None
+        self.btm_object = DashObject(
+            shape="cylinder",
+            color=random.choice(self.colors),
+            radius=0.05,
+            height=0.18,
+            position=[0.0, 0.0, 0.0],  # To be overridden.
+        )
+        self.table_object = DashObject(
+            shape="tabletop",
+            color="grey",
+            radius=None,
+            height=None,
+            position=[0.25, 0.2, 0.0],
+        )
+
+        # Vision-related configurations.
+        self.gen_vision_dataset = gen_vision_dataset
+        self.dataset = PlacingDatasetGenerator(
+            p=p,
+            dataset_dir=dataset_dir,
+            camera_offset=[0.0, self.table_object.position[1], 0.0],
+        )
+
         self.np_random = None
         self.robot = None
         self.viewer = None
         self.timer = 0
 
-        self.control_skip = int(control_skip)
-        # shadow hand is 22-5=17dof
+        self.frameSkip = 3
         self.action_scale = np.array(
-            [0.012 / self.control_skip] * 7 + [0.024 / self.control_skip] * 17
-        )
+            [0.004] * 7 + [0.008] * 17
+        )  # shadow hand is 22-5=17dof
 
         self.tx = -1  # dummy
         self.ty = -1  # dummy
@@ -134,9 +163,6 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         # print(self.init_states[51])
         # print(self.init_states[89])
 
-        self.obj_id = None
-        self.bottom_obj_id = None
-
         self.seed(
             0
         )  # used once temporarily, will be overwritten outside by env
@@ -166,49 +192,6 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
             + self.np_random.uniform(low=-r, high=r, size=len(arr))
         )
 
-    def create_prim_2_grasp(
-        self, shape, dim, init_xyz, init_quat=(0, 0, 0, 1)
-    ):
-        # shape: p.GEOM_SPHERE or p.GEOM_BOX or p.GEOM_CYLINDER
-        # dim: halfExtents (vec3) for box, (radius, length)vec2 for cylinder
-        # init_xyz vec3 of obj location
-        id = None
-        if shape == p.GEOM_BOX:
-            visualShapeId = p.createVisualShape(
-                shapeType=shape, halfExtents=dim
-            )
-            collisionShapeId = p.createCollisionShape(
-                shapeType=shape, halfExtents=dim
-            )
-            id = p.createMultiBody(
-                baseMass=self.obj_mass,
-                baseInertialFramePosition=[0, 0, 0],
-                baseCollisionShapeIndex=collisionShapeId,
-                baseVisualShapeIndex=visualShapeId,
-                basePosition=init_xyz,
-                baseOrientation=init_quat,
-            )
-        elif shape == p.GEOM_CYLINDER:
-            # visualShapeId = p.createVisualShape(shapeType=shape, radius=dim[0], length=dim[1])
-            visualShapeId = p.createVisualShape(
-                shape, dim[0], [1, 1, 1], dim[1]
-            )
-            # collisionShapeId = p.createCollisionShape(shapeType=shape, radius=dim[0], length=dim[1])
-            collisionShapeId = p.createCollisionShape(
-                shape, dim[0], [1, 1, 1], dim[1]
-            )
-            id = p.createMultiBody(
-                baseMass=self.obj_mass,
-                baseInertialFramePosition=[0, 0, 0],
-                baseCollisionShapeIndex=collisionShapeId,
-                baseVisualShapeIndex=visualShapeId,
-                basePosition=init_xyz,
-                baseOrientation=init_quat,
-            )
-        elif shape == p.GEOM_SPHERE:
-            pass  # TODO: ball
-        return id
-
     def reset_robot_object_from_sample(self, state, arm_q):
         o_pos_pf = state["obj_pos_in_palm"]
         o_quat_pf = state["obj_quat_in_palm"]
@@ -235,18 +218,38 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         if self.exclude_hard and rotMetric < self.hard_orn_thres:
             return False
 
-        self.is_box = (
-            True if state["obj_shape"] == p.GEOM_BOX else False
-        )  # TODO: ball
+        # Initializing the top object.
+        geom = state["obj_shape"]
+        self.is_box = True if geom == p.GEOM_BOX else False
         self.dim = state["obj_dim"]
-        self.obj_id = self.create_prim_2_grasp(
-            state["obj_shape"], self.dim, o_pos, o_quat
+
+        # Compute object's half height based on the object shape.
+        if self.is_box:
+            self.half_height = self.dim[-1]  # BOX last dim is half H.
+        else:
+            self.half_height = self.dim[-1] / 2.0  # CYL last dim is H.
+
+        # `o_pos` is the position of the COM; compute the position of the base
+        # because the renderer (below) expects base position.
+        base_position = list(o_pos).copy()
+        base_position[2] -= self.half_height
+
+        # Define a DashObject for the top object.
+        o = DashObject(
+            shape="box" if self.is_box else "cylinder",
+            color=random.choice(self.colors),
+            radius=self.dim[0],
+            height=self.half_height * 2,
+            position=base_position,
+            orientation=o_quat,
         )
 
-        if self.is_box:
-            self.half_height = self.dim[-1]
-        else:
-            self.half_height = self.dim[-1] / 2.0
+        # Render the object, and store the object ID.
+        self.obj_id = self.renderer.render_object(o=o, base_mass=self.obj_mass)
+        o.oid = self.obj_id
+
+        # Add the top object to the dataset.
+        self.dataset.track_object(o)
 
         p.changeDynamics(self.obj_id, -1, lateralFriction=1.0)
         # self.obj_mass = p.getDynamicsInfo(self.obj_id, -1)[0]
@@ -255,7 +258,6 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
 
     def get_optimal_init_arm_q(self, desired_obj_pos):
         # TODO: desired obj init pos -> should add clearance to z.
-        # uses (self.o_pos_pf_ave, self.o_quat_pf_ave), so set mean stats to load properly
         arm_q = None
         cost = 1e30
         ref = np.array([0.0] * 3 + [-1.57] + [0.0] * 3)
@@ -277,10 +279,10 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         return arm_q
 
     def sample_valid_arm_q(self):
-        self.tz = self.btm_obj_height if not self.place_floor else 0.0
+        self.tz = self.btm_object.height if not self.place_floor else 0.0
         while True:
             if self.up:
-                self.tx = self.np_random.uniform(low=0, high=0.25)
+                self.tx = self.np_random.uniform(low=0, high=0.3)
                 self.ty = self.np_random.uniform(low=-0.1, high=0.5)
                 # self.tx = self.np_random.uniform(low=0, high=0.2)
                 # self.ty = self.np_random.uniform(low=-0.2, high=0.0)
@@ -310,7 +312,8 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         p.setTimeStep(self._timeStep)
         p.setGravity(0, 0, -10)
         self.timer = 0
-        self.vision_counter = 0
+        if self.gen_vision_dataset:
+            self.dataset.reset()
 
         self.robot = InmoovShadowNew(
             init_noise=False, timestep=self._timeStep, np_random=self.np_random
@@ -324,47 +327,65 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
             init_done = self.reset_robot_object_from_sample(init_state, arm_q)
 
         if self.place_floor:
-            self.bottom_obj_id = p.loadURDF(
-                os.path.join(currentdir, "assets/tabletop.urdf"),
-                [0.25, 0.2, 0.0],
-                useFixedBase=1,
-            )
+            self.bottom_obj_id = self.load_table()
             p.changeDynamics(self.bottom_obj_id, -1, lateralFriction=1.0)
         else:
-            btm_xyz = np.array([self.tx, self.ty, self.tz / 2.0])
-            if self.init_noise:
-                btm_xyz += np.append(
+            # Load the table.
+            self.floor_id = self.load_table()
+            self.renderer.color_object(
+                oid=self.floor_id, color=self.table_object.color
+            )
+
+            # Create the bottom object.
+            com_position = np.array([self.tx, self.ty, self.tz / 2])
+            if self.init_noise:  # Optionally add noise.
+                com_position += np.append(
                     self.np_random.uniform(low=-0.015, high=0.015, size=2), 0
                 )
+            self.btm_object.color = random.choice(self.colors)
+
+            # Render the object.
             self.bottom_obj_id = p.loadURDF(
-                os.path.join(currentdir, "assets/cylinder.urdf"),
-                btm_xyz,
+                fileName=os.path.join(currentdir, "assets/cylinder.urdf"),
+                basePosition=com_position,
                 useFixedBase=0,
             )
-            self.floor_id = p.loadURDF(
-                os.path.join(currentdir, "assets/tabletop.urdf"),
-                [0.25, 0.2, 0.0],
-                useFixedBase=1,
+            self.renderer.color_object(
+                oid=self.bottom_obj_id, color=self.btm_object.color
             )
+            self.btm_object.oid = self.bottom_obj_id
+
+            # Convert from COM to base position.
+            base_position = com_position.copy()
+            base_position[2] = 0.0  # Change from center to base Z.
+            self.btm_object.position = base_position
+
+            self.dataset.track_object(self.btm_object)  # Add to the dataset.
+
+            # Change dynamics.
             p.changeDynamics(self.bottom_obj_id, -1, lateralFriction=1.0)
             p.changeDynamics(self.floor_id, -1, lateralFriction=1.0)
+
+        self.robot.change_hand_friction(1.7)
 
         p.stepSimulation()  # TODO
 
         # init obj pose
         self.t_pos, self.t_orn = p.getBasePositionAndOrientation(self.obj_id)
-        self.last_t_pos, self.last_t_orn = p.getBasePositionAndOrientation(
-            self.obj_id
-        )
         self.b_pos, self.b_orn = p.getBasePositionAndOrientation(
-            self.bottom_obj_id
-        )
-        self.last_b_pos, self.last_b_orn = p.getBasePositionAndOrientation(
             self.bottom_obj_id
         )
         self.observation = self.getExtendedObservation()
 
         return np.array(self.observation)
+
+    def load_table(self):
+        oid = p.loadURDF(
+            fileName=os.path.join(currentdir, "assets/tabletop.urdf"),
+            basePosition=self.table_object.position,
+            useFixedBase=1,
+        )
+        return oid
 
     def sample_init_state(self):
         ran_ind = int(
@@ -376,7 +397,7 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         p.disconnect()
 
     def step(self, action):
-        for _ in range(self.control_skip):
+        for _ in range(self.frameSkip):
             # action is not in -1,1
             if action is not None:
                 # action = np.clip(np.array(action), -1, 1)   # TODO
@@ -483,6 +504,10 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
 
         obs = self.getExtendedObservation()
 
+        # Save the example.
+        if self.gen_vision_dataset:
+            self.dataset.generate_example()
+
         return obs, reward, False, {}
 
     def obj6DtoObs(self, o_pos, o_orn):
@@ -497,27 +522,15 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
     def obj6DtoObs_UpVec(self, o_pos, o_orn):
         objObs = []
         o_pos = np.array(o_pos)
-        if self.up:  # TODO: center o_pos
+        if self.up:  # TODO:tmp
             o_pos -= [self.tx, self.ty, 0]
-        # TODO: scale up since we do not have obs normalization
-        if self.obs_noise:
-            o_pos = self.perturb(o_pos, r=0.02) * 3.0
-        else:
-            o_pos = o_pos * 3.0
-        # o_pos = [0., 0, 0]
-
+        o_pos = o_pos * 3.0  # TODO:tmp, scale up
         o_rotmat = np.array(p.getMatrixFromQuaternion(o_orn))
         o_upv = [o_rotmat[2], o_rotmat[5], o_rotmat[8]]
-        if self.obs_noise:
-            o_upv = self.perturb(o_upv, r=0.03)
-        else:
-            o_upv = o_upv
-        # o_upv = [0, 0, 1]
-
-        objObs.extend(list(self.perturb(o_pos, r=0.005)))
-        objObs.extend(list(o_pos))
-        objObs.extend(list(self.perturb(o_upv, r=0.005)))
-        objObs.extend(list(o_upv))
+        objObs.extend(list(self.perturb(o_pos, r=0.04)))
+        objObs.extend(list(self.perturb(o_pos, r=0.04)))
+        objObs.extend(list(self.perturb(o_upv, r=0.04)))
+        objObs.extend(list(self.perturb(o_upv, r=0.04)))
         return objObs
 
     # change to tar pos fin pos diff
@@ -527,7 +540,6 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         self.observation = self.robot.get_robot_observation(diff_tar=True)
 
         if self.use_gt_6d:
-            self.vision_counter += 1
             if self.obj_id is None:
                 self.observation.extend(
                     self.obj6DtoObs_UpVec([0, 0, 0], [0, 0, 0, 1])
@@ -536,55 +548,21 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
                 if self.gt_only_init:
                     clPos, clOrn = self.t_pos, self.t_orn
                 else:
-                    # model both delayed and low-freq vision input
-                    # every vision_skip steps, update cur 6D
-                    # but feed policy with last-time updated 6D
-                    if self.vision_counter % self.vision_skip == 0:
-                        self.last_t_pos, self.last_t_orn = (
-                            self.t_pos,
-                            self.t_orn,
-                        )
-                        self.t_pos, self.t_orn = p.getBasePositionAndOrientation(
-                            self.obj_id
-                        )
-                    clPos, clOrn = self.last_t_pos, self.last_t_orn
-
-                    # clPos, clOrn = p.getBasePositionAndOrientation(self.obj_id)
-
-                    # print("feed into", clPos, clOrn)
-                    # clPos_act, clOrn_act = p.getBasePositionAndOrientation(self.obj_id)
-                    # print("act",  clPos_act, clOrn_act)
-
+                    clPos, clOrn = p.getBasePositionAndOrientation(self.obj_id)
                 self.observation.extend(
                     self.obj6DtoObs_UpVec(clPos, clOrn)
                 )  # TODO
-            if (
-                not self.place_floor and not self.gt_only_init
-            ):  # if stacking & real-time, include bottom 6D
+
+            # if stacking & real-time, include bottom 6D
+            if not self.place_floor and not self.gt_only_init:
                 if self.bottom_obj_id is None:
                     self.observation.extend(
                         self.obj6DtoObs_UpVec([0, 0, 0], [0, 0, 0, 1])
                     )  # TODO
                 else:
-                    # model both delayed and low-freq vision input
-                    # every vision_skip steps, update cur 6D
-                    # but feed policy with last-time updated 6D
-                    if self.vision_counter % self.vision_skip == 0:
-                        self.last_b_pos, self.last_b_orn = (
-                            self.b_pos,
-                            self.b_orn,
-                        )
-                        self.b_pos, self.b_orn = p.getBasePositionAndOrientation(
-                            self.bottom_obj_id
-                        )
-                    clPos, clOrn = self.last_b_pos, self.last_b_orn
-
-                    # print("b feed into", clPos, clOrn)
-                    # clPos_act, clOrn_act = p.getBasePositionAndOrientation(self.bottom_obj_id)
-                    # print("b act", clPos_act, clOrn_act)
-
-                    # clPos, clOrn = p.getBasePositionAndOrientation(self.bottom_obj_id)
-
+                    clPos, clOrn = p.getBasePositionAndOrientation(
+                        self.bottom_obj_id
+                    )
                     self.observation.extend(
                         self.obj6DtoObs_UpVec(clPos, clOrn)
                     )  # TODO
@@ -604,37 +582,43 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         self.observation.extend(curContact)
 
         if self.up:
-            # self.tx, self.ty is the vision module one also used for reset/planning
             xy = np.array([self.tx, self.ty])  # TODO: tx, ty wrt world origin
-            self.observation.extend(list(self.perturb(xy, r=0.005)))
-            self.observation.extend(list(self.perturb(xy, r=0.005)))
+            self.observation.extend(list(self.perturb(xy, r=0.01)))
+            self.observation.extend(list(self.perturb(xy, r=0.01)))
             self.observation.extend(list(xy))
+            # this is the vision module one also used for reset/planning
 
         if self.random_shape:
             shape_info = 1.0 if self.is_box else -1.0
             self.observation.extend([shape_info])
 
         if self.random_size:
-            # self.half_height is the true half_height, vision module one will be noisy
-            if self.obs_noise:
-                half_height_est = self.half_height + self.np_random.uniform(
-                    low=-0.01, high=0.01
-                )
-            else:
-                half_height_est = self.half_height
             self.observation.extend(
                 [
-                    half_height_est * 4
-                    + self.np_random.uniform(low=-0.01, high=0.01),
-                    half_height_est * 4
-                    + self.np_random.uniform(low=-0.01, high=0.01),
-                    half_height_est * 4,
+                    self.half_height * 4
+                    + self.np_random.uniform(low=-0.02, high=0.02) * 2,
+                    self.half_height * 4
+                    + self.np_random.uniform(low=-0.02, high=0.02) * 2,
+                    self.half_height * 4
+                    + self.np_random.uniform(low=-0.02, high=0.02) * 2,
                 ]
             )
+            # this is the true half_height, vision module one will be noisy
+
+        # if self.lastContact is not None:
+        #     self.observation.extend(self.lastContact)
+        # else:   # first step
+        #     self.observation.extend(curContact)
+        # self.lastContact = curContact.copy()
+
+        # print("obv", self.observation)
+        # print("max", np.max(np.abs(np.array(self.observation))))
+        # print("min", np.min(np.abs(np.array(self.observation))))
 
         return self.observation
 
     def seed(self, seed=None):
+        random.seed(seed)
         self.np_random, seed = gym.utils.seeding.np_random(seed)
         if self.robot is not None:
             self.robot.np_random = (
@@ -646,33 +630,3 @@ class InmoovShadowHandPlaceEnvV6(gym.Env):
         s = inspect.getsource(type(self))
         s = s + inspect.getsource(type(self.robot))
         return s
-
-
-if __name__ == "__main__":
-    env = InmoovShadowHandPlaceEnvV6()
-    p.setPhysicsEngineParameter(numSolverIterations=200)
-    env.seed(303)
-    for _ in range(20):
-        env.reset()
-        env.robot.tar_fin_q = env.robot.get_q_dq(env.robot.fin_actdofs)[0]
-        for test_t in range(300):
-            thumb_pose = [
-                -0.84771132,
-                0.60768666,
-                -0.13419822,
-                0.52214954,
-                0.25141182,
-            ]
-            open_up_q = np.array([0.0, 0.0, 0.0] * 4 + thumb_pose)
-            devi = open_up_q - env.robot.get_q_dq(env.robot.fin_actdofs)[0]
-            if test_t < 200:
-                env.robot.apply_action(
-                    np.array([0.0] * 7 + list(devi / 150.0))
-                )
-            p.stepSimulation()
-            # input("press enter")
-            if env.renders:
-                time.sleep(env._timeStep * 2.0)
-        print(env.robot.get_q_dq(env.robot.fin_actdofs))
-    # input("press enter")
-    p.disconnect()
