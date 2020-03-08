@@ -32,7 +32,8 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
                  using_comfortable=True,
                  using_comfortable_range=False,
                  control_skip=3,
-                 obs_noise=False):
+                 obs_noise=True,
+                 box_rot=True):
         self.renders = renders
         self.init_noise = init_noise
         self.up = up
@@ -42,6 +43,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         self.using_comfortable = using_comfortable
         self.using_comfortable_range = using_comfortable_range
         self.obs_noise = obs_noise
+        self.box_rot = box_rot
 
         self.vary_angle_range = 0.6
         self.obj_mass = 3.5
@@ -219,7 +221,11 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
 
         if self.shape_ind == 1:
             self.dim = [self.half_width*0.8, self.half_width*0.8, self.half_height]    # TODO
-            self.obj_id = self.create_prim_2_grasp(p.GEOM_BOX, self.dim, obj_init_xyz)
+            if not self.box_rot:
+                self.obj_id = self.create_prim_2_grasp(p.GEOM_BOX, self.dim, obj_init_xyz)
+            else:
+                quat = p.getQuaternionFromEuler([0., 0., self.np_random.uniform(low=0, high=6.28)])
+                self.obj_id = self.create_prim_2_grasp(p.GEOM_BOX, self.dim, obj_init_xyz, quat)
         elif self.shape_ind == 0:
             self.dim = [self.half_width, self.half_height*2.0]
             self.obj_id = self.create_prim_2_grasp(p.GEOM_CYLINDER, self.dim, obj_init_xyz)
@@ -230,8 +236,8 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
         self.floorId = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.2, 0.2, 0.0],
                               useFixedBase=1)
 
-        mu_obj = self.np_random.uniform(0.6, 1.3)
-        mu_f = self.np_random.uniform(0.6, 1.3)
+        mu_obj = self.np_random.uniform(0.8, 1.2)
+        mu_f = self.np_random.uniform(0.8, 1.2)
         p.changeDynamics(self.obj_id, -1, lateralFriction=mu_obj)
         p.changeDynamics(self.floorId, -1, lateralFriction=mu_f)
 
@@ -364,6 +370,9 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             else:
                 self.observation.extend([self.tx_act, self.ty_act])
 
+        if self.random_size:
+            self.observation.extend([self.half_height_est])
+
         if self.random_shape:
             if self.shape_ind == 1:
                 shape_info = [1, -1, -1]
@@ -374,9 +383,6 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             else:
                 shape_info = [-1, -1, -1]
             self.observation.extend(shape_info)
-
-        if self.random_size:
-            self.observation.extend([self.half_height_est])
 
         # self.observation.extend([self.timer/300 + self.np_random.uniform(low=-0.01, high=0.01),
         #                          self.timer/300 + self.np_random.uniform(low=-0.01, high=0.01),
