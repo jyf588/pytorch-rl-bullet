@@ -110,7 +110,7 @@ class InmoovShadowNew:
         self.scale_mass_inertia(-1, self.ee_id, 0.01)
         self.scale_mass_inertia(self.ee_id, p.getNumJoints(self.arm_id), 10.0)
 
-        mu = self.np_random.uniform(0.6, 1.3)
+        mu = self.np_random.uniform(0.8, 1.2)
         for i in range(self.ee_id, p.getNumJoints(self.arm_id)):
             p.changeDynamics(self.arm_id, i, lateralFriction=mu)
 

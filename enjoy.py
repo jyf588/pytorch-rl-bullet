@@ -58,7 +58,7 @@ parser.add_argument(
 )  # TODO
 parser.add_argument("--save_final_states", type=int, default=0)
 parser.add_argument("--save_final_s", type=int, default=80)
-parser.add_argument("--save_final_e", type=int, default=100)
+parser.add_argument("--save_final_e", type=int, default=99)
 
 
 args, unknown = parser.parse_known_args()  # this is an 'internal' method
