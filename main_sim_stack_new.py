@@ -306,6 +306,11 @@ if USE_VISION_MODULE:
         checkpoint_path="/home/michelle/outputs/ego_v009/checkpoint_best.pt",
         camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
     )
+    stacking_vision_module = VisionInference(
+        p=p,
+        checkpoint_path="/home/michelle/outputs/stacking_v001/checkpoint_best.pt",
+        camera_offset=[0.0, 0.0, 0.0],
+    )
     pred_odicts = vision_module.predict(oids=obj_ids)
 
     # Artificially pad with a fourth dimension because language module expects
@@ -487,12 +492,18 @@ for i in range(PLACE_END_STEP):
         )
 
     env_core.step(unwrap_action(action))
-    t_pos, t_quat = p.getBasePositionAndOrientation(
-        oid1
-    )  # real time update TODO!!!
-    b_pos, b_quat = p.getBasePositionAndOrientation(
-        obj_ids[2]
-    )  # real time update TODO!!!
+    t_pos, t_quat = p.getBasePositionAndOrientation(oid1)
+    b_pos, b_quat = p.getBasePositionAndOrientation(obj_ids[2])
+
+    if USE_VISION_MODULE:
+        top_oid = oid1
+        btm_oid = obj_ids[2]
+        top_odict, btm_odict = stacking_vision_module.predict(
+            oids=[top_oid, btm_oid]
+        )
+        t_pos = top_odict["position"]
+        b_pos = btm_odict["position"]
+
     p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
         p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, 0.065
     )
