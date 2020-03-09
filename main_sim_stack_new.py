@@ -5,6 +5,7 @@ import pickle
 import pprint
 import os
 import sys
+from typing import *
 
 import numpy as np
 import torch
@@ -289,6 +290,48 @@ def construct_bullet_scene(odicts):  # TODO: copied from inference code
     return obj_ids
 
 
+def get_stacking_obs(
+    top_oid: int,
+    btm_oid: int,
+    use_vision: bool,
+    vision_module: Optional[VisionInference] = None,
+) -> Tuple[Any]:
+    """Retrieves stacking observations.
+
+    Args:
+        top_oid: The object ID of the top object.
+        btm_oid: The object ID of the bottom object.
+        use_vision: Whether to use vision or GT.
+        vision_module: The vision module to use to generate predictions.
+    
+    Returns:
+        t_pos: The xyz position of the top object.
+        t_quat: The orientation of the top object, in xyzw quaternion 
+            format.
+        b_pos: The xyz position of the bottom object.
+        b_quat: The orientation of the bottom object, in xyzw quaternion 
+            format.
+        half_height: Half of the height of the top object.
+    """
+    t_pos, t_quat = p.getBasePositionAndOrientation(top_oid)
+    b_pos, b_quat = p.getBasePositionAndOrientation(btm_oid)
+
+    if use_vision:
+        top_odict, btm_odict = stacking_vision_module.predict(
+            oids=[top_oid, btm_oid]
+        )
+        t_pos = top_odict["position"]
+        b_pos = btm_odict["position"]
+        t_half_height = top_odict["height"] / 2
+
+        print(f"Stacking vision module predictions:")
+        pprint.pprint(top_odict)
+        pprint.pprint(btm_odict)
+    else:
+        t_half_height = 0.065
+    return t_pos, t_quat, b_pos, b_quat, t_half_height
+
+
 """Configurations."""
 SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
 USE_VISION_MODULE = True
@@ -483,26 +526,19 @@ print("palm", env_core.robot.get_link_pos_quat(env_core.robot.ee_id))
 """Prepare for placing"""
 env_core.diffTar = True  # TODO:tmp!!!
 
-t_pos, t_quat = p.getBasePositionAndOrientation(top_oid)
-b_pos, b_quat = p.getBasePositionAndOrientation(btm_oid)
-
-if USE_VISION_MODULE:
-    top_odict, btm_odict = stacking_vision_module.predict(
-        oids=[top_oid, btm_oid]
-    )
-    t_pos = top_odict["position"]
-    b_pos = btm_odict["position"]
-
-    print(f"Stacking vision module predictions:")
-    pprint.pprint(top_odict)
-    pprint.pprint(btm_odict)
+t_pos, t_quat, b_pos, b_quat, t_half_height = get_stacking_obs(
+    top_oid=top_oid,
+    btm_oid=btm_oid,
+    use_vision=USE_VISION_MODULE,
+    vision_module=stacking_vision_module,
+)
 
 # TODO: an unly hack to force Bullet compute forward kinematics
 p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
-    p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, 0.065
-)  # TODO:hardcoded
+    p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, t_half_height
+)
 p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
-    p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, 0.065
+    p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, t_half_height
 )
 p_obs = wrap_over_grasp_obs(p_obs)
 print("pobs", p_obs)
@@ -517,22 +553,16 @@ for i in range(PLACE_END_STEP):
         )
 
     env_core.step(unwrap_action(action))
-    t_pos, t_quat = p.getBasePositionAndOrientation(top_oid)
-    b_pos, b_quat = p.getBasePositionAndOrientation(btm_oid)
 
-    if USE_VISION_MODULE:
-        top_odict, btm_odict = stacking_vision_module.predict(
-            oids=[top_oid, btm_oid]
-        )
-        t_pos = top_odict["position"]
-        b_pos = btm_odict["position"]
-
-        # print(f"Stacking vision module predictions ({i}/{PLACE_END_STEP}):")
-        # print(f"top_odict: {top_odict}")
-        # print(f"btm_odict: {btm_odict}")
+    t_pos, t_quat, b_pos, b_quat, t_half_height = get_stacking_obs(
+        top_oid=top_oid,
+        btm_oid=btm_oid,
+        use_vision=USE_VISION_MODULE,
+        vision_module=stacking_vision_module,
+    )
 
     p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
-        p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, 0.065
+        p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, t_half_height
     )
     p_obs = wrap_over_grasp_obs(p_obs)
 
