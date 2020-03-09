@@ -123,8 +123,6 @@ COLORS = {
     "green": [0.0, 0.8, 0.0, 1.0],
 }
 
-g_tx = 0.2
-g_ty = 0.4
 
 # Ground-truth scene:
 HIDE_SURROUNDING_OBJECTS = True  # If true, hides the surrounding objects.
@@ -140,7 +138,7 @@ obj1 = {
 obj2 = {
     "shape": "box",
     "color": "green",
-    "position": [g_tx, g_ty, 0, 0],
+    "position": [0.2, 0.4, 0, 0],
     "size": "small",
 }  # target
 obj3 = {
@@ -392,6 +390,13 @@ else:
 [OBJECTS, target_xyz] = NLPmod(sentence, language_input_objs)
 print("target xyz from language", target_xyz)
 
+# Define the grasp position.
+if USE_VISION_MODULE:
+    top_pos = pred_odicts[top_obj_idx]["position"]
+else:
+    top_pos = gt_odicts[top_obj_idx]["position"]
+g_tx, g_ty = top_pos[0], top_pos[1]
+
 # Define the target xyz position to perform placing.
 p_tx, p_ty = target_xyz[0], target_xyz[1]
 if USE_VISION_MODULE:
@@ -410,7 +415,6 @@ else:
 """Imaginary arm session to get q_reach"""
 sess = ImaginaryArmObjSession()
 
-# TODO: Use vision here.
 Qreach = np.array(sess.get_most_comfortable_q_and_refangle(g_tx, g_ty)[0])
 
 desired_obj_pos = [p_tx, p_ty, PLACE_CLEARANCE + p_tz]
