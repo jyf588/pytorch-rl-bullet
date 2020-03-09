@@ -301,7 +301,9 @@ if USE_VISION_MODULE:
     p.connect(p.DIRECT)
     obj_ids = construct_bullet_scene(odicts=gt_odicts)
 
-    # Initialize the vision module for initial planning.
+    # Initialize the vision module for initial planning. We apply camera offset
+    # because the default camera position is for y=0, but the table is offset
+    # in this case.
     vision_module = VisionInference(
         p=p,
         checkpoint_path="/home/michelle/outputs/ego_v009/checkpoint_best.pt",
@@ -313,7 +315,7 @@ if USE_VISION_MODULE:
     stacking_vision_module = VisionInference(
         p=p,
         checkpoint_path="/home/michelle/outputs/stacking_v001/checkpoint_best.pt",
-        camera_offset=[0.0, 0.0, 0.0],
+        camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
         html_dir="/home/michelle/html/vision_inference_stacking",
     )
     pred_odicts = vision_module.predict(oids=obj_ids)
