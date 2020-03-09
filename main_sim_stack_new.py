@@ -393,9 +393,12 @@ print("target xyz from language", target_xyz)
 # Define the grasp position.
 if USE_VISION_MODULE:
     top_pos = pred_odicts[top_obj_idx]["position"]
+    g_half_h = 0.065
 else:
     top_pos = gt_odicts[top_obj_idx]["position"]
+    g_half_h = 0.065
 g_tx, g_ty = top_pos[0], top_pos[1]
+print(f"Grasp position: ({g_tx}, {g_ty})\theight: {g_half_h}")
 
 # Define the target xyz position to perform placing.
 p_tx, p_ty = target_xyz[0], target_xyz[1]
@@ -451,10 +454,7 @@ pose_saver = PoseSaver(
 
 env_core.robot.reset_with_certain_arm_q(Qreach)  # TODO
 
-# TODO: Use vision here?
-g_obs = env_core.get_robot_contact_txty_halfh_obs(
-    g_tx, g_ty, 0.065
-)  # TODO: hardcoded
+g_obs = env_core.get_robot_contact_txty_halfh_obs(g_tx, g_ty, g_half_h)
 g_obs = wrap_over_grasp_obs(g_obs)
 
 """Grasp"""
@@ -466,11 +466,7 @@ for i in range(GRASP_END_STEP):
         )
 
     env_core.step(unwrap_action(action))
-    # g_obs = env_core.get_robot_contact_txty_obs(g_tx, g_ty)
-    # TODO: Use vision here?
-    g_obs = env_core.get_robot_contact_txty_halfh_obs(
-        g_tx, g_ty, 0.065
-    )  # TODO: hardcoded
+    g_obs = env_core.get_robot_contact_txty_halfh_obs(g_tx, g_ty, g_half_h)
     g_obs = wrap_over_grasp_obs(g_obs)
 
     # print(g_obs)
