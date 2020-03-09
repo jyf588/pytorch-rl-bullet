@@ -125,7 +125,6 @@ COLORS = {
 
 g_tx = 0.2
 g_ty = 0.4
-p_tz = 0.18  # TODO: placing on cyl
 
 # Ground-truth scene:
 HIDE_SURROUNDING_OBJECTS = True  # If true, hides the surrounding objects.
@@ -295,6 +294,7 @@ def get_stacking_obs(
     btm_oid: int,
     use_vision: bool,
     vision_module: Optional[VisionInference] = None,
+    verbose: Optional[bool] = False,
 ) -> Tuple[Any]:
     """Retrieves stacking observations.
 
@@ -324,9 +324,10 @@ def get_stacking_obs(
         b_pos = btm_odict["position"]
         t_half_height = top_odict["height"] / 2
 
-        print(f"Stacking vision module predictions:")
-        pprint.pprint(top_odict)
-        pprint.pprint(btm_odict)
+        if verbose:
+            print(f"Stacking vision module predictions:")
+            pprint.pprint(top_odict)
+            pprint.pprint(btm_odict)
     else:
         t_half_height = 0.065
     return t_pos, t_quat, b_pos, b_quat, t_half_height
@@ -390,8 +391,13 @@ else:
 
 [OBJECTS, target_xyz] = NLPmod(sentence, language_input_objs)
 print("target xyz from language", target_xyz)
-p_tx = target_xyz[0]
-p_ty = target_xyz[1]
+
+# Define the target xyz position to perform placing.
+p_tx, p_ty = target_xyz[0], target_xyz[1]
+if USE_VISION_MODULE:
+    p_tz = pred_odicts[btm_obj_idx]["height"]
+else:
+    p_tz = 0.18
 
 
 """Start Bullet session."""
@@ -531,6 +537,7 @@ t_pos, t_quat, b_pos, b_quat, t_half_height = get_stacking_obs(
     btm_oid=btm_oid,
     use_vision=USE_VISION_MODULE,
     vision_module=stacking_vision_module,
+    verbose=True,
 )
 
 # TODO: an unly hack to force Bullet compute forward kinematics
