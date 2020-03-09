@@ -73,13 +73,13 @@ class InmoovShadowHandDemoEnvV3():
         objObs = []
         o_pos = np.array(o_pos)
         o_pos -= [tx, ty, 0]
-        o_pos = o_pos * 3.0       # TODO:tmp, scale up
+        o_pos = o_pos * 3.0
         o_rotmat = np.array(p.getMatrixFromQuaternion(o_orn))
         o_upv = [o_rotmat[2], o_rotmat[5], o_rotmat[8]]
-        objObs.extend(list(self.perturb(o_pos, r=0.04)))
-        objObs.extend(list(self.perturb(o_pos, r=0.04)))
-        objObs.extend(list(self.perturb(o_upv, r=0.04)))
-        objObs.extend(list(self.perturb(o_upv, r=0.04)))
+        objObs.extend(list(self.perturb(o_pos, r=0.02)))
+        objObs.extend(list(self.perturb(o_pos, r=0.02)))
+        objObs.extend(list(self.perturb(o_upv, r=0.01)))
+        objObs.extend(list(self.perturb(o_upv, r=0.01)))
         return objObs
 
     def reset(self):    # deprecated
@@ -134,6 +134,19 @@ class InmoovShadowHandDemoEnvV3():
         self.observation.extend([half_height * 4 + self.np_random.uniform(low=-0.02, high=0.02) * 2,
                                  half_height * 4 + self.np_random.uniform(low=-0.02, high=0.02) * 2,
                                  half_height * 4 + self.np_random.uniform(low=-0.02, high=0.02) * 2])   # TODO
+        return self.observation
+
+    def get_robot_contact_txty_halfh_obs_nodup(self, tx, ty, half_h):
+        self.get_robot_contact_obs()
+        self.observation.extend([tx, ty])
+        self.observation.extend([tx, ty])
+        self.observation.extend([half_h])
+        return self.observation
+
+    def get_robot_contact_txty_halfh_2obj6dUp_obs_nodup(self, tx, ty, half_h, t_pos, t_quat, b_pos, b_quat):
+        self.get_robot_contact_txty_halfh_obs_nodup(tx, ty, half_h)
+        self.observation.extend(self.obj6DtoObs_UpVec(t_pos, t_quat, tx, ty))
+        self.observation.extend(self.obj6DtoObs_UpVec(b_pos, b_quat, tx, ty))
         return self.observation
 
     def get_robot_obj6d_contact_txty_obs(self, tx, ty, t_pos, t_quat):
