@@ -319,6 +319,7 @@ if USE_VISION_MODULE:
         p=p,
         checkpoint_path="/home/michelle/outputs/ego_v009/checkpoint_best.pt",
         camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
+        apply_offset_to_preds=True,
         html_dir="/home/michelle/html/vision_inference_initial",
     )
 
@@ -327,6 +328,7 @@ if USE_VISION_MODULE:
         p=p,
         checkpoint_path="/home/michelle/outputs/stacking_v001/checkpoint_best.pt",
         camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
+        apply_offset_to_preds=False,
         html_dir="/home/michelle/html/vision_inference_stacking",
     )
     pred_odicts = vision_module.predict(oids=obj_ids)
