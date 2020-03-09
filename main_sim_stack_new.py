@@ -125,7 +125,10 @@ COLORS = {
 g_tx = 0.2
 g_ty = 0.4
 p_tz = 0.18  # TODO: placing on cyl
+
 # Ground-truth scene:
+HIDE_SURROUNDING_OBJECTS = True  # If true, hides the surrounding objects.
+
 obj1 = {
     "shape": "box",
     "color": "yellow",
@@ -152,8 +155,16 @@ obj4 = {
     "position": [0.0, 0.1, 0, 0],
     "size": "large",
 }  # irrelevant
-gt_odicts = [obj1, obj2, obj3, obj4]
-Target_ind = 1  # TODO:tmp
+
+if HIDE_SURROUNDING_OBJECTS:
+    gt_odicts = [obj2, obj3]
+    top_obj_idx = 0
+    btm_obj_idx = 1
+else:
+    gt_odicts = [obj1, obj2, obj3, obj4]
+    top_obj_idx = 1
+    btm_obj_idx = 2
+
 # command
 # sentence = "Put the small red box between the blue cylinder and yellow box"
 # sentence = "Put the small green cylinder on top of the blue cylinder"
@@ -369,7 +380,8 @@ p.setGravity(0, 0, -10)
 print(f"Loading objects:")
 pprint.pprint(gt_odicts)
 obj_ids = construct_bullet_scene(odicts=gt_odicts)
-oid1 = obj_ids[Target_ind]  # TODO:tmp
+top_oid = obj_ids[top_obj_idx]
+btm_oid = obj_ids[btm_obj_idx]
 
 env_core = InmoovShadowHandDemoEnvV3(noisy_obs=NOISY_OBS, seed=args.seed)
 
@@ -419,7 +431,7 @@ final_g_obs = copy.copy(g_obs)
 del g_obs, g_tx, g_ty, g_actor_critic, g_ob_rms
 
 
-state = get_relative_state_for_reset(oid1)
+state = get_relative_state_for_reset(top_oid)
 print("after grasping", state)
 print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 # input("after grasping")
@@ -460,16 +472,13 @@ else:
 
 """Execute planned moving trajectory"""
 planning(Traj2, recurrent_hidden_states, masks, pose_saver)
-print("after moving", get_relative_state_for_reset(oid1))
+print("after moving", get_relative_state_for_reset(top_oid))
 print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 # input("after moving")
 
 print("palm", env_core.robot.get_link_pos_quat(env_core.robot.ee_id))
 
 """Prepare for placing"""
-top_oid = oid1
-btm_oid = obj_ids[2]
-
 env_core.diffTar = True  # TODO:tmp!!!
 
 t_pos, t_quat = p.getBasePositionAndOrientation(top_oid)
@@ -481,6 +490,10 @@ if USE_VISION_MODULE:
     )
     t_pos = top_odict["position"]
     b_pos = btm_odict["position"]
+
+    print(f"Stacking vision module predictions:")
+    pprint.pprint(top_odict)
+    pprint.pprint(btm_odict)
 
 # TODO: an unly hack to force Bullet compute forward kinematics
 p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
