@@ -475,9 +475,12 @@ env_core.diffTar = True  # TODO:tmp!!!
 t_pos, t_quat = p.getBasePositionAndOrientation(top_oid)
 b_pos, b_quat = p.getBasePositionAndOrientation(btm_oid)
 
-top_odict, btm_odict = stacking_vision_module.predict(oids=[top_oid, btm_oid])
-t_pos = top_odict["position"]
-b_pos = btm_odict["position"]
+if USE_VISION_MODULE:
+    top_odict, btm_odict = stacking_vision_module.predict(
+        oids=[top_oid, btm_oid]
+    )
+    t_pos = top_odict["position"]
+    b_pos = btm_odict["position"]
 
 # TODO: an unly hack to force Bullet compute forward kinematics
 p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
