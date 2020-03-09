@@ -301,11 +301,14 @@ if USE_VISION_MODULE:
     p.connect(p.DIRECT)
     obj_ids = construct_bullet_scene(odicts=gt_odicts)
 
+    # Initialize the vision module for initial planning.
     vision_module = VisionInference(
         p=p,
         checkpoint_path="/home/michelle/outputs/ego_v009/checkpoint_best.pt",
         camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
     )
+
+    # Initialize the vision module for stacking.
     stacking_vision_module = VisionInference(
         p=p,
         checkpoint_path="/home/michelle/outputs/stacking_v001/checkpoint_best.pt",
@@ -313,17 +316,11 @@ if USE_VISION_MODULE:
     )
     pred_odicts = vision_module.predict(oids=obj_ids)
 
-    # Artificially pad with a fourth dimension because language module expects
-    # it. Also offset Y predictions with table offset.
+    # Artificially pad with a fourth dimension because language module
+    # expects it.
     for i in range(len(pred_odicts)):
         pred_odicts[i]["position"] = pred_odicts[i]["position"] + [0.0]
 
-        # Print the errors.
-        np.set_printoptions(precision=2)
-        gt_position = np.array(gt_odicts[i]["position"])
-        pred_position = np.array(pred_odicts[i]["position"])
-        position_err = np.abs(gt_position - pred_position) * 100
-        print(f"Object {i} position err (cm): {position_err}")
     print(f"Vision module predictions:")
     pprint.pprint(pred_odicts)
     p.disconnect()
@@ -466,11 +463,17 @@ print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 print("palm", env_core.robot.get_link_pos_quat(env_core.robot.ee_id))
 
 """Prepare for placing"""
+top_oid = oid1
+btm_oid = obj_ids[2]
 
 env_core.diffTar = True  # TODO:tmp!!!
 
-t_pos, t_quat = p.getBasePositionAndOrientation(oid1)  # TODO!!!
-b_pos, b_quat = p.getBasePositionAndOrientation(obj_ids[2])  #  TODO!!!
+t_pos, t_quat = p.getBasePositionAndOrientation(top_oid)
+b_pos, b_quat = p.getBasePositionAndOrientation(btm_oid)
+
+top_odict, btm_odict = stacking_vision_module.predict(oids=[top_oid, btm_oid])
+t_pos = top_odict["position"]
+b_pos = btm_odict["position"]
 
 # TODO: an unly hack to force Bullet compute forward kinematics
 p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
@@ -492,17 +495,19 @@ for i in range(PLACE_END_STEP):
         )
 
     env_core.step(unwrap_action(action))
-    t_pos, t_quat = p.getBasePositionAndOrientation(oid1)
-    b_pos, b_quat = p.getBasePositionAndOrientation(obj_ids[2])
+    t_pos, t_quat = p.getBasePositionAndOrientation(top_oid)
+    b_pos, b_quat = p.getBasePositionAndOrientation(btm_oid)
 
     if USE_VISION_MODULE:
-        top_oid = oid1
-        btm_oid = obj_ids[2]
         top_odict, btm_odict = stacking_vision_module.predict(
             oids=[top_oid, btm_oid]
         )
         t_pos = top_odict["position"]
         b_pos = btm_odict["position"]
+
+        # print(f"Stacking vision module predictions ({i}/{PLACE_END_STEP}):")
+        # print(f"top_odict: {top_odict}")
+        # print(f"btm_odict: {btm_odict}")
 
     p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
         p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, 0.065
