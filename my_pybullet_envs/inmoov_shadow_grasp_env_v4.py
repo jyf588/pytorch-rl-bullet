@@ -224,7 +224,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
             if not self.box_rot:
                 self.obj_id = self.create_prim_2_grasp(p.GEOM_BOX, self.dim, obj_init_xyz)
             else:
-                quat = p.getQuaternionFromEuler([0., 0., self.np_random.uniform(low=0, high=6.28)])
+                quat = p.getQuaternionFromEuler([0., 0., self.np_random.uniform(low=0, high=2.0*math.pi)])
                 self.obj_id = self.create_prim_2_grasp(p.GEOM_BOX, self.dim, obj_init_xyz, quat)
         elif self.shape_ind == 0:
             self.dim = [self.half_width, self.half_height*2.0]
@@ -364,7 +364,7 @@ class InmoovShadowHandGraspEnvV4(gym.Env):
 
         if self.up:
             xy = np.array([self.tx, self.ty])
-            self.observation.extend(list(xy))
+            self.observation.extend(list(xy))   # TODO: duplicated
             if self.obs_noise:
                 self.observation.extend(list(xy))
             else:

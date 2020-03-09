@@ -1346,23 +1346,68 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v7" --algo ppo --use-gae --l
 python main.py --env-name "InmoovHandPlaceBulletEnv-v7" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 7000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0302_box_20_place_0307_1  --seed 8139 --random_shape 0 --random_size 1 --default_box 1 --up 1 --obs_noise 0 --control_skip 4
 python main.py --env-name "InmoovHandPlaceBulletEnv-v7" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 7000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0302_cyl_4_place_0307_0  --seed 8140 --random_shape 0 --random_size 1 --default_box 0 --up 1 --obs_noise 0 --control_skip 4
 python main.py --env-name "InmoovHandPlaceBulletEnv-v7" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 7000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0302_cyl_4_place_0307_1  --seed 8141 --random_shape 0 --random_size 1 --default_box 0 --up 1 --obs_noise 0 --control_skip 4
+# 3af6896
 
+3/8 14:20
+# warm-start with noise added
+trained_models_0302_box_20_place_0307_1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v7" --algo ppo --use-gae --log-interval 10  \
+--num-steps 600 --num-processes 16  --lr 2e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 \
+ --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 2000000 --use-linear-lr-decay \
+ --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0302_box_20_place_0307_1_n  --seed 8142 \
+ --random_shape 0 --random_size 1 --default_box 1 --up 1 --control_skip 4 --obs_noise 1 \
+--warm-start "./trained_models_0302_box_20_place_0307_1/ppo/InmoovHandPlaceBulletEnv-v7.pt"
+
+# warm-start seems to make it worse..(89%) already 92% when zero-shot, so maybe little room to improve..
+
+trained_models_0302_cyl_4_place_0307_1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v7" --algo ppo --use-gae --log-interval 10  \
+--num-steps 600 --num-processes 16  --lr 2e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 \
+ --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 2000000 --use-linear-lr-decay \
+ --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0302_cyl_4_place_0307_1_n  --seed 8143 \
+ --random_shape 0 --random_size 1 --default_box 0 --up 1 --control_skip 4 --obs_noise 1 \
+--warm-start "./trained_models_0302_cyl_4_place_0307_1/ppo/InmoovHandPlaceBulletEnv-v7.pt" --exclude_hard 0
+
+# 94 already at zero-shot
+
+3/8 xxxx
+# do not concatenate twice (obj6D)
+# add vision skip 3 (control skip 4)    can try 2*6 later
+# v8
+# turn off exclude hard?
+python main.py --env-name "InmoovHandPlaceBulletEnv-v8" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 7000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0302_box_20_place_0307_2  --seed 8144 --random_shape 0 --random_size 1 --default_box 1 --up 1 --obs_noise 0 --control_skip 4 --vision_skip 3 --exclude_hard 0
+python main.py --env-name "InmoovHandPlaceBulletEnv-v8" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 7000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0302_box_20_place_0307_3  --seed 8145 --random_shape 0 --random_size 1 --default_box 1 --up 1 --obs_noise 0 --control_skip 4 --vision_skip 3 --exclude_hard 0
+
+
+# PLACING:
 # obs_noise
-
-# do not concatenate twice
+# do not concatenate twice (tx, obj6D)
 # add vision skip
-
 # box 20 is collected init using earlier iter, might want to run that again using final iter
+# put both on object and on floor (on other objects?)
+# 6 grid init
+# clean up reward terms
 
-# put both on object and on floor
+# GRASPING:
+# grasping sphere more robustly...
+# try again to have one policy for different shapes
+# maybe clean up reward terms
 
-
+# Do we want to sample init states earlier?
 
 # copy header
 # copy folder
 
 # run the crack
-# run grasp env v2 to train policy for different objects
+# run grasp env to train policy for different objects
 # run output states to collect the pickle file (use rot inv or rot old?)
-# train with place v3
+# train with place
 
+
+# o create a container with access to data from the host machine create a folder "container_data" in the home directory and then type:
+# sudo docker run --gpus=all -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v ~/container_data:/data --name openravecont openrave-ha:v3 /bin/bash
+# ALWAYS TYPE source bashrc WHEN YOU BEGIN A NEW CONTAINER
+# pip install -U spacypython -m spacy download en_core_web_sm
+
+# TODO: issue, lang seems fail when instruction wrong
+# TODO: new issue, hand penetrate into obj, will slip during transporting.

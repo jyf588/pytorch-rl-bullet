@@ -59,7 +59,7 @@ def main():
 
   # parser.add_argument('--env', help='environment ID', default='InmoovHandGraspPlaceBulletEnv-v1')
   # parser.add_argument('--env', help='environment ID', default='InmoovHandGraspBulletEnv-v4')
-  parser.add_argument('--env', help='environment ID', default='InmoovHandPlaceBulletEnv-v7')
+  parser.add_argument('--env', help='environment ID', default='InmoovHandPlaceBulletEnv-v8')
   # parser.add_argument('--env', help='environment ID', default='InmoovHandPlaceBulletEnvDet-v4')
 
   # parser.add_argument('--env', help='environment ID', default='AntBulletEnv-v0')
