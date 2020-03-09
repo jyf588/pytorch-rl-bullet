@@ -1393,6 +1393,8 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v8" --algo ppo --use-gae --l
 # try again to have one policy for different shapes
 # maybe clean up reward terms
 
+# Do we want to sample init states earlier?
+
 # copy header
 # copy folder
 
@@ -1401,3 +1403,11 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v8" --algo ppo --use-gae --l
 # run output states to collect the pickle file (use rot inv or rot old?)
 # train with place
 
+
+# o create a container with access to data from the host machine create a folder "container_data" in the home directory and then type:
+# sudo docker run --gpus=all -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v ~/container_data:/data --name openravecont openrave-ha:v3 /bin/bash
+# ALWAYS TYPE source bashrc WHEN YOU BEGIN A NEW CONTAINER
+# pip install -U spacypython -m spacy download en_core_web_sm
+
+# TODO: issue, lang seems fail when instruction wrong
+# TODO: new issue, hand penetrate into obj, will slip during transporting.

@@ -24,6 +24,7 @@ from .inmoov_shadow_place_env_v5 import InmoovShadowHandPlaceEnvV5
 from .inmoov_shadow_grasp_place_env_v1 import InmoovShadowHandGraspPlaceEnvV1
 
 from .inmoov_shadow_place_env_v7 import InmoovShadowHandPlaceEnvV7
+from .inmoov_shadow_place_env_v8 import InmoovShadowHandPlaceEnvV8
 
 from .inmoov_shadow_place_env_v6 import InmoovShadowHandPlaceEnvV6
 
@@ -119,6 +120,12 @@ if not no_vision:
 register(
     id='InmoovHandPlaceBulletEnv-v7',
     entry_point='my_pybullet_envs:InmoovShadowHandPlaceEnvV7',
+    max_episode_steps=100,
+)
+
+register(
+    id='InmoovHandPlaceBulletEnv-v8',
+    entry_point='my_pybullet_envs:InmoovShadowHandPlaceEnvV8',
     max_episode_steps=100,
 )
 
