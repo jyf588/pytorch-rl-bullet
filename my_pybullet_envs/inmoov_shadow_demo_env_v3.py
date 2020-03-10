@@ -100,6 +100,17 @@ class InmoovShadowHandDemoEnvV3:
         objObs.extend(list(self.perturb(o_upv, r=0.01)))
         return objObs
 
+    def obj_pos_and_up_to_obs(self, o_pos, o_upv, tx, ty):
+        objObs = []
+        o_pos = np.array(o_pos)
+        o_pos -= [tx, ty, 0]
+        o_pos = o_pos * 3.0
+        objObs.extend(list(self.perturb(o_pos, r=0.02)))
+        objObs.extend(list(self.perturb(o_pos, r=0.02)))
+        objObs.extend(list(self.perturb(o_upv, r=0.01)))
+        objObs.extend(list(self.perturb(o_upv, r=0.01)))
+        return objObs
+
     def reset(self):  # deprecated
         self.timer = 0
 
@@ -246,8 +257,8 @@ class InmoovShadowHandDemoEnvV3:
     ):
         """
         Args:
-            tx: TODO: figure out what this is.
-            ty: TODO: figure out what this is.
+            tx: Target x position.
+            ty: Target y position.
             t_pos: The xyz position of the top object.
             t_quat: The orientation of the top object, in xyzw quaternion 
                 format.
@@ -262,6 +273,70 @@ class InmoovShadowHandDemoEnvV3:
 
         self.observation.extend(self.obj6DtoObs_UpVec(t_pos, t_quat, tx, ty))
         self.observation.extend(self.obj6DtoObs_UpVec(b_pos, b_quat, tx, ty))
+
+        curContact = []
+        for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
+            cps = p.getContactPoints(bodyA=self.robot.arm_id, linkIndexA=i)
+            con_this_link = False
+            for cp in cps:
+                if cp[1] != cp[2]:  # not self-collision of the robot
+                    con_this_link = True
+                    break
+            if con_this_link:
+                curContact.extend([1.0])
+            else:
+                curContact.extend([-1.0])
+        self.observation.extend(curContact)
+
+        # xy = np.array([tx, ty])
+        # self.observation.extend(list(self.perturb(xy, r=self.noisy_txty)))
+        # self.observation.extend(list(self.perturb(xy, r=self.noisy_txty)))
+        # self.observation.extend(list(self.perturb(xy, r=self.noisy_txty)))
+        xy = np.array([tx, ty])
+        self.observation.extend(list(self.perturb(xy, r=0.01)))
+        self.observation.extend(list(self.perturb(xy, r=0.01)))
+        self.observation.extend(list(xy))
+
+        self.observation.extend(
+            [
+                half_height * 4
+                + self.np_random.uniform(low=-0.02, high=0.02) * 2,
+                half_height * 4
+                + self.np_random.uniform(low=-0.02, high=0.02) * 2,
+                half_height * 4
+                + self.np_random.uniform(low=-0.02, high=0.02) * 2,
+            ]
+        )  # TODO
+
+        return self.observation
+
+    def get_robot_2obj6dUp_contact_txty_halfh_obs_from_up(
+        self, tx, ty, t_pos, t_up, b_pos, b_up, half_height
+    ):
+        """Note that this differs from the 
+        get_robot_2obj6dUp_contact_txty_halfh_obs() function in that up vectors
+        are provided, instead of orientation. The reasoning for this is that we
+        want to support vision, which predicts up vectors directly.
+
+        Args:
+            tx: Target x position.
+            ty: Target y position.
+            t_pos: The xyz position of the top object.
+            t_up: The up vector of the top object.
+            b_pos: The xyz position of the bottom object.
+            b_up: The up vector of the bottom object.
+            half_height: Half of the height of the top object.
+        """
+        self.observation = self.robot.get_robot_observation(
+            self.withVel, self.diffTar
+        )
+
+        self.observation.extend(
+            self.obj_pos_and_up_to_obs(t_pos, t_up, tx, ty)
+        )
+        self.observation.extend(
+            self.obj_pos_and_up_to_obs(b_pos, b_up, tx, ty)
+        )
 
         curContact = []
         for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):

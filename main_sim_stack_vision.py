@@ -174,7 +174,7 @@ sentence = "Put the small green box on top of the blue cylinder"
 BULLET_SOLVER_ITER = 200
 
 SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
-USE_VISION_MODULE = False
+USE_VISION_MODULE = True
 RENDER = False  # If true, uses OpenGL. Else, uses TinyRenderer.
 
 
@@ -311,22 +311,19 @@ def get_stacking_obs(
     
     Returns:
         t_pos: The xyz position of the top object.
-        t_quat: The orientation of the top object, in xyzw quaternion 
-            format.
+        t_up: The up vector of the top object.
         b_pos: The xyz position of the bottom object.
-        b_quat: The orientation of the bottom object, in xyzw quaternion 
-            format.
+        b_up: The up vector of the bottom object.
         half_height: Half of the height of the top object.
     """
-    t_pos, t_quat = p.getBasePositionAndOrientation(top_oid)
-    b_pos, b_quat = p.getBasePositionAndOrientation(btm_oid)
-
     if use_vision:
         top_odict, btm_odict = stacking_vision_module.predict(
             oids=[top_oid, btm_oid]
         )
         t_pos = top_odict["position"]
         b_pos = btm_odict["position"]
+        t_up = top_odict["up_vector"]
+        b_up = top_odict["up_vector"]
         t_half_height = top_odict["height"] / 2
 
         if verbose:
@@ -334,8 +331,16 @@ def get_stacking_obs(
             pprint.pprint(top_odict)
             pprint.pprint(btm_odict)
     else:
+        t_pos, t_quat = p.getBasePositionAndOrientation(top_oid)
+        b_pos, b_quat = p.getBasePositionAndOrientation(btm_oid)
+
+        rot = np.array(p.getMatrixFromQuaternion(t_quat))
+        t_up = [rot[2], rot[5], rot[8]]
+        rot = np.array(p.getMatrixFromQuaternion(b_quat))
+        b_up = [rot[2], rot[5], rot[8]]
+
         t_half_height = T_HALF_HEIGHT
-    return t_pos, t_quat, b_pos, b_quat, t_half_height
+    return t_pos, t_up, b_pos, b_up, t_half_height
 
 
 """Vision and language"""
@@ -381,8 +386,8 @@ else:
     stacking_vision_module = None
 
 
-[OBJECTS, target_xyz] = NLPmod(sentence, language_input_objs)
-print("tar xyz from language", target_xyz)
+[OBJECTS, placing_xyz] = NLPmod(sentence, language_input_objs)
+print("tar xyz from language", placing_xyz)
 
 
 # Define the grasp position.
@@ -397,11 +402,12 @@ print(f"Grasp position: ({g_tx}, {g_ty})\theight: {g_half_h}")
 
 
 # Define the target xyz position to perform placing.
-p_tx, p_ty = target_xyz[0], target_xyz[1]
+p_tx, p_ty = placing_xyz[0], placing_xyz[1]
 if USE_VISION_MODULE:
     p_tz = pred_odicts[btm_obj_idx]["height"]
 else:
     p_tz = P_TZ
+print(f"Placing position: ({p_tx}, {p_ty}, {p_tz})")
 
 
 # latter 2 returns dummy
@@ -532,18 +538,18 @@ print("palm", env_core.robot.get_link_pos_quat(env_core.robot.ee_id))
 
 env_core.diffTar = True  # TODO:tmp!!!
 
-t_pos, t_quat, b_pos, b_quat, half_height = get_stacking_obs(
+t_pos, t_up, b_pos, b_up, half_height = get_stacking_obs(
     top_oid=top_oid,
     btm_oid=btm_oid,
     use_vision=USE_VISION_MODULE,
     vision_module=stacking_vision_module,
 )
 # TODO: an unly hack to force Bullet compute forward kinematics
-p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
-    p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, half_height
+p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs_from_up(
+    p_tx, p_ty, t_pos, t_up, b_pos, b_up, half_height
 )  # TODO:hardcoded
-p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
-    p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, half_height
+p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs_from_up(
+    p_tx, p_ty, t_pos, t_up, b_pos, b_up, half_height
 )
 p_obs = wrap_over_grasp_obs(p_obs)
 print("pobs", p_obs)
@@ -556,14 +562,14 @@ for i in range(PLACE_END_STEP):
         )
 
     env_core.step(unwrap_action(action))
-    t_pos, t_quat, b_pos, b_quat, half_height = get_stacking_obs(
+    t_pos, t_up, b_pos, b_up, half_height = get_stacking_obs(
         top_oid=top_oid,
         btm_oid=btm_oid,
         use_vision=USE_VISION_MODULE,
         vision_module=stacking_vision_module,
     )
-    p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
-        p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, half_height
+    p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs_from_up(
+        p_tx, p_ty, t_pos, t_up, b_pos, b_up, half_height
     )
     p_obs = wrap_over_grasp_obs(p_obs)
 
