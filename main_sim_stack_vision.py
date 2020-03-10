@@ -532,10 +532,10 @@ t_pos, t_quat, b_pos, b_quat, half_height = get_stacking_obs(
 )
 # TODO: an unly hack to force Bullet compute forward kinematics
 p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
-    p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, 0.065
+    p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, half_height
 )  # TODO:hardcoded
 p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
-    p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, 0.065
+    p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, half_height
 )
 p_obs = wrap_over_grasp_obs(p_obs)
 print("pobs", p_obs)
@@ -555,7 +555,7 @@ for i in range(PLACE_END_STEP):
         vision_module=stacking_vision_module,
     )
     p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
-        p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, 0.065
+        p_tx, p_ty, t_pos, t_quat, b_pos, b_quat, half_height
     )
     p_obs = wrap_over_grasp_obs(p_obs)
 

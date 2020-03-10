@@ -31,9 +31,9 @@ from my_pybullet_envs.inmoov_shadow_demo_env_v3 import (
 sys.path.append("ns_vqa_dart/")
 no_vision = False
 try:
-   from bullet.vision_inference import VisionInference
+    from bullet.vision_inference import VisionInference
 except ImportError:
-   no_vision = True
+    no_vision = True
 from pose_saver import PoseSaver
 
 currentdir = os.path.dirname(
@@ -75,7 +75,7 @@ homedir = os.path.expanduser("~")
 FIX_MOVE = True
 FIX_MOVE_PATH = os.path.join(homedir, "container_data/OR_MOVE.npy")
 
-GRASP_END_STEP = 40     # TODO:tmp
+GRASP_END_STEP = 40  # TODO:tmp
 PLACE_END_STEP = 95
 
 STATE_NORM = False
@@ -135,14 +135,14 @@ obj2 = {
     "position": [0.2, 0.4, 0, 0],
     "size": "small",
 }  # target
-T_HALF_HEIGHT = HALF_OBJ_HEIGHT_S   # TODO
+T_HALF_HEIGHT = HALF_OBJ_HEIGHT_S  # TODO
 obj3 = {
     "shape": "cylinder",
     "color": "blue",
     "position": [0.1, -0.05, 0, 0],
     "size": "large",
 }  # ref 2
-P_TZ = 0.18     # TODO
+P_TZ = 0.18  # TODO
 obj4 = {
     "shape": "box",
     "color": "yellow",
@@ -159,23 +159,23 @@ else:
     top_obj_idx = 1
     btm_obj_idx = 2
 
-IS_BOX = gt_odicts[top_obj_idx]['shape'] == 'box'   # TODO: infer from language
+IS_BOX = gt_odicts[top_obj_idx]["shape"] == "box"  # TODO: infer from language
 if IS_BOX:
-    GRASP_PI = '0302_box_20_n_80_99'
-    GRASP_DIR = "./trained_models_%s/ppo/" % '0302_box_20_n'     # TODO
-    PLACE_PI = '0302_box_20_place_0307_1'
+    GRASP_PI = "0302_box_20_n_80_99"
+    GRASP_DIR = "./trained_models_%s/ppo/" % "0302_box_20_n"  # TODO
+    PLACE_PI = "0302_box_20_place_0307_1"
     PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
     sentence = "Put the green box on top of the blue cylinder"
 else:
-    GRASP_PI = '0302_cyl_4_n_80_100'
-    GRASP_DIR = "./trained_models_%s/ppo/" % '0302_cyl_4_n'  # TODO
-    PLACE_PI = '0302_cyl_4_place_0307_1'
+    GRASP_PI = "0302_cyl_4_n_80_100"
+    GRASP_DIR = "./trained_models_%s/ppo/" % "0302_cyl_4_n"  # TODO
+    PLACE_PI = "0302_cyl_4_place_0307_1"
     PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
     sentence = "Put the green cylinder on top of the blue cylinder"
-GRASP_PI_ENV_NAME = 'InmoovHandGraspBulletEnv-v4'
-PLACE_PI_ENV_NAME = 'InmoovHandPlaceBulletEnv-v7'
+GRASP_PI_ENV_NAME = "InmoovHandGraspBulletEnv-v4"
+PLACE_PI_ENV_NAME = "InmoovHandPlaceBulletEnv-v7"
 
 # # old constants
 # # DEMO_ENV_NAME = 'ShadowHandDemoBulletEnv-v1'        # TODO: no longer used
@@ -309,7 +309,7 @@ def get_stacking_obs(
     top_oid: int,
     btm_oid: int,
     use_vision: bool,
-    vision_module = None,
+    vision_module=None,
     verbose: Optional[bool] = False,
 ):
     """Retrieves stacking observations.
@@ -407,7 +407,7 @@ print("target xyz from language", target_xyz)
 # Define the grasp position.
 if USE_VISION_MODULE:
     top_pos = pred_odicts[top_obj_idx]["position"]
-    g_half_h = T_HALF_HEIGHT        # TODO: vision predict
+    g_half_h = T_HALF_HEIGHT  # TODO: vision predict
 else:
     top_pos = gt_odicts[top_obj_idx]["position"]
     g_half_h = T_HALF_HEIGHT
@@ -453,8 +453,10 @@ print(f"Loading objects:")
 pprint.pprint(gt_odicts)
 
 
-env_core = InmoovShadowHandDemoEnvV3(noisy_obs=NOISY_OBS, seed=args.seed)   # TODO: does obj/robot order matter
-env_core.diffTar = True     # TODO:tmp!!!
+env_core = InmoovShadowHandDemoEnvV3(
+    noisy_obs=NOISY_OBS, seed=args.seed
+)  # TODO: does obj/robot order matter
+env_core.diffTar = True  # TODO:tmp!!!
 env_core.robot.change_hand_friction(HAND_MU)
 
 obj_ids = construct_bullet_scene(odicts=gt_odicts)
@@ -485,7 +487,9 @@ for i in range(GRASP_END_STEP):
         )
 
     env_core.step(unwrap_action(action))
-    g_obs = env_core.get_robot_contact_txty_halfh_obs_nodup(g_tx, g_ty, g_half_h)
+    g_obs = env_core.get_robot_contact_txty_halfh_obs_nodup(
+        g_tx, g_ty, g_half_h
+    )
     g_obs = wrap_over_grasp_obs(g_obs)
 
     # print(g_obs)
@@ -549,8 +553,10 @@ print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 print("palm", env_core.robot.get_link_pos_quat(env_core.robot.ee_id))
 
 """Prepare for placing"""
-env_core.control_skip = 4   # TODO:!!!
-env_core.action_scale = np.array([0.012 / env_core.control_skip] * 7 + [0.024 / env_core.control_skip] * 17)
+env_core.control_skip = 4  # TODO:!!!
+env_core.action_scale = np.array(
+    [0.012 / env_core.control_skip] * 7 + [0.024 / env_core.control_skip] * 17
+)
 
 t_pos, t_quat, b_pos, b_quat, t_half_height = get_stacking_obs(
     top_oid=top_oid,
@@ -562,10 +568,10 @@ t_pos, t_quat, b_pos, b_quat, t_half_height = get_stacking_obs(
 
 # TODO: an unly hack to force Bullet compute forward kinematics
 p_obs = env_core.get_robot_contact_txty_halfh_2obj6dUp_obs_nodup(
-    p_tx, p_ty, t_half_height, t_pos, t_quat,b_pos, b_quat
+    p_tx, p_ty, t_half_height, t_pos, t_quat, b_pos, b_quat
 )
 p_obs = env_core.get_robot_contact_txty_halfh_2obj6dUp_obs_nodup(
-    p_tx, p_ty, t_half_height, t_pos, t_quat,b_pos, b_quat
+    p_tx, p_ty, t_half_height, t_pos, t_quat, b_pos, b_quat
 )
 p_obs = wrap_over_grasp_obs(p_obs)
 print("pobs", p_obs)
