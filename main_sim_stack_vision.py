@@ -23,6 +23,7 @@ from my_pybullet_envs.inmoov_shadow_place_env_v6 import (
 from my_pybullet_envs.inmoov_shadow_demo_env_v3 import (
     InmoovShadowHandDemoEnvV3,
 )
+from pose_saver import PoseSaver
 
 currentdir = os.path.dirname(
     os.path.abspath(inspect.getfile(inspect.currentframe()))
@@ -133,21 +134,25 @@ obj2 = {
     "position": [g_tx, g_ty, 0, 0],
     "size": "small",
 }  # target
+T_HALF_HEIGHT = HALF_OBJ_HEIGHT_S  # TODO
 obj3 = {
     "shape": "cylinder",
     "color": "blue",
     "position": [0.2, -0.05, 0, 0],
     "size": "large",
 }  # ref 2
+P_TZ = 0.18  # TODO
 obj4 = {
     "shape": "box",
     "color": "yellow",
     "position": [0.0, 0.1, 0, 0],
     "size": "large",
 }  # irrelevant
-objs = [obj1, obj2, obj3, obj4]
+gt_odicts = [obj1, obj2, obj3, obj4]
+top_obj_idx = 1
+btm_obj_idx = 2
 # objs = [obj1, obj2, obj3]
-Target_ind = 1  # TODO:tmp
+# Target_ind = 1  # TODO:tmp
 # command
 # sentence = "Put the small red box between the blue cylinder and yellow box"
 # sentence = "Put the small green cylinder on top of the blue cylinder"
@@ -155,8 +160,12 @@ sentence = "Put the small green box on top of the blue cylinder"
 
 BULLET_SOLVER_ITER = 200
 
+SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
+USE_VISION_MODULE = False
+RENDER = False  # If true, uses OpenGL. Else, uses TinyRenderer.
 
-def planning(Traj, i_g_obs, recurrent_hidden_states, masks):
+
+def planning(Traj, i_g_obs, recurrent_hidden_states, masks, pose_saver):
     print("end of traj", Traj[-1, 0:7])
     for ind in range(0, len(Traj)):
         tar_armq = Traj[ind, 0:7]
@@ -164,12 +173,14 @@ def planning(Traj, i_g_obs, recurrent_hidden_states, masks):
         env_core.robot.apply_action([0.0] * 24)
         p.stepSimulation()
         time.sleep(1.0 / 240.0)
+        pose_saver.get_poses()
 
     for _ in range(50):
         # print(env_core.robot.tar_arm_q)
         env_core.robot.tar_arm_q = tar_armq
         env_core.robot.apply_action([0.0] * 24)  # stay still for a while
         p.stepSimulation()
+        pose_saver.get_poses()
         # print("act", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
     #     #time.sleep(1. / 240.)
 
@@ -271,10 +282,30 @@ def construct_bullet_scene(objs):  # TODO: copied from inference code
 
 
 ################# pre-calculation & loading
-[OBJECTS, target_xyz] = NLPmod(sentence, objs)
+[OBJECTS, target_xyz] = NLPmod(sentence, gt_odicts)
 print("tar xyz from language", target_xyz)
-p_tx = target_xyz[0]
-p_ty = target_xyz[1]
+# p_tx = target_xyz[0]
+# p_ty = target_xyz[1]
+
+
+# Define the grasp position.
+if USE_VISION_MODULE:
+    top_pos = pred_odicts[top_obj_idx]["position"]
+    g_half_h = T_HALF_HEIGHT  # TODO: vision predict
+else:
+    top_pos = gt_odicts[top_obj_idx]["position"]
+    g_half_h = T_HALF_HEIGHT
+g_tx, g_ty = top_pos[0], top_pos[1]
+print(f"Grasp position: ({g_tx}, {g_ty})\theight: {g_half_h}")
+
+
+# Define the target xyz position to perform placing.
+p_tx, p_ty = target_xyz[0], target_xyz[1]
+if USE_VISION_MODULE:
+    p_tz = pred_odicts[btm_obj_idx]["height"]
+else:
+    p_tz = P_TZ
+
 
 # latter 2 returns dummy
 g_actor_critic, g_ob_rms, _, _ = load_policy_params(
@@ -284,7 +315,12 @@ p_actor_critic, p_ob_rms, recurrent_hidden_states, masks = load_policy_params(
     PLACE_DIR, PLACE_PI_ENV_NAME
 )
 
-p.connect(p.GUI)
+"""Start Bullet session."""
+if RENDER:
+    p.connect(p.GUI)
+else:
+    p.connect(p.DIRECT)
+
 p.resetSimulation()
 
 sess = ImaginaryArmObjSession()
@@ -304,8 +340,14 @@ p.setGravity(0, 0, -10)
 
 env_core = InmoovShadowHandDemoEnvV3(noisy_obs=NOISY_OBS, seed=args.seed)
 
-obj_ids = construct_bullet_scene(objs)
-oid1 = obj_ids[Target_ind]  # TODO:tmp
+obj_ids = construct_bullet_scene(gt_odicts)
+top_oid = obj_ids[top_obj_idx]  # TODO:tmp
+
+pose_saver = PoseSaver(
+    path=os.path.join(homedir, "main_sim_stack_new.json"),
+    oids=obj_ids,
+    robot_id=env_core.robot.arm_id,
+)
 
 #################### ready to grasp
 
@@ -337,6 +379,7 @@ for i in range(GRASP_END_STEP):
     # control_steps += 1
     # input("press enter g_obs")
     masks.fill_(1.0)
+    pose_saver.get_poses()
 
 import copy
 
@@ -344,7 +387,7 @@ final_g_obs = copy.copy(g_obs)
 del g_obs, g_tx, g_ty, g_actor_critic, g_ob_rms
 
 
-state = get_relative_state_for_reset(oid1)
+state = get_relative_state_for_reset(top_oid)
 print("after grasping", state)
 print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 # input("after grasping")
@@ -384,8 +427,8 @@ else:
 
 
 ##################################---- EXECUTE PLANNED MOVING TRAJECTORY
-planning(Traj2, final_g_obs, recurrent_hidden_states, masks)
-print("after moving", get_relative_state_for_reset(oid1))
+planning(Traj2, final_g_obs, recurrent_hidden_states, masks, pose_saver)
+print("after moving", get_relative_state_for_reset(top_oid))
 print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 # input("after moving")
 
@@ -395,7 +438,7 @@ print("palm", env_core.robot.get_link_pos_quat(env_core.robot.ee_id))
 
 env_core.diffTar = True  # TODO:tmp!!!
 
-t_pos, t_quat = p.getBasePositionAndOrientation(oid1)  # TODO!!!
+t_pos, t_quat = p.getBasePositionAndOrientation(top_oid)  # TODO!!!
 b_pos, b_quat = p.getBasePositionAndOrientation(obj_ids[2])  #  TODO!!!
 # TODO: an unly hack to force Bullet compute forward kinematics
 p_obs = env_core.get_robot_2obj6dUp_contact_txty_halfh_obs(
@@ -416,7 +459,7 @@ for i in range(PLACE_END_STEP):
 
     env_core.step(unwrap_action(action))
     t_pos, t_quat = p.getBasePositionAndOrientation(
-        oid1
+        top_oid
     )  # real time update TODO!!!
     b_pos, b_quat = p.getBasePositionAndOrientation(
         obj_ids[2]
@@ -431,9 +474,14 @@ for i in range(PLACE_END_STEP):
     # input("press enter g_obs")
 
     masks.fill_(1.0)
+    pose_saver.get_poses()
+
 
 # execute_release_traj()
 for ind in range(0, 100):
     p.stepSimulation()
     time.sleep(1.0 / 240.0)
+    pose_saver.get_poses()
 
+if SAVE_POSES:
+    pose_saver.save()
