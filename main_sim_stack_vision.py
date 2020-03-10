@@ -336,7 +336,7 @@ print("tar xyz from language", target_xyz)
 # Define the grasp position.
 if USE_VISION_MODULE:
     top_pos = pred_odicts[top_obj_idx]["position"]
-    g_half_h = T_HALF_HEIGHT  # TODO: vision predict
+    g_half_h = pred_odicts[top_obj_idx]["height"] / 2
 else:
     top_pos = gt_odicts[top_obj_idx]["position"]
     g_half_h = T_HALF_HEIGHT
