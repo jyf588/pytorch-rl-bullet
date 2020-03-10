@@ -116,9 +116,6 @@ COLORS = {
     "green": [0.0, 0.8, 0.0, 1.0],
 }
 
-g_tx = 0.2
-g_ty = 0.4
-p_tz = 0.18  # TODO: placing on cyl
 # Ground-truth scene:
 obj1 = {
     "shape": "box",
@@ -131,7 +128,7 @@ obj1 = {
 obj2 = {
     "shape": "box",
     "color": "green",
-    "position": [g_tx, g_ty, 0, 0],
+    "position": [0.2, 0.4, 0, 0],
     "size": "small",
 }  # target
 T_HALF_HEIGHT = HALF_OBJ_HEIGHT_S  # TODO
@@ -161,7 +158,7 @@ sentence = "Put the small green box on top of the blue cylinder"
 BULLET_SOLVER_ITER = 200
 
 SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
-USE_VISION_MODULE = False
+USE_VISION_MODULE = True
 RENDER = False  # If true, uses OpenGL. Else, uses TinyRenderer.
 
 
@@ -245,10 +242,10 @@ def unwrap_action(act_tensor):
     return action.numpy()
 
 
-def construct_bullet_scene(objs):  # TODO: copied from inference code
+def construct_bullet_scene(odicts):  # TODO: copied from inference code
     # p.resetSimulation()
     obj_ids = []
-    for obj in objs:
+    for obj in odicts:
         ob_shape = obj["shape"]
         assert len(obj["position"]) == 4  # x y and z height
 
@@ -281,11 +278,51 @@ def construct_bullet_scene(objs):  # TODO: copied from inference code
     return obj_ids
 
 
-################# pre-calculation & loading
-[OBJECTS, target_xyz] = NLPmod(sentence, gt_odicts)
+"""Vision and language"""
+if USE_VISION_MODULE:
+    # Construct the bullet scene using DIRECT rendering, because that's what
+    # the vision module was trained on.
+    p.connect(p.DIRECT)
+    obj_ids = construct_bullet_scene(odicts=gt_odicts)
+
+    # Initialize the vision module for initial planning. We apply camera offset
+    # because the default camera position is for y=0, but the table is offset
+    # in this case.
+    initial_vision_module = VisionInference(
+        p=p,
+        checkpoint_path="/home/michelle/outputs/ego_v009/checkpoint_best.pt",
+        camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
+        apply_offset_to_preds=True,
+        html_dir="/home/michelle/html/vision_inference_initial",
+    )
+
+    # Initialize the vision module for stacking.
+    stacking_vision_module = VisionInference(
+        p=p,
+        checkpoint_path="/home/michelle/outputs/stacking_v001/checkpoint_best.pt",
+        camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
+        apply_offset_to_preds=False,
+        html_dir="/home/michelle/html/vision_inference_stacking",
+    )
+    pred_odicts = vision_module.predict(oids=obj_ids)
+
+    # Artificially pad with a fourth dimension because language module
+    # expects it.
+    for i in range(len(pred_odicts)):
+        pred_odicts[i]["position"] = pred_odicts[i]["position"] + [0.0]
+
+    print(f"Vision module predictions:")
+    pprint.pprint(pred_odicts)
+    p.disconnect()
+    language_input_objs = pred_odicts
+else:
+    language_input_objs = gt_odicts
+    initial_vision_module = None
+    stacking_vision_module = None
+
+
+[OBJECTS, target_xyz] = NLPmod(sentence, language_input_objs)
 print("tar xyz from language", target_xyz)
-# p_tx = target_xyz[0]
-# p_ty = target_xyz[1]
 
 
 # Define the grasp position.
@@ -349,16 +386,14 @@ pose_saver = PoseSaver(
     robot_id=env_core.robot.arm_id,
 )
 
-#################### ready to grasp
+"""Prepare for grasping. Reach for the object."""
 
 env_core.robot.reset_with_certain_arm_q(Qreach)  # TODO
 
-g_obs = env_core.get_robot_contact_txty_halfh_obs(
-    g_tx, g_ty, 0.065
-)  # TODO: hardcoded
+g_obs = env_core.get_robot_contact_txty_halfh_obs(g_tx, g_ty, g_half_h)
 g_obs = wrap_over_grasp_obs(g_obs)
 
-# grasp!
+"""Grasp"""
 control_steps = 0
 for i in range(GRASP_END_STEP):
     with torch.no_grad():
@@ -368,9 +403,7 @@ for i in range(GRASP_END_STEP):
 
     env_core.step(unwrap_action(action))
     # g_obs = env_core.get_robot_contact_txty_obs(g_tx, g_ty)
-    g_obs = env_core.get_robot_contact_txty_halfh_obs(
-        g_tx, g_ty, 0.065
-    )  # TODO: hardcoded
+    g_obs = env_core.get_robot_contact_txty_halfh_obs(g_tx, g_ty, g_half_h)
     g_obs = wrap_over_grasp_obs(g_obs)
 
     # print(g_obs)
