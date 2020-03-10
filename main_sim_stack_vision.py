@@ -125,6 +125,7 @@ COLORS = {
     "green": [0.0, 0.8, 0.0, 1.0],
 }
 
+
 # Ground-truth scene:
 obj1 = {
     "shape": "box",
@@ -154,11 +155,17 @@ obj4 = {
     "position": [0.0, 0.1, 0, 0],
     "size": "large",
 }  # irrelevant
-gt_odicts = [obj1, obj2, obj3, obj4]
-top_obj_idx = 1
-btm_obj_idx = 2
-# objs = [obj1, obj2, obj3]
-# Target_ind = 1  # TODO:tmp
+
+HIDE_SURROUNDING_OBJECTS = True  # If true, hides the surrounding objects.
+if HIDE_SURROUNDING_OBJECTS:
+    gt_odicts = [obj2, obj3]
+    top_obj_idx = 0
+    btm_obj_idx = 1
+else:
+    gt_odicts = [obj1, obj2, obj3, obj4]
+    top_obj_idx = 1
+    btm_obj_idx = 2
+
 # command
 # sentence = "Put the small red box between the blue cylinder and yellow box"
 # sentence = "Put the small green cylinder on top of the blue cylinder"
@@ -431,7 +438,8 @@ p.setGravity(0, 0, -10)
 env_core = InmoovShadowHandDemoEnvV3(noisy_obs=NOISY_OBS, seed=args.seed)
 
 obj_ids = construct_bullet_scene(gt_odicts)
-top_oid = obj_ids[top_obj_idx]  # TODO:tmp
+top_oid = obj_ids[top_obj_idx]
+btm_oid = obj_ids[btm_obj_idx]
 
 pose_saver = PoseSaver(
     path=os.path.join(homedir, "main_sim_stack_new.json"),
@@ -526,7 +534,7 @@ env_core.diffTar = True  # TODO:tmp!!!
 
 t_pos, t_quat, b_pos, b_quat, half_height = get_stacking_obs(
     top_oid=top_oid,
-    btm_oid=obj_ids[2],
+    btm_oid=btm_oid,
     use_vision=USE_VISION_MODULE,
     vision_module=stacking_vision_module,
 )
@@ -550,7 +558,7 @@ for i in range(PLACE_END_STEP):
     env_core.step(unwrap_action(action))
     t_pos, t_quat, b_pos, b_quat, half_height = get_stacking_obs(
         top_oid=top_oid,
-        btm_oid=obj_ids[2],
+        btm_oid=btm_oid,
         use_vision=USE_VISION_MODULE,
         vision_module=stacking_vision_module,
     )
