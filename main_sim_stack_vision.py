@@ -1,6 +1,7 @@
 import argparse
-import pickle
 import os
+import pickle
+import pprint
 import sys
 
 import numpy as np
@@ -23,6 +24,13 @@ from my_pybullet_envs.inmoov_shadow_place_env_v6 import (
 from my_pybullet_envs.inmoov_shadow_demo_env_v3 import (
     InmoovShadowHandDemoEnvV3,
 )
+
+sys.path.append("ns_vqa_dart/")
+no_vision = False
+try:
+    from bullet.vision_inference import VisionInference
+except ImportError:
+    no_vision = True
 from pose_saver import PoseSaver
 
 currentdir = os.path.dirname(
@@ -304,7 +312,7 @@ if USE_VISION_MODULE:
         apply_offset_to_preds=False,
         html_dir="/home/michelle/html/vision_inference_stacking",
     )
-    pred_odicts = vision_module.predict(oids=obj_ids)
+    pred_odicts = initial_vision_module.predict(oids=obj_ids)
 
     # Artificially pad with a fourth dimension because language module
     # expects it.
