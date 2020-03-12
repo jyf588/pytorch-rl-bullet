@@ -72,12 +72,12 @@ homedir = os.path.expanduser("~")
 """Configurations."""
 
 # TODO:tmp add a flag to always load the same transporting traj
-FIX_MOVE = True
-FIX_MOVE_PATH = os.path.join(homedir, "container_data/OR_MOVE.npy")
+FIX_MOVE = False
+# FIX_MOVE_PATH = os.path.join(homedir, "container_data/OR_MOVE.npy")
 
 SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
 USE_VISION_MODULE = True and (not no_vision)
-RENDER = True  # If true, uses OpenGL. Else, uses TinyRenderer.
+RENDER = False  # If true, uses OpenGL. Else, uses TinyRenderer.
 
 GRASP_END_STEP = 40  # TODO:tmp
 PLACE_END_STEP = 95
@@ -133,9 +133,9 @@ obj2 = {
     "shape": "box",
     "color": "green",
     "position": [0.2, 0.4, 0, 0],
-    "size": "small",
+    "size": "large",
 }  # target
-T_HALF_HEIGHT = HALF_OBJ_HEIGHT_S
+T_HALF_HEIGHT = HALF_OBJ_HEIGHT_L
 obj3 = {
     "shape": "cylinder",
     "color": "blue",
@@ -388,15 +388,6 @@ if USE_VISION_MODULE:
         html_dir="/home/michelle/html/vision_inference_initial",
     )
 
-    # Initialize the vision module for stacking.
-    stacking_vision_module = VisionInference(
-        p=p,
-        checkpoint_path="/home/michelle/outputs/stacking_v001/checkpoint_best.pt",
-        camera_position=[-0.2237938867122504, 0.03198004185028341, 0.5425],
-        camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
-        apply_offset_to_preds=False,
-        html_dir="/home/michelle/html/vision_inference_stacking",
-    )
     pred_odicts = initial_vision_module.predict(oids=obj_ids)
 
     # Artificially pad with a fourth dimension because language module
@@ -411,7 +402,6 @@ if USE_VISION_MODULE:
 else:
     language_input_objs = gt_odicts
     initial_vision_module = None
-    stacking_vision_module = None
 
 [OBJECTS, placing_xyz] = NLPmod(sentence, language_input_objs)
 print("placing xyz from language", placing_xyz)
@@ -587,6 +577,20 @@ env_core.action_scale = np.array(
     [0.012 / env_core.control_skip] * 7 + [0.024 / env_core.control_skip] * 17
 )
 
+if USE_VISION_MODULE:
+    # Initialize the vision module for stacking.
+    stacking_vision_module = VisionInference(
+        p=p,
+        checkpoint_path="/home/michelle/outputs/stacking_v001/checkpoint_best.pt",
+        camera_position=[-0.2237938867122504, 0.03198004185028341, 0.5425],
+        camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
+        apply_offset_to_preds=False,
+        html_dir="/home/michelle/html/vision_inference_stacking",
+    )
+else:
+    stacking_vision_module = None
+
+
 t_pos, t_up, b_pos, b_up, half_height = get_stacking_obs(
     top_oid=top_oid,
     btm_oid=btm_oid,
@@ -638,6 +642,7 @@ for i in range(PLACE_END_STEP):
 print(f"Pose after placing")
 pprint.pprint(pose_saver.poses[-1])
 
+print(f"Starting release trajectory")
 # execute_release_traj()
 for ind in range(0, 100):
     p.stepSimulation()
