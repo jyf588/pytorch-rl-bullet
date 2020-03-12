@@ -75,11 +75,15 @@ homedir = os.path.expanduser("~")
 FIX_MOVE = True
 FIX_MOVE_PATH = os.path.join(homedir, "container_data/OR_MOVE.npy")
 
+SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
+USE_VISION_MODULE = True and (not no_vision)
+RENDER = True  # If true, uses OpenGL. Else, uses TinyRenderer.
+
 GRASP_END_STEP = 40  # TODO:tmp
 PLACE_END_STEP = 95
 
 STATE_NORM = False
-NOISY_OBS = True
+NOISY_OBS = False
 # Noisy tx ty
 # Noisy obj 6d if applicable
 
@@ -116,12 +120,8 @@ COLORS = {
     "green": [0.0, 0.8, 0.0, 1.0],
 }
 
-SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
-USE_VISION_MODULE = True and (not no_vision)
-RENDER = True  # If true, uses OpenGL. Else, uses TinyRenderer.
-
 # Ground-truth scene:
-HIDE_SURROUNDING_OBJECTS = False  # If true, hides the surrounding objects.
+HIDE_SURROUNDING_OBJECTS = True  # If true, hides the surrounding objects.
 
 obj1 = {
     "shape": "box",
@@ -135,7 +135,7 @@ obj2 = {
     "position": [0.2, 0.4, 0, 0],
     "size": "small",
 }  # target
-T_HALF_HEIGHT = HALF_OBJ_HEIGHT_S  # TODO
+T_HALF_HEIGHT = HALF_OBJ_HEIGHT_S
 obj3 = {
     "shape": "cylinder",
     "color": "blue",
@@ -322,22 +322,19 @@ def get_stacking_obs(
     
     Returns:
         t_pos: The xyz position of the top object.
-        t_quat: The orientation of the top object, in xyzw quaternion 
-            format.
+        t_up: The up vector of the top object.
         b_pos: The xyz position of the bottom object.
-        b_quat: The orientation of the bottom object, in xyzw quaternion 
-            format.
+        b_up: The up vector of the bottom object.
         half_height: Half of the height of the top object.
     """
-    t_pos, t_quat = p.getBasePositionAndOrientation(top_oid)
-    b_pos, b_quat = p.getBasePositionAndOrientation(btm_oid)
-
     if use_vision:
         top_odict, btm_odict = stacking_vision_module.predict(
             oids=[top_oid, btm_oid]
         )
         t_pos = top_odict["position"]
         b_pos = btm_odict["position"]
+        t_up = top_odict["up_vector"]
+        b_up = top_odict["up_vector"]
         t_half_height = top_odict["height"] / 2
 
         if verbose:
@@ -345,8 +342,16 @@ def get_stacking_obs(
             pprint.pprint(top_odict)
             pprint.pprint(btm_odict)
     else:
+        t_pos, t_quat = p.getBasePositionAndOrientation(top_oid)
+        b_pos, b_quat = p.getBasePositionAndOrientation(btm_oid)
+
+        rot = np.array(p.getMatrixFromQuaternion(t_quat))
+        t_up = [rot[2], rot[5], rot[8]]
+        rot = np.array(p.getMatrixFromQuaternion(b_quat))
+        b_up = [rot[2], rot[5], rot[8]]
+
         t_half_height = T_HALF_HEIGHT
-    return t_pos, t_quat, b_pos, b_quat, t_half_height
+    return t_pos, t_up, b_pos, b_up, t_half_height
 
 
 """Pre-calculation & Loading"""
@@ -369,10 +374,16 @@ if USE_VISION_MODULE:
     # Initialize the vision module for initial planning. We apply camera offset
     # because the default camera position is for y=0, but the table is offset
     # in this case.
-    vision_module = VisionInference(
+    initial_vision_module = VisionInference(
         p=p,
         checkpoint_path="/home/michelle/outputs/ego_v009/checkpoint_best.pt",
+        camera_position=[
+            -0.20450591046900168,
+            0.03197646764976494,
+            0.4330631992464512,
+        ],
         camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
+        camera_directed_offset=[0.02, 0.0, 0.0],
         apply_offset_to_preds=True,
         html_dir="/home/michelle/html/vision_inference_initial",
     )
@@ -381,11 +392,12 @@ if USE_VISION_MODULE:
     stacking_vision_module = VisionInference(
         p=p,
         checkpoint_path="/home/michelle/outputs/stacking_v001/checkpoint_best.pt",
+        camera_position=[-0.2237938867122504, 0.03198004185028341, 0.5425],
         camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
         apply_offset_to_preds=False,
         html_dir="/home/michelle/html/vision_inference_stacking",
     )
-    pred_odicts = vision_module.predict(oids=obj_ids)
+    pred_odicts = initial_vision_module.predict(oids=obj_ids)
 
     # Artificially pad with a fourth dimension because language module
     # expects it.
@@ -398,16 +410,16 @@ if USE_VISION_MODULE:
     language_input_objs = pred_odicts
 else:
     language_input_objs = gt_odicts
-    vision_module = None
+    initial_vision_module = None
     stacking_vision_module = None
 
-[OBJECTS, target_xyz] = NLPmod(sentence, language_input_objs)
-print("target xyz from language", target_xyz)
+[OBJECTS, placing_xyz] = NLPmod(sentence, language_input_objs)
+print("placing xyz from language", placing_xyz)
 
 # Define the grasp position.
 if USE_VISION_MODULE:
     top_pos = pred_odicts[top_obj_idx]["position"]
-    g_half_h = T_HALF_HEIGHT  # TODO: vision predict
+    g_half_h = pred_odicts[top_obj_idx]["height"] / 2
 else:
     top_pos = gt_odicts[top_obj_idx]["position"]
     g_half_h = T_HALF_HEIGHT
@@ -415,11 +427,16 @@ g_tx, g_ty = top_pos[0], top_pos[1]
 print(f"Grasp position: ({g_tx}, {g_ty})\theight: {g_half_h}")
 
 # Define the target xyz position to perform placing.
-p_tx, p_ty = target_xyz[0], target_xyz[1]
+p_tx, p_ty = placing_xyz[0], placing_xyz[1]
 if USE_VISION_MODULE:
+    # Temp: replace with GT
+    # p_tx = gt_odicts[btm_obj_idx]["position"][0]
+    # p_ty = gt_odicts[btm_obj_idx]["position"][1]
+    # p_tz = P_TZ
     p_tz = pred_odicts[btm_obj_idx]["height"]
 else:
     p_tz = P_TZ
+print(f"Placing position: ({p_tx}, {p_ty}, {p_tz})")
 
 
 """Start Bullet session."""
@@ -444,6 +461,7 @@ p.resetSimulation()  # Clean up the simulation, since this is only imaginary.
 
 """Setup Bullet world."""
 p.setPhysicsEngineParameter(numSolverIterations=BULLET_SOLVER_ITER)
+p.setPhysicsEngineParameter(deterministicOverlappingPairs=1)
 p.setTimeStep(TS)
 p.setGravity(0, 0, -10)
 
@@ -454,7 +472,7 @@ pprint.pprint(gt_odicts)
 
 
 env_core = InmoovShadowHandDemoEnvV3(
-    noisy_obs=NOISY_OBS, seed=args.seed
+    noisy_obs=NOISY_OBS, seed=args.seed, init_noise=False
 )  # TODO: does obj/robot order matter
 env_core.diffTar = True  # TODO:tmp!!!
 env_core.robot.change_hand_friction(HAND_MU)
@@ -466,7 +484,7 @@ btm_oid = obj_ids[btm_obj_idx]
 
 # Initialize a PoseSaver to save poses throughout robot execution.
 pose_saver = PoseSaver(
-    path=os.path.join(homedir, "main_sim_stack_new.json"),
+    path="./main_sim_stack_new.json",
     oids=obj_ids,
     robot_id=env_core.robot.arm_id,
 )
@@ -474,6 +492,10 @@ pose_saver = PoseSaver(
 """Prepare for grasping. Reach for the object."""
 
 env_core.robot.reset_with_certain_arm_q(Qreach)  # TODO
+
+pose_saver.get_poses()
+print(f"Pose after reset")
+pprint.pprint(pose_saver.poses[-1])
 
 g_obs = env_core.get_robot_contact_txty_halfh_obs_nodup(g_tx, g_ty, g_half_h)
 g_obs = wrap_over_grasp_obs(g_obs)
@@ -500,6 +522,8 @@ for i in range(GRASP_END_STEP):
     masks.fill_(1.0)
     pose_saver.get_poses()
 
+print(f"Pose after grasping")
+pprint.pprint(pose_saver.poses[-1])
 
 final_g_obs = copy.copy(g_obs)
 del g_obs, g_tx, g_ty, g_actor_critic, g_ob_rms, g_half_h
@@ -552,13 +576,18 @@ print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 
 print("palm", env_core.robot.get_link_pos_quat(env_core.robot.ee_id))
 
+pose_saver.get_poses()
+print(f"Pose before placing")
+pprint.pprint(pose_saver.poses[-1])
+
+
 """Prepare for placing"""
 env_core.control_skip = 4  # TODO:!!!
 env_core.action_scale = np.array(
     [0.012 / env_core.control_skip] * 7 + [0.024 / env_core.control_skip] * 17
 )
 
-t_pos, t_quat, b_pos, b_quat, t_half_height = get_stacking_obs(
+t_pos, t_up, b_pos, b_up, half_height = get_stacking_obs(
     top_oid=top_oid,
     btm_oid=btm_oid,
     use_vision=USE_VISION_MODULE,
@@ -567,11 +596,11 @@ t_pos, t_quat, b_pos, b_quat, t_half_height = get_stacking_obs(
 )
 
 # TODO: an unly hack to force Bullet compute forward kinematics
-p_obs = env_core.get_robot_contact_txty_halfh_2obj6dUp_obs_nodup(
-    p_tx, p_ty, t_half_height, t_pos, t_quat, b_pos, b_quat
+p_obs = env_core.get_robot_contact_txty_halfh_2obj6dUp_obs_nodup_from_up(
+    p_tx, p_ty, half_height, t_pos, t_up, b_pos, b_up
 )
-p_obs = env_core.get_robot_contact_txty_halfh_2obj6dUp_obs_nodup(
-    p_tx, p_ty, t_half_height, t_pos, t_quat, b_pos, b_quat
+p_obs = env_core.get_robot_contact_txty_halfh_2obj6dUp_obs_nodup_from_up(
+    p_tx, p_ty, half_height, t_pos, t_up, b_pos, b_up
 )
 p_obs = wrap_over_grasp_obs(p_obs)
 print("pobs", p_obs)
@@ -587,15 +616,15 @@ for i in range(PLACE_END_STEP):
 
     env_core.step(unwrap_action(action))
 
-    t_pos, t_quat, b_pos, b_quat, t_half_height = get_stacking_obs(
+    t_pos, t_up, b_pos, b_up, half_height = get_stacking_obs(
         top_oid=top_oid,
         btm_oid=btm_oid,
         use_vision=USE_VISION_MODULE,
         vision_module=stacking_vision_module,
     )
 
-    p_obs = env_core.get_robot_contact_txty_halfh_2obj6dUp_obs_nodup(
-        p_tx, p_ty, t_half_height, t_pos, t_quat, b_pos, b_quat
+    p_obs = env_core.get_robot_contact_txty_halfh_2obj6dUp_obs_nodup_from_up(
+        p_tx, p_ty, half_height, t_pos, t_up, b_pos, b_up
     )
     p_obs = wrap_over_grasp_obs(p_obs)
 
@@ -606,6 +635,8 @@ for i in range(PLACE_END_STEP):
     masks.fill_(1.0)
     pose_saver.get_poses()
 
+print(f"Pose after placing")
+pprint.pprint(pose_saver.poses[-1])
 
 # execute_release_traj()
 for ind in range(0, 100):

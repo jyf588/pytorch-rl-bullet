@@ -23,8 +23,8 @@ class InmoovShadowHandDemoEnvV3:
 
     def __init__(
         self,
-        init_noise=True,
-        noisy_obs=True,
+        init_noise=False,
+        noisy_obs=False,
         timestep=1.0 / 240,
         withVel=False,
         seed=0,
@@ -189,6 +189,18 @@ class InmoovShadowHandDemoEnvV3:
         self.get_robot_contact_txty_halfh_obs_nodup(tx, ty, half_h)
         self.observation.extend(self.obj6DtoObs_UpVec(t_pos, t_quat, tx, ty))
         self.observation.extend(self.obj6DtoObs_UpVec(b_pos, b_quat, tx, ty))
+        return self.observation
+
+    def get_robot_contact_txty_halfh_2obj6dUp_obs_nodup_from_up(
+        self, tx, ty, half_h, t_pos, t_up, b_pos, b_up
+    ):
+        self.get_robot_contact_txty_halfh_obs_nodup(tx, ty, half_h)
+        self.observation.extend(
+            self.obj_pos_and_up_to_obs(t_pos, t_up, tx, ty)
+        )
+        self.observation.extend(
+            self.obj_pos_and_up_to_obs(b_pos, b_up, tx, ty)
+        )
         return self.observation
 
     def get_robot_obj6d_contact_txty_obs(self, tx, ty, t_pos, t_quat):
