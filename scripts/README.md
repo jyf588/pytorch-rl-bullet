@@ -39,7 +39,7 @@ Solution: https://devtalk.nvidia.com/default/topic/1061452/docker-and-nvidia-doc
 
 Inside the running container, see if you can use Firefox and openrave with GUI.
 ```
-source ~/.bashrc
+source bashrc
 glxgears
 firefox
 ```
@@ -58,4 +58,43 @@ docker ps --all (list containers)
 docker rm -f contrainer_number (kill and remove container)
 docker image list
 docker image rm image_number
+docker cp <src_path> openravecont:<dst_path>
+```
+
+To run OpenRAVE for DASH:
+
+Outside of docker container:
+```
+cd ~/container_data
+git clone https://github.com/jyf588/or_planning_scripts
+```
+
+Update `tabletop_2.kinbody.xml` to the following:
+
+```
+<KinBody name="box0">
+  <Body name="base">
+    <Geom type="box">
+      <extents>1.3 0.6 0.05</extents>
+      <translation>0.2 0.1 -0.13</translation>
+      <diffusecolor>0.6 0 0</diffusecolor>
+    </Geom>
+  </Body>
+</KinBody>
+```
+
+Inside of docker container:
+```
+source bashrc
+cd /data/or_planning_scripts
+python move_single.py
+```
+
+If you need to run reach_single.py also, open another session for the same 
+container:
+```
+sudo docker exec -it openravecont /bin/bash
+source bashrc
+cd /data/or_planning_scripts
+python reach_single.py
 ```
