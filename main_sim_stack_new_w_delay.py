@@ -76,7 +76,7 @@ FIX_MOVE_PATH = os.path.join(homedir, "container_data/OR_MOVE.npy")
 
 SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
 USE_VISION_MODULE = True and (not no_vision)
-RENDER = True  # If true, uses OpenGL. Else, uses TinyRenderer.
+RENDER = False  # If true, uses OpenGL. Else, uses TinyRenderer.
 
 GRASP_END_STEP = 40  # TODO:tmp
 PLACE_END_STEP = 95
@@ -131,23 +131,79 @@ obj1 = {
 obj2 = {
     "shape": "box",
     "color": "green",
-    "position": [0.2, 0.4, 0, 0],
-    "size": "small",
+    "position": [0.1, -0.06, 0, 0],
+    "size": "large",
 }  # target
 T_HALF_HEIGHT = HALF_OBJ_HEIGHT_S
 obj3 = {
     "shape": "cylinder",
     "color": "blue",
-    "position": [0.1, -0.05, 0, 0],
+    "position": [0.2, 0.4, 0, 0],
     "size": "large",
 }  # ref 2
 P_TZ = 0.18  # TODO
 obj4 = {
     "shape": "box",
     "color": "yellow",
-    "position": [0.0, 0.1, 0, 0],
+    "position": [0.3, 0.3, 0, 0],
     "size": "large",
 }  # irrelevant
+
+# =============================
+# obj1 = {
+#     "shape": "box",
+#     "color": "yellow",
+#     "position": [0.15, 0.7, 0, 0],
+#     "size": "large",
+# }  # ref 1
+# obj2 = {
+#     "shape": "cylinder",
+#     "color": "green",
+#     "position": [0.1, -0.06, 0, 0],
+#     "size": "large",
+# }  # target
+# T_HALF_HEIGHT = HALF_OBJ_HEIGHT_L
+# obj3 = {
+#     "shape": "cylinder",
+#     "color": "blue",
+#     "position": [0.1, 0.3, 0, 0],
+#     "size": "large",
+# }  # ref 2
+# P_TZ = 0.18  # TODO
+# obj4 = {
+#     "shape": "box",
+#     "color": "yellow",
+#     "position": [0.2, 0.4, 0, 0],
+#     "size": "large",
+# }  # irrelevant
+
+# ====================
+# obj1 = {
+#     "shape": "box",
+#     "color": "yellow",
+#     "position": [0.15, 0.7, 0, 0],
+#     "size": "large",
+# }  # ref 1
+# obj2 = {
+#     "shape": "box",
+#     "color": "green",
+#     "position": [0.2, 0.4, 0, 0],
+#     "size": "large",
+# }  # target
+# T_HALF_HEIGHT = HALF_OBJ_HEIGHT_L
+# obj3 = {
+#     "shape": "cylinder",
+#     "color": "blue",
+#     "position": [0.1, -0.05, 0, 0],
+#     "size": "large",
+# }  # ref 2
+# P_TZ = 0.18  # TODO
+# obj4 = {
+#     "shape": "box",
+#     "color": "yellow",
+#     "position": [0.0, 0.1, 0, 0],
+#     "size": "large",
+# }  # irrelevant
 
 if HIDE_SURROUNDING_OBJECTS:
     gt_odicts = [obj2, obj3]

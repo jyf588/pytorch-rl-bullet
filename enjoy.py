@@ -48,7 +48,7 @@ parser.add_argument(
     "--iter", type=int, default=-1, help="which iter pi to test"
 )
 parser.add_argument(
-    "--success_reward_thresh",
+    "--r_thres",
     type=int,
     default=4000,
     help="The threshold reward value above which it is considered a success.",
@@ -57,8 +57,8 @@ parser.add_argument(
     "--n_trials", type=int, default=10000, help="The number of trials to run."
 )  # TODO
 parser.add_argument("--save_final_states", type=int, default=0)
-parser.add_argument("--save_final_s", type=int, default=80)
-parser.add_argument("--save_final_e", type=int, default=99)
+parser.add_argument("--save_final_s", type=int, default=20)
+parser.add_argument("--save_final_e", type=int, default=50)
 
 
 args, unknown = parser.parse_known_args()  # this is an 'internal' method
@@ -216,7 +216,7 @@ while n_trials < args.n_trials:
         env_core.append_final_state()
         print(len(env_core.final_states))
     if done:
-        if reward_total > args.success_reward_thresh:
+        if reward_total > args.r_thres:
             n_success += 1
         else:
             if save_final_state_pkl:

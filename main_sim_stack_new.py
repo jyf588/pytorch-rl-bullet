@@ -77,7 +77,7 @@ FIX_MOVE = False
 
 SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
 USE_VISION_MODULE = True and (not no_vision)
-RENDER = False  # If true, uses OpenGL. Else, uses TinyRenderer.
+RENDER = True  # If true, uses OpenGL. Else, uses TinyRenderer.
 
 GRASP_END_STEP = 40  # TODO:tmp
 PLACE_END_STEP = 95
@@ -121,7 +121,7 @@ COLORS = {
 }
 
 # Ground-truth scene:
-HIDE_SURROUNDING_OBJECTS = True  # If true, hides the surrounding objects.
+HIDE_SURROUNDING_OBJECTS = False  # If true, hides the surrounding objects.
 
 obj1 = {
     "shape": "box",
@@ -133,9 +133,9 @@ obj2 = {
     "shape": "box",
     "color": "green",
     "position": [0.2, 0.4, 0, 0],
-    "size": "large",
+    "size": "small",
 }  # target
-T_HALF_HEIGHT = HALF_OBJ_HEIGHT_L
+T_HALF_HEIGHT = HALF_OBJ_HEIGHT_S
 obj3 = {
     "shape": "cylinder",
     "color": "blue",
