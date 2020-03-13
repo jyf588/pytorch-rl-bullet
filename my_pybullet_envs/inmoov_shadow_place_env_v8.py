@@ -75,6 +75,7 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
             height=None,
             position=[0.2, 0.2, 0.0],
         )
+        top_shape = "box" if self.default_box else "cyl"
 
         # Vision-related configurations.
         self.vision_skip = vision_skip
@@ -82,7 +83,7 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         self.gen_vision_dataset = gen_vision_dataset
         self.dataset = PlacingDatasetGenerator(
             p=p,
-            dataset_dir=dataset_dir,
+            dataset_dir=f"{dataset_dir} + {top_shape}",
             camera_offset=[0.0, self.table_object.position[1], 0.0],
         )
 
@@ -266,14 +267,32 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
             True if state["obj_shape"] == p.GEOM_BOX else False
         )  # TODO: ball
         self.dim = state["obj_dim"]
-        self.obj_id = self.create_prim_2_grasp(
-            state["obj_shape"], self.dim, o_pos, o_quat
-        )
 
         if self.is_box:
             self.half_height = self.dim[-1]
         else:
             self.half_height = self.dim[-1] / 2.0  # TODO: ball
+
+        # `o_pos` is the position of the COM; compute the position of the base
+        # because the renderer (below) expects base position.
+        base_position = list(o_pos).copy()
+        base_position[2] -= self.half_height
+
+        # Define a DashObject for the top object.
+        o = DashObject(
+            shape="box" if self.is_box else "cylinder",
+            color=random.choice(self.colors),
+            radius=self.dim[0],
+            height=self.half_height * 2,
+            position=base_position,
+            orientation=o_quat,
+        )
+
+        self.obj_id = self.renderer.render_object(o=o, base_mass=self.obj_mass)
+        o.oid = self.obj_id
+
+        # Add the top object to the dataset.
+        self.dataset.track_object(o)
 
         mu_obj = self.np_random.uniform(0.8, 1.2)
         p.changeDynamics(self.obj_id, -1, lateralFriction=mu_obj)
@@ -526,6 +545,9 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         # print("r_total", reward)
 
         obs = self.getExtendedObservation()
+
+        if self.gen_vision_dataset:
+            self.dataset.generate_example()
 
         return obs, reward, False, {}
 
