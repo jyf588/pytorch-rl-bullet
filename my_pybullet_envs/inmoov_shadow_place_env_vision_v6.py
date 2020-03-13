@@ -40,7 +40,7 @@ class InmoovShadowHandPlaceEnvVisionV6(gym.Env):
         grasp_pi_name=None,
         exclude_hard=True,
         gen_vision_dataset=True,
-        dataset_dir="/home/michelle/datasets/placing",
+        dataset_dir="/home/michelle/datasets/stacking_v001",
     ):
         self.renders = renders
         self.init_noise = init_noise
