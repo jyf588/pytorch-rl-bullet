@@ -6,6 +6,7 @@ import gym, gym.utils.seeding, gym.spaces
 import numpy as np
 import math
 import pickle
+import random
 
 import os
 import inspect
@@ -122,6 +123,7 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
             p.connect(p.GUI)
         else:
             p.connect(p.DIRECT)
+        self.renderer = BulletRenderer(p=p)
         self.np_random = None
         self.robot = None
         self.viewer = None
@@ -365,18 +367,27 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
             if self.init_noise:
                 self.tx_act += self.np_random.uniform(low=-0.015, high=0.015)
                 self.ty_act += self.np_random.uniform(low=-0.015, high=0.015)
-            btm_xyz = np.array([self.tx_act, self.ty_act, self.tz / 2.0])
+            com_position = np.array([self.tx_act, self.ty_act, self.tz / 2.0])
+            self.btm_object.position = [com_position[0], com_position[1], 0.0]
+            self.btm_object.color = random.choice(self.colors)
 
             self.bottom_obj_id = p.loadURDF(
                 os.path.join(currentdir, "assets/cylinder.urdf"),
-                btm_xyz,
+                com_position,
                 useFixedBase=0,
+            )
+            self.renderer.color_object(
+                oid=self.bottom_obj_id, color=self.btm_object.color
             )
             self.floor_id = p.loadURDF(
                 os.path.join(currentdir, "assets/tabletop.urdf"),
                 self.table_object.position,
                 useFixedBase=1,
             )
+
+            self.btm_object.oid = self.bottom_obj_id
+            self.dataset.track_object(self.btm_object)  # Add to the dataset.
+
             mu_f = self.np_random.uniform(0.8, 1.2)
             mu_b = self.np_random.uniform(0.8, 1.2)
             p.changeDynamics(self.bottom_obj_id, -1, lateralFriction=mu_b)
@@ -657,6 +668,7 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         return self.observation
 
     def seed(self, seed=None):
+        random.seed(seed)
         self.np_random, seed = gym.utils.seeding.np_random(seed)
         if self.robot is not None:
             self.robot.np_random = (
