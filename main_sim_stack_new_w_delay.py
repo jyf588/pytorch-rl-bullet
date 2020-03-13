@@ -84,7 +84,7 @@ PLACE_END_STEP = 95
 STATE_NORM = False
 
 INIT_NOISE = True
-DET_CONTACT = 0     # 0 false, 1 true
+DET_CONTACT = 0  # 0 false, 1 true
 
 OBJ_MU = 1.0
 FLOOR_MU = 1.0
@@ -103,7 +103,7 @@ DEVICE = "cuda" if IS_CUDA else "cpu"
 
 TS = 1.0 / 240
 TABLE_OFFSET = [
-    0.25,
+    0.2,
     0.2,
     0.0,
 ]  # TODO: chaged to 0.2 for vision, 0.25 may collide, need to change OR reaching.
@@ -132,9 +132,9 @@ obj2 = {
     "shape": "box",
     "color": "green",
     "position": [0.2, 0.4, 0, 0],
-    "size": "large",
+    "size": "small",
 }  # target
-T_HALF_HEIGHT = HALF_OBJ_HEIGHT_L
+T_HALF_HEIGHT = HALF_OBJ_HEIGHT_S
 obj3 = {
     "shape": "cylinder",
     "color": "blue",
@@ -279,7 +279,7 @@ def construct_bullet_scene(odicts):  # TODO: copied from inference code
         else:
             real_loc += [0, 0, HALF_OBJ_HEIGHT_L + 0.001]
         urdf_file = (
-                "my_pybullet_envs/assets/" + ob_shape + ".urdf"
+            "my_pybullet_envs/assets/" + ob_shape + ".urdf"
         )  # TODO: hardcoded path
 
         obj_id = p.loadURDF(
@@ -301,11 +301,11 @@ def construct_bullet_scene(odicts):  # TODO: copied from inference code
 
 
 def get_stacking_obs(
-        top_oid: int,
-        btm_oid: int,
-        use_vision: bool,
-        vision_module=None,
-        verbose: Optional[bool] = False,
+    top_oid: int,
+    btm_oid: int,
+    use_vision: bool,
+    vision_module=None,
+    verbose: Optional[bool] = False,
 ):
     """Retrieves stacking observations.
 
@@ -376,7 +376,7 @@ if USE_VISION_MODULE:
             0.03197646764976494,
             0.4330631992464512,
         ],
-        camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
+        camera_offset=[-0.05, TABLE_OFFSET[1], 0.0],
         camera_directed_offset=[0.02, 0.0, 0.0],
         apply_offset_to_preds=True,
         html_dir="/home/michelle/html/vision_inference_initial",
@@ -462,8 +462,13 @@ print(f"Loading objects:")
 pprint.pprint(gt_odicts)
 
 env_core = InmoovShadowHandDemoEnvV4(
-    seed=args.seed, init_noise=INIT_NOISE, timestep=TS, withVel=False, diffTar=True,
-    robot_mu=HAND_MU, control_skip=GRASPING_CONTROL_SKIP
+    seed=args.seed,
+    init_noise=INIT_NOISE,
+    timestep=TS,
+    withVel=False,
+    diffTar=True,
+    robot_mu=HAND_MU,
+    control_skip=GRASPING_CONTROL_SKIP,
 )  # TODO: does obj/robot order matter
 
 obj_ids = construct_bullet_scene(odicts=gt_odicts)
@@ -573,7 +578,7 @@ if USE_VISION_MODULE:
     # Initialize the vision module for stacking.
     stacking_vision_module = VisionInference(
         p=p,
-        checkpoint_path="/home/michelle/outputs/stacking_v001/checkpoint_best.pt",
+        checkpoint_path="/home/michelle/outputs/stacking_v002_cyl/checkpoint_best.pt",
         camera_position=[-0.2237938867122504, 0.03198004185028341, 0.5425],
         camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
         apply_offset_to_preds=False,
@@ -590,8 +595,13 @@ t_pos, t_up, b_pos, b_up, t_half_height = get_stacking_obs(
     verbose=True,
 )
 
-l_t_pos, l_t_up, l_b_pos, l_b_up, l_t_half_height = \
-    t_pos, t_up, b_pos, b_up, t_half_height
+l_t_pos, l_t_up, l_b_pos, l_b_up, l_t_half_height = (
+    t_pos,
+    t_up,
+    b_pos,
+    b_up,
+    t_half_height,
+)
 
 # TODO: an unly hack to force Bullet compute forward kinematics
 p_obs = env_core.get_robot_contact_txty_halfh_2obj6dUp_obs_nodup_from_up(
@@ -616,8 +626,13 @@ for i in range(PLACE_END_STEP):
 
     if USE_VISION_DELAY:
         if (i + 1) % VISION_DELAY == 0:
-            l_t_pos, l_t_up, l_b_pos, l_b_up, l_t_half_height = \
-                t_pos, t_up, b_pos, b_up, t_half_height
+            l_t_pos, l_t_up, l_b_pos, l_b_up, l_t_half_height = (
+                t_pos,
+                t_up,
+                b_pos,
+                b_up,
+                t_half_height,
+            )
             t_pos, t_up, b_pos, b_up, t_half_height = get_stacking_obs(
                 top_oid=top_oid,
                 btm_oid=btm_oid,
