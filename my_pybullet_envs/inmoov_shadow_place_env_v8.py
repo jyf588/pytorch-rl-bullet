@@ -42,6 +42,7 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         vision_skip=3,
         control_skip=4,
         obs_noise=False,  # noisy (imperfect) observation
+        pose_source="gt",  # ['gt', 'vision']
         gen_vision_dataset=False,
         dataset_dir="/home/michelle/datasets/stacking_v002",
         dataset_freq=2,
@@ -57,6 +58,7 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         self.gt_only_init = gt_only_init
         self.exclude_hard = exclude_hard
         self.obs_noise = obs_noise
+        self.pose_source = pose_source
 
         # Object-related configurations.
         self.obj_id = None
@@ -199,45 +201,6 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
             np.array(arr)
             + self.np_random.uniform(low=-r, high=r, size=len(arr))
         )
-
-    def create_prim_2_grasp(
-        self, shape, dim, init_xyz, init_quat=(0, 0, 0, 1)
-    ):
-        # shape: p.GEOM_SPHERE or p.GEOM_BOX or p.GEOM_CYLINDER
-        # dim: halfExtents (vec3) for box, (radius, length)vec2 for cylinder
-        # init_xyz vec3 of obj location
-        visual_shape_id = None
-        collision_shape_id = None
-        if shape == p.GEOM_BOX:
-            visual_shape_id = p.createVisualShape(
-                shapeType=shape, halfExtents=dim
-            )
-            collision_shape_id = p.createCollisionShape(
-                shapeType=shape, halfExtents=dim
-            )
-        elif shape == p.GEOM_CYLINDER:
-            # visual_shape_id = p.createVisualShape(shapeType=shape, radius=dim[0], length=dim[1])
-            visual_shape_id = p.createVisualShape(
-                shape, dim[0], [1, 1, 1], dim[1]
-            )
-            # collision_shape_id = p.createCollisionShape(shapeType=shape, radius=dim[0], length=dim[1])
-            collision_shape_id = p.createCollisionShape(
-                shape, dim[0], [1, 1, 1], dim[1]
-            )
-        elif shape == p.GEOM_SPHERE:
-            pass
-            # visual_shape_id = p.createVisualShape(shape, radius=dim[0])
-            # collision_shape_id = p.createCollisionShape(shape, radius=dim[0])
-
-        sid = p.createMultiBody(
-            baseMass=self.obj_mass,
-            baseInertialFramePosition=[0, 0, 0],
-            baseCollisionShapeIndex=collision_shape_id,
-            baseVisualShapeIndex=visual_shape_id,
-            basePosition=init_xyz,
-            baseOrientation=init_quat,
-        )
-        return sid
 
     def reset_robot_object_from_sample(self, state, arm_q):
         o_pos_pf = state["obj_pos_in_palm"]
