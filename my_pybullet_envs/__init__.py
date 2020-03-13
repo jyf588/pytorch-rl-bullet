@@ -20,17 +20,18 @@ from .inmoov_shadow_grasp_env_v3 import InmoovShadowHandGraspEnvV3
 from .inmoov_shadow_place_env_v4 import InmoovShadowHandPlaceEnvV4
 from .inmoov_shadow_place_env_v4_det import InmoovShadowHandPlaceEnvV4Det
 from .inmoov_shadow_grasp_env_v4 import InmoovShadowHandGraspEnvV4
+from .inmoov_shadow_grasp_env_v5 import InmoovShadowHandGraspEnvV5
 from .inmoov_shadow_place_env_v5 import InmoovShadowHandPlaceEnvV5
 from .inmoov_shadow_grasp_place_env_v1 import InmoovShadowHandGraspPlaceEnvV1
 
 from .inmoov_shadow_place_env_v7 import InmoovShadowHandPlaceEnvV7
-from .inmoov_shadow_place_env_v8 import InmoovShadowHandPlaceEnvV8
 
 from .inmoov_shadow_place_env_v6 import InmoovShadowHandPlaceEnvV6
 
 no_vision = False
 try:
    from .inmoov_shadow_place_env_vision_v6 import InmoovShadowHandPlaceEnvVisionV6
+   from .inmoov_shadow_place_env_v8 import InmoovShadowHandPlaceEnvV8
 except ImportError:
    no_vision = True
 
@@ -78,6 +79,12 @@ register(
     id="InmoovHandGraspBulletEnv-v4",
     entry_point="my_pybullet_envs:InmoovShadowHandGraspEnvV4",
     max_episode_steps=134,
+)
+
+register(
+    id="InmoovHandGraspBulletEnv-v5",
+    entry_point="my_pybullet_envs:InmoovShadowHandGraspEnvV5",
+    max_episode_steps=65,
 )
 
 register(
