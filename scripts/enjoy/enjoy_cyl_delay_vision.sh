@@ -1,6 +1,6 @@
 python enjoy.py \
-    --env-name InmoovHandPlaceBulletEnv-v7 \
-    --load-dir trained_models_0302_cyl_4_place_0307_1/ppo/ \
+    --env-name InmoovHandPlaceBulletEnv-v8 \
+    --load-dir trained_models_0302_cyl_4_place_0307_2/ppo/ \
     --non-det 0 \
     --seed=1898 \
     --random_shape 0 \
@@ -9,6 +9,8 @@ python enjoy.py \
     --up 1 \
     --renders 0 \
     --exclude_hard 0 \
+    --vision_skip 2 \
+    --control_skip 6 \
     --obs_noise 1 \
+    --pose_source vision \
     --n_trials 1000
-
