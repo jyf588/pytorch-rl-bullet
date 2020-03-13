@@ -44,6 +44,7 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         obs_noise=False,  # noisy (imperfect) observation
         gen_vision_dataset=False,
         dataset_dir="/home/michelle/datasets/stacking_v002",
+        dataset_freq=2,
     ):
         self.renders = renders
         self.init_noise = init_noise
@@ -83,8 +84,9 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         self.gen_vision_dataset = gen_vision_dataset
         self.dataset = PlacingDatasetGenerator(
             p=p,
-            dataset_dir=f"{dataset_dir} + {top_shape}",
+            dataset_dir=f"{dataset_dir}_{top_shape}",
             camera_offset=[0.0, self.table_object.position[1], 0.0],
+            frequency=dataset_freq,
         )
 
         self.hard_orn_thres = 0.9
@@ -395,13 +397,16 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
                 com_position,
                 useFixedBase=0,
             )
-            self.renderer.color_object(
-                oid=self.bottom_obj_id, color=self.btm_object.color
-            )
             self.floor_id = p.loadURDF(
                 os.path.join(currentdir, "assets/tabletop.urdf"),
                 self.table_object.position,
                 useFixedBase=1,
+            )
+            self.renderer.color_object(
+                oid=self.bottom_obj_id, color=self.btm_object.color
+            )
+            self.renderer.color_object(
+                oid=self.floor_id, color=self.table_object.color
             )
 
             self.btm_object.oid = self.bottom_obj_id
