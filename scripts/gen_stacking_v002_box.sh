@@ -13,4 +13,4 @@ python enjoy.py \
     --control_skip 6 \
     --obs_noise 1 \
     --gen_vision_dataset 1 \
-    --n_trials 460
+    --n_trials 440
