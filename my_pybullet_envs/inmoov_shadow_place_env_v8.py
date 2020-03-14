@@ -18,8 +18,8 @@ currentdir = os.path.dirname(
 )
 
 from ns_vqa_dart.bullet.dash_object import DashObject
-from ns_vqa_dart.bullet.generate_placing import PlacingDatasetGenerator
 from ns_vqa_dart.bullet.renderer import BulletRenderer
+from ns_vqa_dart.bullet.state_saver import StateSaver
 
 sys.path.append("ns_vqa_dart/")
 from bullet.vision_inference import VisionInference
@@ -48,9 +48,7 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         control_skip=4,
         obs_noise=False,  # noisy (imperfect) observation
         use_vision_obs=False,
-        gen_vision_dataset=False,
-        dataset_dir="/home/michelle/datasets/stacking_v002",
-        dataset_freq=2,
+        save_states=False,
     ):
         self.renders = renders
         self.init_noise = init_noise
@@ -64,6 +62,7 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         self.exclude_hard = exclude_hard
         self.obs_noise = obs_noise
         self.use_vision_obs = use_vision_obs
+        self.save_states = save_states
 
         # Object-related configurations.
         self.obj_id = None
@@ -88,13 +87,6 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         # Vision-related configurations.
         self.vision_skip = vision_skip
         self.vision_counter = 0
-        self.gen_vision_dataset = gen_vision_dataset
-        self.dataset = PlacingDatasetGenerator(
-            p=p,
-            dataset_dir=f"{dataset_dir}_{top_shape}",
-            camera_offset=[0.0, self.table_object.position[1], 0.0],
-            frequency=dataset_freq,
-        )
         # If user indicates wanting pose source from vision, initialize vision
         # inference module.
         if self.use_vision_obs:
@@ -110,6 +102,8 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
                 apply_offset_to_preds=False,
                 html_dir="/home/michelle/html/vision_inference_stacking",
             )
+        if self.save_states:
+            self.state_saver = StateSaver()
 
         self.hard_orn_thres = 0.9
         self.obj_mass = 3.5
@@ -222,6 +216,45 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
             + self.np_random.uniform(low=-r, high=r, size=len(arr))
         )
 
+    def create_prim_2_grasp(
+        self, shape, dim, init_xyz, init_quat=(0, 0, 0, 1)
+    ):
+        # shape: p.GEOM_SPHERE or p.GEOM_BOX or p.GEOM_CYLINDER
+        # dim: halfExtents (vec3) for box, (radius, length)vec2 for cylinder
+        # init_xyz vec3 of obj location
+        visual_shape_id = None
+        collision_shape_id = None
+        if shape == p.GEOM_BOX:
+            visual_shape_id = p.createVisualShape(
+                shapeType=shape, halfExtents=dim
+            )
+            collision_shape_id = p.createCollisionShape(
+                shapeType=shape, halfExtents=dim
+            )
+        elif shape == p.GEOM_CYLINDER:
+            # visual_shape_id = p.createVisualShape(shapeType=shape, radius=dim[0], length=dim[1])
+            visual_shape_id = p.createVisualShape(
+                shape, dim[0], [1, 1, 1], dim[1]
+            )
+            # collision_shape_id = p.createCollisionShape(shapeType=shape, radius=dim[0], length=dim[1])
+            collision_shape_id = p.createCollisionShape(
+                shape, dim[0], [1, 1, 1], dim[1]
+            )
+        elif shape == p.GEOM_SPHERE:
+            pass
+            # visual_shape_id = p.createVisualShape(shape, radius=dim[0])
+            # collision_shape_id = p.createCollisionShape(shape, radius=dim[0])
+
+        sid = p.createMultiBody(
+            baseMass=self.obj_mass,
+            baseInertialFramePosition=[0, 0, 0],
+            baseCollisionShapeIndex=collision_shape_id,
+            baseVisualShapeIndex=visual_shape_id,
+            basePosition=init_xyz,
+            baseOrientation=init_quat,
+        )
+        return sid
+
     def reset_robot_object_from_sample(self, state, arm_q):
         o_pos_pf = state["obj_pos_in_palm"]
         o_quat_pf = state["obj_quat_in_palm"]
@@ -263,21 +296,17 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         base_position = list(o_pos).copy()
         base_position[2] -= self.half_height
 
-        # Define a DashObject for the top object.
-        o = DashObject(
-            shape="box" if self.is_box else "cylinder",
-            color=random.choice(self.colors),
-            radius=self.dim[0],
-            height=self.half_height * 2,
-            position=base_position,
-            orientation=o_quat,
+        self.obj_id = self.create_prim_2_grasp(
+            state["obj_shape"], self.dim, o_pos, o_quat
         )
 
-        self.obj_id = self.renderer.render_object(o=o, base_mass=self.obj_mass)
-        o.oid = self.obj_id
-
-        # Add the top object to the dataset.
-        self.dataset.track_object(o)
+        if self.save_states:
+            self.state_saver.track_object(
+                oid=self.obj_id,
+                shape="box" if self.is_box else "cylinder",
+                radius=self.dim[0],
+                height=self.half_height * 2,
+            )
 
         mu_obj = self.np_random.uniform(0.8, 1.2)
         p.changeDynamics(self.obj_id, -1, lateralFriction=mu_obj)
@@ -343,8 +372,8 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         self.timer = 0
         self.vision_counter = 0
 
-        if self.gen_vision_dataset:
-            self.dataset.reset()
+        if self.save_states:
+            self.state_saver.reset()
 
         self.robot = InmoovShadowNew(
             init_noise=False, timestep=self._timeStep, np_random=self.np_random
@@ -385,15 +414,16 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
                 self.table_object.position,
                 useFixedBase=1,
             )
-            self.renderer.color_object(
-                oid=self.bottom_obj_id, color=self.btm_object.color
-            )
-            self.renderer.color_object(
-                oid=self.floor_id, color=self.table_object.color
-            )
 
             self.btm_object.oid = self.bottom_obj_id
-            self.dataset.track_object(self.btm_object)  # Add to the dataset.
+
+            if self.save_states:
+                self.state_saver.track_object(
+                    oid=self.bottom_obj_id,
+                    shape="cylinder",
+                    radius=self.btm_object.radius,
+                    height=self.btm_object.height,
+                )
 
             mu_f = self.np_random.uniform(0.8, 1.2)
             mu_b = self.np_random.uniform(0.8, 1.2)
@@ -530,8 +560,8 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
 
         obs = self.getExtendedObservation()
 
-        if self.gen_vision_dataset:
-            self.dataset.generate_example()
+        if self.save_states:
+            self.state_saver.save()
 
         return obs, reward, False, {}
 
