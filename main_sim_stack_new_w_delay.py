@@ -27,6 +27,8 @@ from my_pybullet_envs.inmoov_shadow_demo_env_v4 import (
     InmoovShadowHandDemoEnvV4,
 )
 
+import demo_scenes
+
 sys.path.append("ns_vqa_dart/")
 no_vision = False
 try:
@@ -109,6 +111,7 @@ TABLE_OFFSET = [
 ]  # TODO: chaged to 0.2 for vision, 0.25 may collide, need to change OR reaching.
 HALF_OBJ_HEIGHT_L = 0.09
 HALF_OBJ_HEIGHT_S = 0.065
+SIZE2HALF_H = {"small": HALF_OBJ_HEIGHT_S, "large": HALF_OBJ_HEIGHT_L}
 PLACE_CLEARANCE = 0.14  # TODO: different for diff envs
 
 COLORS = {
@@ -122,97 +125,20 @@ COLORS = {
 # Ground-truth scene:
 HIDE_SURROUNDING_OBJECTS = False  # If true, hides the surrounding objects.
 
-obj1 = {
-    "shape": "box",
-    "color": "yellow",
-    "position": [0.15, 0.7, 0, 0],
-    "size": "large",
-}  # ref 1
-obj2 = {
-    "shape": "box",
-    "color": "green",
-    "position": [0.1, -0.06, 0, 0],
-    "size": "large",
-}  # target
-T_HALF_HEIGHT = HALF_OBJ_HEIGHT_S
-obj3 = {
-    "shape": "cylinder",
-    "color": "blue",
-    "position": [0.2, 0.4, 0, 0],
-    "size": "large",
-}  # ref 2
-P_TZ = 0.18  # TODO
-obj4 = {
-    "shape": "box",
-    "color": "yellow",
-    "position": [0.3, 0.3, 0, 0],
-    "size": "large",
-}  # irrelevant
-
-# =============================
-# obj1 = {
-#     "shape": "box",
-#     "color": "yellow",
-#     "position": [0.15, 0.7, 0, 0],
-#     "size": "large",
-# }  # ref 1
-# obj2 = {
-#     "shape": "cylinder",
-#     "color": "green",
-#     "position": [0.1, -0.06, 0, 0],
-#     "size": "large",
-# }  # target
-# T_HALF_HEIGHT = HALF_OBJ_HEIGHT_L
-# obj3 = {
-#     "shape": "cylinder",
-#     "color": "blue",
-#     "position": [0.1, 0.3, 0, 0],
-#     "size": "large",
-# }  # ref 2
-# P_TZ = 0.18  # TODO
-# obj4 = {
-#     "shape": "box",
-#     "color": "yellow",
-#     "position": [0.2, 0.4, 0, 0],
-#     "size": "large",
-# }  # irrelevant
-
-# ====================
-# obj1 = {
-#     "shape": "box",
-#     "color": "yellow",
-#     "position": [0.15, 0.7, 0, 0],
-#     "size": "large",
-# }  # ref 1
-# obj2 = {
-#     "shape": "box",
-#     "color": "green",
-#     "position": [0.2, 0.4, 0, 0],
-#     "size": "large",
-# }  # target
-# T_HALF_HEIGHT = HALF_OBJ_HEIGHT_L
-# obj3 = {
-#     "shape": "cylinder",
-#     "color": "blue",
-#     "position": [0.1, -0.05, 0, 0],
-#     "size": "large",
-# }  # ref 2
-# P_TZ = 0.18  # TODO
-# obj4 = {
-#     "shape": "box",
-#     "color": "yellow",
-#     "position": [0.0, 0.1, 0, 0],
-#     "size": "large",
-# }  # irrelevant
+gt_odicts = demo_scenes.SCENE_1
+top_obj_idx = 1
+btm_obj_idx = 2
 
 if HIDE_SURROUNDING_OBJECTS:
-    gt_odicts = [obj2, obj3]
+    gt_odicts = [gt_odicts[top_obj_idx], gt_odicts[btm_obj_idx]]
     top_obj_idx = 0
     btm_obj_idx = 1
-else:
-    gt_odicts = [obj1, obj2, obj3, obj4]
-    top_obj_idx = 1
-    btm_obj_idx = 2
+
+top_size = gt_odicts[top_obj_idx]["size"]
+btm_size = gt_odicts[btm_obj_idx]["size"]
+P_TZ = SIZE2HALF_H[btm_size] * 2
+T_HALF_HEIGHT = SIZE2HALF_H[top_size]
+
 
 IS_BOX = gt_odicts[top_obj_idx]["shape"] == "box"  # TODO: infer from language
 if IS_BOX:
