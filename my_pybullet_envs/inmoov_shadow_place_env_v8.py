@@ -17,12 +17,11 @@ currentdir = os.path.dirname(
     os.path.abspath(inspect.getfile(inspect.currentframe()))
 )
 
+
 from ns_vqa_dart.bullet.dash_object import DashObject
 from ns_vqa_dart.bullet.renderer import BulletRenderer
 from ns_vqa_dart.bullet.state_saver import StateSaver
-
-sys.path.append("ns_vqa_dart/")
-from bullet.vision_inference import VisionInference
+from ns_vqa_dart.bullet.vision_inference import VisionInference
 
 
 class InmoovShadowHandPlaceEnvV8(gym.Env):
@@ -49,6 +48,7 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         obs_noise=False,  # noisy (imperfect) observation
         use_vision_obs=False,
         save_states=False,
+        states_dir=None,
     ):
         self.renders = renders
         self.init_noise = init_noise
@@ -103,7 +103,9 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
                 html_dir="/home/michelle/html/vision_inference_stacking",
             )
         if self.save_states:
-            self.state_saver = StateSaver()
+            self.state_saver = StateSaver(
+                dataset_dir=f"/home/michelle/datasets/delay_{top_shape}_states"
+            )
 
         self.hard_orn_thres = 0.9
         self.obj_mass = 3.5
