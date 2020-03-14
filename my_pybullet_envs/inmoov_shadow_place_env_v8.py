@@ -18,7 +18,7 @@ currentdir = os.path.dirname(
 )
 
 
-from ns_vqa_dart.bullet.dash_object import DashObject
+from ns_vqa_dart.bullet.dash_object import DashObject, DashTable
 from ns_vqa_dart.bullet.renderer import BulletRenderer
 from ns_vqa_dart.bullet.state_saver import StateSaver
 from ns_vqa_dart.bullet.vision_inference import VisionInference
@@ -75,13 +75,7 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
             height=0.18,
             position=[0.0, 0.0, 0.0],  # To be overridden.
         )
-        self.table_object = DashObject(
-            shape="tabletop",
-            color="grey",
-            radius=None,
-            height=None,
-            position=[0.2, 0.2, 0.0],
-        )
+        self.table_object = DashTable(position=[0.2, 0.2, 0.0])
         top_shape = "box" if self.default_box else "cyl"
 
         # Vision-related configurations.

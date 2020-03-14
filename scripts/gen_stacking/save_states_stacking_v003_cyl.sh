@@ -2,7 +2,7 @@ python enjoy.py \
     --env-name InmoovHandPlaceBulletEnv-v8 \
     --load-dir trained_models_0302_cyl_4_place_0307_2/ppo/ \
     --non-det 0 \
-    --seed=1898 \
+    --seed=1 \
     --random_shape 0 \
     --random_size 1 \
     --default_box 0 \
@@ -13,4 +13,4 @@ python enjoy.py \
     --control_skip 6 \
     --obs_noise 1 \
     --save_states 1 \
-    --n_trials 500
+    --n_trials 1
