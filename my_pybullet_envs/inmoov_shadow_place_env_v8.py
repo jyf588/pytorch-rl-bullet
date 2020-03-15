@@ -86,15 +86,18 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         if self.use_vision_obs:
             self.vision_module = VisionInference(
                 p=p,
-                checkpoint_path=f"/home/michelle/outputs/stacking_v002_{top_shape}/checkpoint_best.pt",
-                camera_position=[
-                    -0.2237938867122504,
-                    0.03198004185028341,
-                    0.5425,
-                ],
+                # checkpoint_path=f"/home/michelle/outputs/stacking_v002_{top_shape}/checkpoint_best.pt",
+                # camera_position=[
+                #     -0.2237938867122504,
+                #     0.03198004185028341,
+                #     0.5425,
+                # ],
+                checkpoint_path=f"/home/michelle/outputs/stacking_v003/checkpoint_best.pt",
+                camera_position=[-0.2237938867122504, 0.0, 0.5425],
                 camera_offset=[0.0, self.table_object.position[1], 0.0],
                 apply_offset_to_preds=False,
-                html_dir="/home/michelle/html/vision_inference_stacking",
+                # html_dir="/home/michelle/html/enjoy_v8_stacking_v002_{top_shape}",
+                html_dir="/home/michelle/html/enjoy_v8_stacking_v003",
             )
         if self.save_states:
             self.state_saver = StateSaver(
