@@ -1,6 +1,6 @@
 from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
 
-import pybullet as p
+# import pybullet as p
 import time
 import gym, gym.utils.seeding, gym.spaces
 import numpy as np
@@ -22,6 +22,9 @@ from ns_vqa_dart.bullet.dash_object import DashObject, DashTable
 from ns_vqa_dart.bullet.renderer import BulletRenderer
 from ns_vqa_dart.bullet.state_saver import StateSaver
 from ns_vqa_dart.bullet.vision_inference import VisionInference
+import ns_vqa_dart.bullet.util
+
+p = ns_vqa_dart.bullet.util.create_bullet_client(mode="direct")
 
 
 class InmoovShadowHandPlaceEnvV8(gym.Env):
@@ -81,11 +84,16 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         # Vision-related configurations.
         self.vision_skip = vision_skip
         self.vision_counter = 0
+        self.state_saver = StateSaver(
+            p=p,
+            dataset_dir=f"/home/michelle/datasets/delay_{top_shape}_states",
+        )
         # If user indicates wanting pose source from vision, initialize vision
         # inference module.
         if self.use_vision_obs:
             self.vision_module = VisionInference(
-                p=p,
+                # p=p,
+                state_saver=self.state_saver,
                 # checkpoint_path=f"/home/michelle/outputs/stacking_v002_{top_shape}/checkpoint_best.pt",
                 # camera_position=[
                 #     -0.2237938867122504,
@@ -97,11 +105,7 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
                 camera_offset=[0.0, self.table_object.position[1], 0.0],
                 apply_offset_to_preds=False,
                 # html_dir="/home/michelle/html/enjoy_v8_stacking_v002_{top_shape}",
-                # html_dir="/home/michelle/html/enjoy_v8_stacking_v003",
-            )
-        if self.save_states:
-            self.state_saver = StateSaver(
-                dataset_dir=f"/home/michelle/datasets/delay_{top_shape}_states"
+                html_dir=f"/home/michelle/html/enjoy_v8_stacking_v003_{top_shape}",
             )
 
         self.hard_orn_thres = 0.9
@@ -137,11 +141,10 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         ]
 
         self._timeStep = 1.0 / 240.0
-        if self.renders:
-            p.connect(p.GUI)
-        else:
-            p.connect(p.DIRECT)
-        self.renderer = BulletRenderer(p=p)
+        # if self.renders:
+        #     p.connect(p.GUI)
+        # else:
+        #     p.connect(p.DIRECT)
         self.np_random = None
         self.robot = None
         self.viewer = None
@@ -192,6 +195,7 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         self.robot = InmoovShadowNew(
             init_noise=False, timestep=self._timeStep, np_random=self.np_random
         )
+        self.state_saver.set_robot_id(self.robot.arm_id)
 
         self.observation = self.getExtendedObservation()
         action_dim = len(self.action_scale)
@@ -299,13 +303,12 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
             state["obj_shape"], self.dim, o_pos, o_quat
         )
 
-        if self.save_states:
-            self.state_saver.track_object(
-                oid=self.obj_id,
-                shape="box" if self.is_box else "cylinder",
-                radius=self.dim[0],
-                height=self.half_height * 2,
-            )
+        self.state_saver.track_object(
+            oid=self.obj_id,
+            shape="box" if self.is_box else "cylinder",
+            radius=self.dim[0],
+            height=self.half_height * 2,
+        )
 
         mu_obj = self.np_random.uniform(0.8, 1.2)
         p.changeDynamics(self.obj_id, -1, lateralFriction=mu_obj)
@@ -371,12 +374,13 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         self.timer = 0
         self.vision_counter = 0
 
-        if self.save_states:
-            self.state_saver.reset()
+        self.state_saver.reset()
 
         self.robot = InmoovShadowNew(
             init_noise=False, timestep=self._timeStep, np_random=self.np_random
         )
+
+        self.state_saver.set_robot_id(self.robot.arm_id)
 
         arm_q = self.sample_valid_arm_q()  # reset done during solving IK
 
@@ -416,13 +420,13 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
 
             self.btm_object.oid = self.bottom_obj_id
 
-            if self.save_states:
-                self.state_saver.track_object(
-                    oid=self.bottom_obj_id,
-                    shape="cylinder",
-                    radius=self.btm_object.radius,
-                    height=self.btm_object.height,
-                )
+            self.state_saver.track_object(
+                oid=self.bottom_obj_id,
+                shape="cylinder",
+                radius=self.btm_object.radius,
+                height=self.btm_object.height,
+            )
+            self.state_saver.set_tabletop_id(tabletop_id=self.floor_id)
 
             mu_f = self.np_random.uniform(0.8, 1.2)
             mu_b = self.np_random.uniform(0.8, 1.2)
@@ -439,9 +443,6 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         self.last_t_pos, self.last_t_up = self.t_pos, self.t_up
         self.last_b_pos, self.last_b_up = self.b_pos, self.b_up
         self.observation = self.getExtendedObservation()
-
-        if self.save_states:
-            self.state_saver.set_robot_id(self.robot.arm_id)
 
         return np.array(self.observation)
 
@@ -679,11 +680,15 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
 
         if self.use_gt_6d:
             self.vision_counter += 1
-            if self.obj_id is None:
-                self.observation.extend(
-                    self.obj6DtoObs_UpVec([0, 0, 0], [0, 0, 0, 1])
-                )
-            else:
+
+            oid2pose = self.get_pose_for_oids(
+                oids=[self.obj_id, self.bottom_obj_id]
+            )
+
+            pos = oid2pose[self.obj_id]["position"]
+            upv = oid2pose[self.obj_id]["up_vector"]
+
+            if self.obj_id is not None:
                 if self.gt_only_init:
                     pos, upv = self.t_pos, self.t_up
                 else:
@@ -695,26 +700,18 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
                             self.t_pos,
                             self.t_up,
                         )
-                        self.t_pos, self.t_up = self.get_object_obs(
-                            oid=self.obj_id
-                        )
+                        self.t_pos = pos
+                        self.t_up = upv
                     pos, upv = self.last_t_pos, self.last_t_up
 
-                    # clPos, clOrn = p.getBasePositionAndOrientation(self.obj_id)
+            self.observation.extend(self.obj_pos_up_to_obs(pos, upv))
 
-                    # print("feed into", clPos, clOrn)
-                    # clPos_act, clOrn_act = p.getBasePositionAndOrientation(self.obj_id)
-                    # print("act",  clPos_act, clOrn_act)
+            # if stacking & real-time, include bottom 6D
+            if not self.place_floor and not self.gt_only_init:
+                pos = oid2pose[self.bottom_obj_id]["position"]
+                upv = oid2pose[self.bottom_obj_id]["up_vector"]
 
-                self.observation.extend(self.obj_pos_up_to_obs(pos, upv))
-            if (
-                not self.place_floor and not self.gt_only_init
-            ):  # if stacking & real-time, include bottom 6D
-                if self.bottom_obj_id is None:
-                    self.observation.extend(
-                        self.obj6DtoObs_UpVec([0, 0, 0], [0, 0, 0, 1])
-                    )
-                else:
+                if self.bottom_obj_id is not None:
                     # model both delayed and low-freq vision input
                     # every vision_skip steps, update cur 6D
                     # but feed policy with last-time updated 6D
@@ -723,39 +720,58 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
                             self.b_pos,
                             self.b_up,
                         )
-                        self.b_pos, self.b_up = self.get_object_obs(
-                            oid=self.bottom_obj_id
-                        )
+                        bottom_pose = oid2pose[self.bottom_obj_id]
+                        self.b_pos = bottom_pose["position"]
+                        self.b_up = bottom_pose["up_vector"]
                     pos, upv = self.last_b_pos, self.last_b_up
-
-                    # print("b feed into", clPos, clOrn)
-                    # clPos_act, clOrn_act = p.getBasePositionAndOrientation(self.bottom_obj_id)
-                    # print("b act", clPos_act, clOrn_act)
-
-                    # clPos, clOrn = p.getBasePositionAndOrientation(self.bottom_obj_id)
-
-                    self.observation.extend(self.obj_pos_up_to_obs(pos, upv))
-
+                self.observation.extend(self.obj_pos_up_to_obs(pos, upv))
         return self.observation
 
-    def get_object_obs(self, oid: int) -> Tuple[List[float], List[float]]:
+    def get_pose_for_oids(
+        self, oids: List[int]
+    ) -> Tuple[List[float], List[float]]:
         """Gets the observations for an object.
 
         Args:
-            oid: The object ID.
+            oids: Object IDs to get pose for.
 
         Returns:
-            pos: The position of the object.
-            up_vector: The up vector of the object.
+            oid2pose: A dictionary mapping from oid to pose.
         """
+        oid2pose = {}
+
+        loaded_oids = []
+        for oid in oids:
+            if oid is None:
+                oid2pose[oid] = {
+                    "position": [0, 0, 0],
+                    "up_vector": self.orn_to_upv(orn=[0, 0, 0, 1]),
+                }
+            else:
+                loaded_oids.append(oid)
+
         if self.use_vision_obs:
-            odict = self.vision_module.predict(oids=[oid])[0]
-            pos = odict["position"]
-            up_vector = odict["up_vector"]
+            if len(self.state_saver.oid2attr) == 0:
+                for oid in loaded_oids:
+                    oid2pose[oid] = {
+                        "position": [0, 0, 0],
+                        "up_vector": self.orn_to_upv(orn=[0, 0, 0, 1]),
+                    }
+            else:
+                odicts = self.vision_module.predict(client_oids=loaded_oids)
+                for i in range(len(loaded_oids)):
+                    oid = loaded_oids[i]
+                    odict = odicts[i]
+                    oid2pose[oid] = {
+                        "position": odict["position"],
+                        "up_vector": odict["up_vector"],
+                    }
         else:
-            pos, orn = p.getBasePositionAndOrientation(oid)
-            up_vector = self.orn_to_upv(orn=orn)
-        return pos, up_vector
+            for oid in loaded_oids:
+                pos, orn = p.getBasePositionAndOrientation(oid)
+                up_vector = self.orn_to_upv(orn=orn)
+                oid2pose[oid] = {"position": pos, "up_vector": up_vector}
+        return oid2pose
 
     def seed(self, seed=None):
         random.seed(seed)
