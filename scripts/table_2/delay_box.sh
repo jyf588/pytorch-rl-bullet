@@ -12,4 +12,4 @@ python enjoy.py \
     --vision_skip 2 \
     --control_skip 6 \
     --obs_noise 1 \
-    --n_trials 1000
+    --n_trials 200

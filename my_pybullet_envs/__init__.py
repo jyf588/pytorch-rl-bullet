@@ -30,10 +30,10 @@ from .inmoov_shadow_place_env_v6 import InmoovShadowHandPlaceEnvV6
 
 no_vision = False
 try:
-   from .inmoov_shadow_place_env_vision_v6 import InmoovShadowHandPlaceEnvVisionV6
-   from .inmoov_shadow_place_env_v8 import InmoovShadowHandPlaceEnvV8
-except ImportError:
-   no_vision = True
+    from .inmoov_shadow_place_env_v8 import InmoovShadowHandPlaceEnvV8
+except ImportError as e:
+    print(e)
+    no_vision = True
 
 
 def register(id, *args, **kvargs):
@@ -125,14 +125,14 @@ if not no_vision:
     )
 
 register(
-    id='InmoovHandPlaceBulletEnv-v7',
-    entry_point='my_pybullet_envs:InmoovShadowHandPlaceEnvV7',
+    id="InmoovHandPlaceBulletEnv-v7",
+    entry_point="my_pybullet_envs:InmoovShadowHandPlaceEnvV7",
     max_episode_steps=100,
 )
 
 register(
-    id='InmoovHandPlaceBulletEnv-v8',
-    entry_point='my_pybullet_envs:InmoovShadowHandPlaceEnvV8',
+    id="InmoovHandPlaceBulletEnv-v8",
+    entry_point="my_pybullet_envs:InmoovShadowHandPlaceEnvV8",
     max_episode_steps=100,
 )
 
@@ -143,8 +143,8 @@ register(
 )
 
 register(
-    id='ShadowHandGraspBulletEnv-v0',
-    entry_point='my_pybullet_envs:ShadowHandGraspEnv',
+    id="ShadowHandGraspBulletEnv-v0",
+    entry_point="my_pybullet_envs:ShadowHandGraspEnv",
     max_episode_steps=400,
 )
 
