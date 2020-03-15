@@ -437,6 +437,9 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
         self.last_b_pos, self.last_b_up = self.b_pos, self.b_up
         self.observation = self.getExtendedObservation()
 
+        if self.save_states:
+            self.state_saver.set_robot_id(self.robot.arm_id)
+
         return np.array(self.observation)
 
     def sample_init_state(self):

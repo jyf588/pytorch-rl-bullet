@@ -13,4 +13,4 @@ python enjoy.py \
     --control_skip 6 \
     --obs_noise 1 \
     --save_states 1 \
-    --n_trials 1
+    --n_trials 500
