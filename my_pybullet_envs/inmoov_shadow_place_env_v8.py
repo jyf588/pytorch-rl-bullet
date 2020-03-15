@@ -97,7 +97,7 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
                 camera_offset=[0.0, self.table_object.position[1], 0.0],
                 apply_offset_to_preds=False,
                 # html_dir="/home/michelle/html/enjoy_v8_stacking_v002_{top_shape}",
-                html_dir="/home/michelle/html/enjoy_v8_stacking_v003",
+                # html_dir="/home/michelle/html/enjoy_v8_stacking_v003",
             )
         if self.save_states:
             self.state_saver = StateSaver(
