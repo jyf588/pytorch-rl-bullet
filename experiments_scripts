@@ -1485,6 +1485,14 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --l
 3/14 21:33
 
 
+#
+# todo: do we want to include btm_height or tz as obs?
+        if self.init_noise:
+            height_est = self.btm_obj_height + np.random.uniform(low=-0.02, high=0.02)
+        else:
+            height_est = self.btm_obj_height
+# TODO: also might need to re-train with this change..
+
 # put both on object and on floor (on other objects?)
 
 # try grasp v5 again, stay_still pen *10, num of mini batch 32/2=16?
@@ -1524,10 +1532,10 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --l
 # ALWAYS TYPE source bashrc WHEN YOU BEGIN A NEW CONTAINER
 # pip install -U spacypython -m spacy download en_core_web_sm
 
-# TODO: large obj collide during transporting
-# TODO: collide with other objs during grasping.
-# TODO: new issue, might need multiple candidate for placing.
-# TODO: sometimes go through bottom of table..
+# TODO: large obj collide during transporting --> make a large BB, move up & move down
+# TODO: collide with other objs during grasping. --> increase dev pen, or make drop condition harsh
+# TODO: new issue, might need multiple candidate for placing. --> train placing on all (or several) wrists
+# TODO: sometimes go through bottom of table.. --> maybe lower table in OR is enough
 
 # TODO: slip in hand sometimes. What is the best way to avoid this
 # TODO: new issue, hand penetrate into obj, will slip during transporting.

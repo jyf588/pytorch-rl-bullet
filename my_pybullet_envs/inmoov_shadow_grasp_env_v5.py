@@ -291,7 +291,7 @@ class InmoovShadowHandGraspEnvV5(gym.Env):
         palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
         dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(clPos)), 0.5)
         reward += -dist * 2.0
-        reward += -np.minimum(np.linalg.norm(np.array([self.tx, self.ty, 0.1]) - np.array(clPos)), 0.4) * 8.0
+        reward += -np.minimum(np.linalg.norm(np.array([self.tx, self.ty, 0.1]) - np.array(clPos)), 0.4) * 10.0
 
         for i in self.robot.fin_tips[:4]:
             tip_pos = p.getLinkState(self.robot.arm_id, i)[0]

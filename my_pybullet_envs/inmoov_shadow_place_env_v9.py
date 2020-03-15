@@ -28,7 +28,8 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                  exclude_hard=True,
                  vision_skip=2,
                  control_skip=6,
-                 obs_noise=False    # noisy (imperfect) observation
+                 obs_noise=False,    # noisy (imperfect) observation
+                 random_btm=False
                  ):
         self.renders = renders
         self.init_noise = init_noise
@@ -41,6 +42,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         self.gt_only_init = gt_only_init
         self.exclude_hard = exclude_hard
         self.obs_noise = obs_noise
+        self.random_btm = random_btm
 
         self.vision_skip = vision_skip
         self.vision_counter = 0
@@ -184,8 +186,60 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
 
         return True
 
+    # def reset_robot_object_from_sample_armqs(self, state, arm_qs):
+    #     o_pos_pf = state['obj_pos_in_palm']
+    #     o_quat_pf = state['obj_quat_in_palm']
+    #     if self.init_noise:
+    #         o_pos_pf = list(self.perturb(o_pos_pf, 0.005))
+    #         o_quat_pf = list(self.perturb(o_quat_pf, 0.005))
+    #     all_fin_q_init = state['all_fin_q']
+    #     tar_fin_q_init = state['fin_tar_q']
+    #
+    #     print(arm_qs)
+    #     good_init = False
+    #     for arm_q in arm_qs:
+    #         self.robot.reset_with_certain_arm_q_finger_states(arm_q, all_fin_q_init, tar_fin_q_init)
+    #
+    #         p_pos, p_quat = self.robot.get_link_pos_quat(self.robot.ee_id)
+    #         o_pos, o_quat = p.multiplyTransforms(p_pos, p_quat, o_pos_pf, o_quat_pf)
+    #
+    #         z_axis, _ = p.multiplyTransforms([0, 0, 0], o_quat, [0, 0, 1], [0, 0, 0, 1])  # R_cl * unitz[0,0,1]
+    #         rotMetric = np.array(z_axis).dot(np.array([0, 0, 1]))
+    #         # print(rotMetric, rotMetric)
+    #         if self.exclude_hard and rotMetric < self.hard_orn_thres: return False
+    #
+    #         self.is_box = True if state['obj_shape'] == p.GEOM_BOX else False  # TODO: ball
+    #         self.dim = state['obj_dim']
+    #         self.obj_id = self.create_prim_2_grasp(state['obj_shape'], self.dim, o_pos, o_quat)
+    #
+    #         if self.is_box:
+    #             self.half_height = self.dim[-1]
+    #         else:
+    #             self.half_height = self.dim[-1] / 2.0  # TODO: ball
+    #
+    #         mu_obj = self.np_random.uniform(0.8, 1.2)
+    #         p.changeDynamics(self.obj_id, -1, lateralFriction=mu_obj)
+    #
+    #         cps = p.getContactPoints(bodyA=self.robot.arm_id)
+    #         if len(cps) == 0:
+    #             good_init = True
+    #             break
+    #     print("good init", good_init)
+    #
+    #     # good_init = False
+    #     # while not good_init:
+    #     #     self.reset_with_certain_arm_q(sp)
+    #     #     cps = p.getContactPoints(bodyA=self.arm_id)
+    #     #     # for cp in cps:
+    #     #     #     print(cp)
+    #     #     #     input("penter")
+    #     #     # print(cps[0][6])
+    #     #     if len(cps) == 0: good_init = True  # TODO: init hand last and make sure it does not colllide with env
+    #
+    #     return True
+    #
+
     def get_optimal_init_arm_q(self, desired_obj_pos):
-        # TODO: desired obj init pos -> should add clearance to z.
         # uses (self.o_pos_pf_ave, self.o_quat_pf_ave), so set mean stats to load properly
         arm_q = None
         cost = 1e30
@@ -202,8 +256,26 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                     cost = this_cost
         return arm_q
 
+    # def get_all_init_arm_q(self, desired_obj_pos):
+    #     # uses (self.o_pos_pf_ave, self.o_quat_pf_ave), so set mean stats to load properly
+    #     arm_qs = []
+    #     for ind, cand_quat in enumerate(self.cand_quats):
+    #         p_pos_of_ave, p_quat_of_ave = p.invertTransform(self.o_pos_pf_ave, self.o_quat_pf_ave)
+    #         p_pos, p_quat = p.multiplyTransforms(desired_obj_pos, cand_quat,
+    #                                              p_pos_of_ave, p_quat_of_ave)
+    #         cand_arm_q = self.robot.solve_arm_IK(p_pos, p_quat)
+    #         if cand_arm_q is not None:
+    #             arm_qs.append(cand_arm_q)
+    #     print(arm_qs)
+    #     return arm_qs
+
     def sample_valid_arm_q(self):
-        self.tz = self.btm_obj_height if not self.place_floor else 0.0
+        # todo: do we want to include btm_height or tz as obs?
+        if self.init_noise:
+            height_est = self.btm_obj_height + np.random.uniform(low=-0.02, high=0.02)
+        else:
+            height_est = self.btm_obj_height
+        self.tz = height_est if not self.place_floor else 0.0
         while True:
             if self.up:
                 self.tx = self.np_random.uniform(low=-0.1, high=0.3)
@@ -222,6 +294,26 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
             else:
                 return arm_q
 
+    # def sample_valid_arm_qs(self):
+    #     self.tz = self.btm_obj_height if not self.place_floor else 0.0
+    #     while True:
+    #         if self.up:
+    #             self.tx = self.np_random.uniform(low=-0.1, high=0.3)
+    #             self.ty = self.np_random.uniform(low=-0.1, high=0.5)
+    #             # self.tx = self.np_random.uniform(low=0, high=0.2)
+    #             # self.ty = self.np_random.uniform(low=-0.2, high=0.0)
+    #         else:
+    #             self.tx = 0.0
+    #             self.ty = 0.0
+    #
+    #         desired_obj_pos = [self.tx, self.ty, self.start_clearance + self.tz]
+    #         self.desired_obj_pos_final = [self.tx, self.ty, self.half_height + self.tz]
+    #         arm_qs = self.get_all_init_arm_q(desired_obj_pos)
+    #         if len(arm_qs) == 0:
+    #             continue
+    #         else:
+    #             return arm_qs
+
     def reset(self):
         p.resetSimulation()
         p.setPhysicsEngineParameter(numSolverIterations=200)
@@ -232,12 +324,26 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
 
         self.robot = InmoovShadowNew(init_noise=False, timestep=self._timeStep, np_random=self.np_random)
 
+        if self.random_btm:
+            self.btm_obj_height = self.np_random.uniform(0.13, 0.18)
+            self.btm_obj_half_width = self.np_random.uniform(low=0.045, high=0.05)
+            self.btm_obj_shape = self.np_random.randint(2)
+
         arm_q = self.sample_valid_arm_q()   # reset done during solving IK
 
         init_done = False
         while not init_done:
             init_state = self.sample_init_state()
             init_done = self.reset_robot_object_from_sample(init_state, arm_q)
+
+
+        # TODO: what we need is...
+        # arm_qs = self.sample_valid_arm_qs()   # reset done during solving IK
+        #
+        # init_done = False
+        # while not init_done:
+        #     init_state = self.sample_init_state()
+        #     init_done = self.reset_robot_object_from_sample_armqs(init_state, arm_qs)
 
         if self.place_floor:
             self.bottom_obj_id =p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.1, 0.2, 0.0],
@@ -250,10 +356,20 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
             if self.init_noise:
                 self.tx_act += self.np_random.uniform(low=-0.015, high=0.015)
                 self.ty_act += self.np_random.uniform(low=-0.015, high=0.015)
-            btm_xyz = np.array([self.tx_act, self.ty_act, self.tz/2.0])
 
-            self.bottom_obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
-                                            btm_xyz, useFixedBase=0)
+            btm_xyz = np.array([self.tx_act, self.ty_act, self.btm_obj_height / 2.0])
+            if self.random_btm:
+                if self.btm_obj_shape == 1:
+                    self.dim = [self.btm_obj_half_width * 0.8, self.btm_obj_half_width * 0.8, self.btm_obj_height/2.0]  # TODO
+                    quat = p.getQuaternionFromEuler([0., 0., self.np_random.uniform(low=0, high=2.0 * math.pi)])
+                    self.bottom_obj_id = self.create_prim_2_grasp(p.GEOM_BOX, self.dim, btm_xyz, quat)
+                elif self.btm_obj_shape == 0:
+                    self.dim = [self.btm_obj_half_width, self.btm_obj_height]
+                    self.bottom_obj_id = self.create_prim_2_grasp(p.GEOM_CYLINDER, self.dim, btm_xyz)
+            else:
+                self.bottom_obj_id = p.loadURDF(os.path.join(currentdir, 'assets/cylinder.urdf'),
+                                                btm_xyz, useFixedBase=0)
+
             self.floor_id = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.1, 0.2, 0.0],
                               useFixedBase=1)
             mu_f = self.np_random.uniform(0.8, 1.2)
