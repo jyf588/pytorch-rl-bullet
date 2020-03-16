@@ -26,7 +26,7 @@ class InmoovShadowHandGraspEnvV5(gym.Env):
                  renders=True,
                  init_noise=True,
                  up=True,
-                 random_shape=False,
+                 random_shape=True,
                  random_size=True,
                  default_box=1,      # if not random shape, 1 box, 0 cyl, -1 sphere, bad legacy naming
                  using_comfortable=True,
@@ -106,7 +106,7 @@ class InmoovShadowHandGraspEnvV5(gym.Env):
             # else:
             #     cyl_init_pos = [0, 0, 0.091]
             self.tx = self.np_random.uniform(low=-0.1, high=0.3)
-            self.ty = self.np_random.uniform(low=-0.1, high=0.5)
+            self.ty = self.np_random.uniform(low=-0.15, high=0.55)
             # self.tx = 0.14
             # self.ty = 0.3
             cyl_init_pos = np.array(cyl_init_pos) + np.array([self.tx, self.ty, 0])
@@ -195,7 +195,10 @@ class InmoovShadowHandGraspEnvV5(gym.Env):
 
         # self.isBox = bool(self.np_random.randint(2)) if self.random_shape else self.default_box
 
-        self.shape_ind = self.np_random.randint(3) - 1 if self.random_shape else self.default_box
+        # self.shape_ind = self.np_random.randint(3) - 1 if self.random_shape else self.default_box
+        self.shape_ind = self.np_random.randint(2) if self.random_shape else self.default_box
+        # TODO: only random between box or cyl for now
+
         self.half_height = self.np_random.uniform(low=0.055, high=0.09) if self.random_size else 0.07
         self.half_width = self.np_random.uniform(low=0.03, high=0.05) if self.random_size else 0.04  # aka radius
         # self.half_height is the true half_height, vision module one will be noisy
@@ -278,7 +281,10 @@ class InmoovShadowHandGraspEnvV5(gym.Env):
             # action is in -1,1
             if action is not None:
                 self.act = action
-                self.robot.apply_action(self.act * self.action_scale)
+                act_array = self.act * self.action_scale
+                # if self.timer > self.test_start * self.control_skip * 0.7:    # TODO
+                #     act_array[:7] = 0
+                self.robot.apply_action(act_array)
             p.stepSimulation()
             if self.renders:
                 time.sleep(self._timeStep * 0.5)
@@ -291,7 +297,7 @@ class InmoovShadowHandGraspEnvV5(gym.Env):
         palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
         dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(clPos)), 0.5)
         reward += -dist * 2.0
-        reward += -np.minimum(np.linalg.norm(np.array([self.tx, self.ty, 0.1]) - np.array(clPos)), 0.4) * 10.0
+        reward += -np.minimum(np.linalg.norm(np.array([self.tx, self.ty, 0.1]) - np.array(clPos)), 0.4) * 16.0
 
         for i in self.robot.fin_tips[:4]:
             tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
@@ -348,16 +354,16 @@ class InmoovShadowHandGraspEnvV5(gym.Env):
         if self.random_size:
             self.observation.extend([self.half_height_est])
 
-        if self.random_shape:
-            if self.shape_ind == 1:
-                shape_info = [1, -1, -1]
-            elif self.shape_ind == 0:
-                shape_info = [-1, 1, -1]
-            elif self.shape_ind == -1:
-                shape_info = [-1, -1, 1]
-            else:
-                shape_info = [-1, -1, -1]
-            self.observation.extend(shape_info)
+        # if self.random_shape:
+        #     if self.shape_ind == 1:
+        #         shape_info = [1, -1, -1]
+        #     elif self.shape_ind == 0:
+        #         shape_info = [-1, 1, -1]
+        #     elif self.shape_ind == -1:
+        #         shape_info = [-1, -1, 1]
+        #     else:
+        #         shape_info = [-1, -1, -1]
+        #     self.observation.extend(shape_info)
 
         return self.observation
 
