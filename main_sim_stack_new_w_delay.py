@@ -387,28 +387,28 @@ if USE_VISION_MODULE:
             radius=SHAPE2SIZE2RADIUS[shape][size],
             height=SIZE2HALF_H[size] * 2,
         )
-    # initial_vision_module = VisionInference(
-    #     state_saver=state_saver,
-    #     checkpoint_path="/home/michelle/outputs/ego_v009/checkpoint_best.pt",
-    #     camera_position=[
-    #         -0.20450591046900168,
-    #         0.03197646764976494,
-    #         0.4330631992464512,
-    #     ],
-    #     camera_offset=[-0.05, TABLE_OFFSET[1], 0.0],
-    #     camera_directed_offset=[0.02, 0.0, 0.0],
-    #     apply_offset_to_preds=True,
-    #     html_dir="/home/michelle/html/vision_inference_initial",
-    # )
-
     initial_vision_module = VisionInference(
         state_saver=state_saver,
-        checkpoint_path="/home/michelle/outputs/stacking_v003/checkpoint_best.pt",
-        camera_position=[-0.2237938867122504, 0.0, 0.5425],
-        camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
-        apply_offset_to_preds=False,
-        html_dir="/home/michelle/html/demo_delay_vision_v003_{top_shape}",
+        checkpoint_path="/home/michelle/outputs/ego_v009/checkpoint_best.pt",
+        camera_position=[
+            -0.20450591046900168,
+            0.03197646764976494,
+            0.4330631992464512,
+        ],
+        camera_offset=[-0.05, TABLE_OFFSET[1], 0.0],
+        camera_directed_offset=[0.02, 0.0, 0.0],
+        apply_offset_to_preds=True,
+        html_dir="/home/michelle/html/vision_inference_initial",
     )
+
+    # initial_vision_module = VisionInference(
+    #     state_saver=state_saver,
+    #     checkpoint_path="/home/michelle/outputs/stacking_v003/checkpoint_best.pt",
+    #     camera_position=[-0.2237938867122504, 0.0, 0.5425],
+    #     camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
+    #     apply_offset_to_preds=False,
+    #     html_dir="/home/michelle/html/demo_delay_vision_v003_{top_shape}",
+    # )
     pred_odicts = initial_vision_module.predict(client_oids=obj_ids)
 
     # Artificially pad with a fourth dimension because language module
@@ -553,6 +553,7 @@ else:
         )
     )  # OpenRave initial condition
     file_path = homedir + "/container_data/PB_MOVE.npz"
+    print(f"Qmove_init: {Qmove_init}")
     print(f"Qdestin: {Qdestin}")
     np.savez(file_path, OBJECTS, Qmove_init, Qdestin)
 
