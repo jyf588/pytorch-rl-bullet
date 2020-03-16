@@ -1483,7 +1483,40 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --l
 python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0311_box_2_place_0313_1  --seed 8155 --random_shape 0 --random_size 1 --default_box 1 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 0
 
 3/14 21:33
+# place v9 on different objects.
+# try grasp v5 again, stay_still pen *10, num of mini batch 32/2=16?
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0311_cyl_2_place_0313_0  --seed 8156 --random_shape 0 --random_size 1 --default_box 0 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 0
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0311_box_2_place_0313_2  --seed 8157 --random_shape 0 --random_size 1 --default_box 1 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 0 --random_btm 1
+python main.py --env-name "InmoovHandGraspBulletEnv-v5" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 7000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_cyl_0_n --seed 9080 --up 1 --using_comfortable 1 --random_shape 0 --random_size 1 --default_box 0 --obs_noise 1
+python main.py --env-name "InmoovHandGraspBulletEnv-v5" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 7000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_box_0_n --seed 9081 --up 1 --using_comfortable 1 --random_shape 0 --random_size 1 --default_box 1 --obs_noise 1
 
+3/15 14:26
+# random shape grasping with cyl and box
+# no shape info in obs for now
+# dev pen 12.
+# self.ty = self.np_random.uniform(low=-0.15, high=0.55)
+python main.py --env-name "InmoovHandGraspBulletEnv-v5" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 7000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_0_n --seed 9082 --up 1 --using_comfortable 1 --random_shape 1 --random_size 1 --obs_noise 1
+# grasping pretty reasonable, but arm still move a lot
+
+3/15 17:57
+# fix arm after 35 steps:
+                act_array = self.act * self.action_scale
+                if self.timer > self.test_start * self.control_skip * 0.7:
+                    act_array[:7] = 0
+# note: RL agent has no info of 35 timer
+# dev pen 10.
+python main.py --env-name "InmoovHandGraspBulletEnv-v5" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 7000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_1_n --seed 9083 --up 1 --using_comfortable 1 --random_shape 1 --random_size 1 --obs_noise 1
+# not really good.
+# try dev pen 16
+
+
+3/16 00:54
+# multi-candidate placing
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 4000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0311_cyl_2_placef_0316_0  --seed 8158 --random_shape 0 --random_size 1 --default_box 0 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 0 --random_btm 1 --place_floor 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 4000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0311_box_2_placef_0316_0  --seed 8159 --random_shape 0 --random_size 1 --default_box 1 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 0 --random_btm 1 --place_floor 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 7000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0311_cyl_2_place_0316_0  --seed 8160 --random_shape 0 --random_size 1 --default_box 0 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 0 --random_btm 1 --place_floor 0
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 7000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0311_box_2_place_0316_0  --seed 8161 --random_shape 0 --random_size 1 --default_box 1 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 0 --random_btm 1 --place_floor 0
+# 0315.sh
 
 #
 # todo: do we want to include btm_height or tz as obs?
@@ -1491,13 +1524,9 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --l
             height_est = self.btm_obj_height + np.random.uniform(low=-0.02, high=0.02)
         else:
             height_est = self.btm_obj_height
-# TODO: also might need to re-train with this change..
 
 # put both on object and on floor (on other objects?)
 
-# try grasp v5 again, stay_still pen *10, num of mini batch 32/2=16?
-
-# try again to have one policy for different shapes
 
 
 # PLACING:
@@ -1514,9 +1543,12 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --l
 # try again to have one policy for different shapes
 # maybe clean up reward terms
 # Do we want to sample init states earlier?
+# TODO: would be interesting to grasp from top of stack.
 
 # GRASPING & PLACING:
 # TODO: make a non-square range of txty, this seems matter as well
+# TODO: may want to change range of object size (short/fat)
+# TODO: some of init arm pose collide with table at forearm...
 
 # copy header
 # copy folder
