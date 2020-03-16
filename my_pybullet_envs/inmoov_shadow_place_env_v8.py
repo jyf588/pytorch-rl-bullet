@@ -426,7 +426,6 @@ class InmoovShadowHandPlaceEnvV8(gym.Env):
                 radius=self.btm_object.radius,
                 height=self.btm_object.height,
             )
-            self.state_saver.set_tabletop_id(tabletop_id=self.floor_id)
 
             mu_f = self.np_random.uniform(0.8, 1.2)
             mu_b = self.np_random.uniform(0.8, 1.2)

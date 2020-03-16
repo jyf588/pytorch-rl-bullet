@@ -1,4 +1,5 @@
 import json
+import os
 import pybullet as p
 from typing import *
 
@@ -16,6 +17,10 @@ class PoseSaver:
         self.oids = oids
         self.robot_id = robot_id
         self.poses = []
+
+        # Create the path's directory if it doesn't already exist.
+        pathdir = os.path.dirname(self.path)
+        os.makedirs(pathdir, exist_ok=True)
 
     def get_poses(self):
         """Queries poses for the current bullet scene."""
