@@ -1,3 +1,5 @@
-Shape,GT,GT (w delay),No pose
-Box,87.90,85.30,71
-Cylinder,94.40,92.30,88
+Shape,N trials,GT,GT (w delay),stacking_v002,stacking_v003,No pose
+Box,1000,87.90,85.30,83.20,85.70,71.60
+Cylinder,1000,94.40,92.30,90.10,90.50,87.80
+Box,200,90.00,86.50,87.00,90.50,72.50
+Cylinder,200,92.50,92.50,90.00,91.00,91.00

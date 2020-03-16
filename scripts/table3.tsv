@@ -1,0 +1,7 @@
+Table 3. Vision Module Results						
+Stage	Shape Acc.	Color Acc.	Radius err (cm)	Height err (cm)	Position L1 (cm)	Up Vector L1 (cm)
+Initial	99.69	100	0.28	0.76	(1.03, 1.39, 0.41)	(0.01, 0.00, 0.00)
+Stack box v1	99.92	100	0.21	0.53	(0.80, 0.96, 0.68)	(0.06, 0.03, 0.02)
+Stack box v2	99.62	100	0.28	0.75	(1.56, 1.20, 1.03)	(0.06, 0.03, 0.04)
+Stack cyl v2	100	100	0.2	0.59	(0.94, 0.88, 0.83)	(0.02, 0.02, 0.01)
+Stacking v3	99.65	100	0.5	0.77	(1.44, 1.53, 0.94)	(0.01, 0.01, 0.01)
