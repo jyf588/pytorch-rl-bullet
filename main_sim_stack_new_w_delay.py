@@ -5,6 +5,7 @@ import pickle
 import pprint
 import os
 import sys
+from tqdm import tqdm
 from typing import *
 
 import numpy as np
@@ -32,7 +33,8 @@ import demo_scenes
 sys.path.append("ns_vqa_dart/")
 no_vision = False
 try:
-    from bullet.vision_inference import VisionInference
+    from ns_vqa_dart.bullet.state_saver import StateSaver
+    from ns_vqa_dart.bullet.vision_inference import VisionInference
 except ImportError:
     no_vision = True
 from pose_saver import PoseSaver
@@ -78,7 +80,7 @@ FIX_MOVE_PATH = os.path.join(homedir, "container_data/OR_MOVE.npy")
 
 SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
 USE_VISION_MODULE = True and (not no_vision)
-RENDER = False  # If true, uses OpenGL. Else, uses TinyRenderer.
+RENDER = True  # If true, uses OpenGL. Else, uses TinyRenderer.
 
 GRASP_END_STEP = 40  # TODO:tmp
 PLACE_END_STEP = 95
@@ -97,10 +99,18 @@ sys.path.append("a2c_ppo_acktr")
 parser = argparse.ArgumentParser(description="RL")
 parser.add_argument("--seed", type=int, default=101)
 parser.add_argument("--non-det", type=int, default=0)
+parser.add_argument(
+    "--pose_path",
+    type=str,
+    default="main_sim_stack_new.json",
+    help="The path to the json file where poses are saved.",
+)
+parser.add_argument("--shape", type=str)
+parser.add_argument("--size", type=str)
 args = parser.parse_args()
 args.det = not args.non_det
 
-IS_CUDA = True  # TODO:tmp odd. seems no need to use cuda
+IS_CUDA = False  # TODO:tmp odd. seems no need to use cuda
 DEVICE = "cuda" if IS_CUDA else "cpu"
 
 TS = 1.0 / 240
@@ -112,6 +122,10 @@ TABLE_OFFSET = [
 HALF_OBJ_HEIGHT_L = 0.09
 HALF_OBJ_HEIGHT_S = 0.065
 SIZE2HALF_H = {"small": HALF_OBJ_HEIGHT_S, "large": HALF_OBJ_HEIGHT_L}
+SHAPE2SIZE2RADIUS = {
+    "box": {"small": 0.025, "large": 0.04},
+    "cylinder": {"small": 0.04, "large": 0.05},
+}
 PLACE_CLEARANCE = 0.14  # TODO: different for diff envs
 
 COLORS = {
@@ -128,6 +142,13 @@ HIDE_SURROUNDING_OBJECTS = False  # If true, hides the surrounding objects.
 gt_odicts = demo_scenes.SCENE_1
 top_obj_idx = 1
 btm_obj_idx = 2
+
+# Override the shape and size of the top object if provided as arguments.
+if args.shape is not None:
+    gt_odicts[top_obj_idx]["shape"] = args.shape
+
+if args.size is not None:
+    gt_odicts[top_obj_idx]["size"] = args.size
 
 if HIDE_SURROUNDING_OBJECTS:
     gt_odicts = [gt_odicts[top_obj_idx], gt_odicts[btm_obj_idx]]
@@ -306,7 +327,7 @@ def get_stacking_obs(
     """
     if use_vision:
         top_odict, btm_odict = stacking_vision_module.predict(
-            oids=[top_oid, btm_oid]
+            client_oids=[top_oid, btm_oid]
         )
         t_pos = top_odict["position"]
         b_pos = btm_odict["position"]
@@ -350,8 +371,20 @@ if USE_VISION_MODULE:
     # Initialize the vision module for initial planning. We apply camera offset
     # because the default camera position is for y=0, but the table is offset
     # in this case.
+    state_saver = StateSaver(p=p)
+    for obj_i in range(len(obj_ids)):
+        odict = gt_odicts[obj_i]
+        shape = odict["shape"]
+        size = odict["size"]
+        state_saver.track_object(
+            oid=obj_ids[obj_i],
+            shape=shape,
+            color=odict["color"],
+            radius=SHAPE2SIZE2RADIUS[shape][size],
+            height=SIZE2HALF_H[size] * 2,
+        )
     initial_vision_module = VisionInference(
-        p=p,
+        state_saver=state_saver,
         checkpoint_path="/home/michelle/outputs/ego_v009/checkpoint_best.pt",
         camera_position=[
             -0.20450591046900168,
@@ -373,7 +406,7 @@ if USE_VISION_MODULE:
     #     apply_offset_to_preds=False,
     #     html_dir="/home/michelle/html/vision_inference_stacking",
     # )
-    pred_odicts = initial_vision_module.predict(oids=obj_ids)
+    pred_odicts = initial_vision_module.predict(client_oids=obj_ids)
 
     # Artificially pad with a fourth dimension because language module
     # expects it.
@@ -459,9 +492,7 @@ btm_oid = obj_ids[btm_obj_idx]
 
 # Initialize a PoseSaver to save poses throughout robot execution.
 pose_saver = PoseSaver(
-    path="./main_sim_stack_new.json",
-    oids=obj_ids,
-    robot_id=env_core.robot.arm_id,
+    path=args.pose_path, oids=obj_ids, robot_id=env_core.robot.arm_id
 )
 
 """Prepare for grasping. Reach for the object."""
@@ -558,13 +589,27 @@ env_core.change_control_skip_scaling(c_skip=PLACING_CONTROL_SKIP)
 
 if USE_VISION_MODULE:
     # Initialize the vision module for stacking.
+    top_shape = gt_odicts[top_obj_idx]["shape"]
+    state_saver = StateSaver(p=p)
+    state_saver.set_robot_id(env_core.robot.arm_id)
+    for obj_i in range(len(obj_ids)):
+        odict = gt_odicts[obj_i]
+        shape = odict["shape"]
+        size = odict["size"]
+        state_saver.track_object(
+            oid=obj_ids[obj_i],
+            shape=shape,
+            color=odict["color"],
+            radius=SHAPE2SIZE2RADIUS[shape][size],
+            height=SIZE2HALF_H[size] * 2,
+        )
     stacking_vision_module = VisionInference(
-        p=p,
-        checkpoint_path="/home/michelle/outputs/stacking_v002_cyl/checkpoint_best.pt",
-        camera_position=[-0.2237938867122504, 0.03198004185028341, 0.5425],
+        state_saver=state_saver,
+        checkpoint_path="/home/michelle/outputs/stacking_v003/checkpoint_best.pt",
+        camera_position=[-0.2237938867122504, 0.0, 0.5425],
         camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
         apply_offset_to_preds=False,
-        html_dir="/home/michelle/html/vision_inference_stacking",
+        html_dir="/home/michelle/html/demo_delay_vision_v003_{top_shape}",
     )
 else:
     stacking_vision_module = None
@@ -597,8 +642,8 @@ print("pobs", p_obs)
 # input("ready to place")
 
 """Execute placing"""
-
-for i in range(PLACE_END_STEP):
+print(f"Executing placing...")
+for i in tqdm(range(PLACE_END_STEP)):
     with torch.no_grad():
         value, action, _, recurrent_hidden_states = p_actor_critic.act(
             p_obs, recurrent_hidden_states, masks, deterministic=args.det
@@ -656,3 +701,7 @@ for ind in range(0, 100):
 
 if SAVE_POSES:
     pose_saver.save()
+
+if USE_VISION_MODULE:
+    initial_vision_module.close()
+    stacking_vision_module.close()
