@@ -1,6 +1,6 @@
 from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
 
-# import pybullet as p
+import pybullet as p
 import time
 import gym, gym.utils.seeding, gym.spaces
 import numpy as np
@@ -24,7 +24,7 @@ from ns_vqa_dart.bullet.state_saver import StateSaver
 from ns_vqa_dart.bullet.vision_inference import VisionInference
 import ns_vqa_dart.bullet.util
 
-p = ns_vqa_dart.bullet.util.create_bullet_client(mode="direct")
+# p = ns_vqa_dart.bullet.util.create_bullet_client(mode="direct")
 
 
 class InmoovShadowHandPlaceEnvV8(gym.Env):

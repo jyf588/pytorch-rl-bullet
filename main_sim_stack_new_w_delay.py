@@ -30,11 +30,11 @@ from my_pybullet_envs.inmoov_shadow_demo_env_v4 import (
 
 import demo_scenes
 
-sys.path.append("ns_vqa_dart/")
 no_vision = False
 try:
     from ns_vqa_dart.bullet.state_saver import StateSaver
     from ns_vqa_dart.bullet.vision_inference import VisionInference
+    import ns_vqa_dart.bullet.util as util
 except ImportError:
     no_vision = True
 from pose_saver import PoseSaver
@@ -72,6 +72,25 @@ homedir = os.path.expanduser("~")
 # 3. tmp add obj obs, some policy does not use GT
 # 5. 4 grid / 6 grid
 
+"""Parse arguments"""
+sys.path.append("a2c_ppo_acktr")
+parser = argparse.ArgumentParser(description="RL")
+parser.add_argument("--seed", type=int, default=101)
+parser.add_argument("--non-det", type=int, default=0)
+parser.add_argument("--use_vision", action="store_true")
+parser.add_argument(
+    "--pose_path",
+    type=str,
+    default="main_sim_stack_new.json",
+    help="The path to the json file where poses are saved.",
+)
+parser.add_argument("--scene", type=int, help="The scene to use.")
+parser.add_argument("--shape", type=str, help="Shape of top shape.")
+parser.add_argument("--size", type=str, help="Shape of top size.")
+args = parser.parse_args()
+args.det = not args.non_det
+
+
 """Configurations."""
 
 # TODO:tmp add a flag to always load the same transporting traj
@@ -79,7 +98,7 @@ FIX_MOVE = False
 FIX_MOVE_PATH = os.path.join(homedir, "container_data/OR_MOVE.npy")
 
 SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
-USE_VISION_MODULE = True and (not no_vision)
+USE_VISION_MODULE = args.use_vision and (not no_vision)
 RENDER = True  # If true, uses OpenGL. Else, uses TinyRenderer.
 
 GRASP_END_STEP = 40  # TODO:tmp
@@ -94,21 +113,6 @@ OBJ_MU = 1.0
 FLOOR_MU = 1.0
 HAND_MU = 1.0
 BULLET_SOLVER_ITER = 200
-
-sys.path.append("a2c_ppo_acktr")
-parser = argparse.ArgumentParser(description="RL")
-parser.add_argument("--seed", type=int, default=101)
-parser.add_argument("--non-det", type=int, default=0)
-parser.add_argument(
-    "--pose_path",
-    type=str,
-    default="main_sim_stack_new.json",
-    help="The path to the json file where poses are saved.",
-)
-parser.add_argument("--shape", type=str)
-parser.add_argument("--size", type=str)
-args = parser.parse_args()
-args.det = not args.non_det
 
 IS_CUDA = False  # TODO:tmp odd. seems no need to use cuda
 DEVICE = "cuda" if IS_CUDA else "cpu"
@@ -139,7 +143,7 @@ COLORS = {
 # Ground-truth scene:
 HIDE_SURROUNDING_OBJECTS = False  # If true, hides the surrounding objects.
 
-gt_odicts = demo_scenes.SCENE_1
+gt_odicts = demo_scenes.SCENES[args.scene]
 top_obj_idx = 1
 btm_obj_idx = 2
 
@@ -365,13 +369,13 @@ p_actor_critic, p_ob_rms, recurrent_hidden_states, masks = load_policy_params(
 if USE_VISION_MODULE:
     # Construct the bullet scene using DIRECT rendering, because that's what
     # the vision module was trained on.
-    p.connect(p.DIRECT)
+    vision_p = util.create_bullet_client(mode="direct")
     obj_ids = construct_bullet_scene(odicts=gt_odicts)
 
     # Initialize the vision module for initial planning. We apply camera offset
     # because the default camera position is for y=0, but the table is offset
     # in this case.
-    state_saver = StateSaver(p=p)
+    state_saver = StateSaver(p=vision_p)
     for obj_i in range(len(obj_ids)):
         odict = gt_odicts[obj_i]
         shape = odict["shape"]
@@ -397,14 +401,13 @@ if USE_VISION_MODULE:
         html_dir="/home/michelle/html/vision_inference_initial",
     )
 
-    # # Initialize the vision module for stacking.
-    # stacking_vision_module = VisionInference(
-    #     p=p,
-    #     checkpoint_path="/home/michelle/outputs/stacking_v001/checkpoint_best.pt",
-    #     camera_position=[-0.2237938867122504, 0.03198004185028341, 0.5425],
+    # initial_vision_module = VisionInference(
+    #     state_saver=state_saver,
+    #     checkpoint_path="/home/michelle/outputs/stacking_v003/checkpoint_best.pt",
+    #     camera_position=[-0.2237938867122504, 0.0, 0.5425],
     #     camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
     #     apply_offset_to_preds=False,
-    #     html_dir="/home/michelle/html/vision_inference_stacking",
+    #     html_dir="/home/michelle/html/demo_delay_vision_v003_{top_shape}",
     # )
     pred_odicts = initial_vision_module.predict(client_oids=obj_ids)
 
@@ -415,7 +418,7 @@ if USE_VISION_MODULE:
 
     print(f"Vision module predictions:")
     pprint.pprint(pred_odicts)
-    p.disconnect()
+    vision_p.disconnect()
     language_input_objs = pred_odicts
 else:
     language_input_objs = gt_odicts
@@ -550,6 +553,8 @@ else:
         )
     )  # OpenRave initial condition
     file_path = homedir + "/container_data/PB_MOVE.npz"
+    print(f"Qmove_init: {Qmove_init}")
+    print(f"Qdestin: {Qdestin}")
     np.savez(file_path, OBJECTS, Qmove_init, Qdestin)
 
     # Wait for command from OpenRave
