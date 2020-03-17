@@ -110,6 +110,13 @@ class InmoovShadowHandDemoEnvV4:
         self.observation.extend([half_h])
         return self.observation
 
+    def get_robot_contact_txtytz_halfh_obs_nodup(self, tx, ty, tz, half_h):
+        self.get_robot_contact_obs()
+        self.observation.extend([tx, ty, tz])
+        self.observation.extend([tx, ty, tz])
+        self.observation.extend([half_h])
+        return self.observation
+
     def get_robot_contact_txty_halfh_2obj6dUp_obs_nodup_from_up(
         self, tx, ty, half_h, t_pos, t_up, b_pos, b_up
     ):
@@ -124,6 +131,29 @@ class InmoovShadowHandDemoEnvV4:
             b_up: The up vector of the bottom object, normalized
         """
         self.get_robot_contact_txty_halfh_obs_nodup(tx, ty, half_h)
+        self.observation.extend(
+            self.obj_pos_and_up_to_obs(t_pos, t_up, tx, ty)
+        )
+        self.observation.extend(
+            self.obj_pos_and_up_to_obs(b_pos, b_up, tx, ty)
+        )
+        return self.observation
+
+    def get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
+        self, tx, ty, tz, half_h, t_pos, t_up, b_pos, b_up
+    ):
+        """
+        Args:
+            tx: Target x position.
+            ty: Target y position.
+            tz: Target z position (height of bottom obj, or 0 if table)
+            half_h: Half of the height of the top object.
+            t_pos: The xyz position of the top object.
+            t_up: The up vector of the top object, normalized
+            b_pos: The xyz position of the bottom object.
+            b_up: The up vector of the bottom object, normalized
+        """
+        self.get_robot_contact_txtytz_halfh_obs_nodup(tx, ty, tz, half_h)
         self.observation.extend(
             self.obj_pos_and_up_to_obs(t_pos, t_up, tx, ty)
         )

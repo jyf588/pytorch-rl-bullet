@@ -21,8 +21,8 @@ from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import (
     ImaginaryArmObjSession,
 )
 
-from my_pybullet_envs.inmoov_shadow_place_env_v8 import (
-    InmoovShadowHandPlaceEnvV8,
+from my_pybullet_envs.inmoov_shadow_place_env_v9 import (
+    InmoovShadowHandPlaceEnvV9,
 )
 from my_pybullet_envs.inmoov_shadow_demo_env_v4 import (
     InmoovShadowHandDemoEnvV4,
@@ -101,8 +101,8 @@ SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
 USE_VISION_MODULE = args.use_vision and (not no_vision)
 RENDER = True  # If true, uses OpenGL. Else, uses TinyRenderer.
 
-GRASP_END_STEP = 40  # TODO:tmp
-PLACE_END_STEP = 95
+GRASP_END_STEP = 30  # TODO:tmp
+PLACE_END_STEP = 50
 
 STATE_NORM = False
 
@@ -114,12 +114,12 @@ FLOOR_MU = 1.0
 HAND_MU = 1.0
 BULLET_SOLVER_ITER = 200
 
-IS_CUDA = False  # TODO:tmp odd. seems no need to use cuda
+IS_CUDA = True  # TODO:tmp odd. seems no need to use cuda
 DEVICE = "cuda" if IS_CUDA else "cpu"
 
 TS = 1.0 / 240
 TABLE_OFFSET = [
-    0.2,
+    0.1,
     0.2,
     0.0,
 ]  # TODO: chaged to 0.2 for vision, 0.25 may collide, need to change OR reaching.
@@ -167,28 +167,26 @@ T_HALF_HEIGHT = SIZE2HALF_H[top_size]
 
 IS_BOX = gt_odicts[top_obj_idx]["shape"] == "box"  # TODO: infer from language
 if IS_BOX:
-    GRASP_PI = "0302_box_20_n_80_99"
-    GRASP_DIR = "./trained_models_%s/ppo/" % "0302_box_20_n"  # TODO
-    # PLACE_PI = "0302_box_20_place_0307_1"   # no delay
-    PLACE_PI = "0302_box_20_place_0307_4"  # 50ms
+    GRASP_PI = "0311_box_2_n_20_50"
+    GRASP_DIR = "./trained_models_%s/ppo/" % "0311_box_2_n"  # TODO
+    PLACE_PI = "0311_box_2_placeco_0316_0"  # 50ms
     PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
     sentence = "Put the green box on top of the blue cylinder"
 else:
-    GRASP_PI = "0302_cyl_4_n_80_100"
-    GRASP_DIR = "./trained_models_%s/ppo/" % "0302_cyl_4_n"  # TODO
-    # PLACE_PI = "0302_cyl_4_place_0307_1"   # no delay
-    PLACE_PI = "0302_cyl_4_place_0307_2"  # 50ms
+    GRASP_PI = "0311_cyl_2_n_20_50"
+    GRASP_DIR = "./trained_models_%s/ppo/" % "0311_cyl_2_n"  # TODO
+    PLACE_PI = "0311_cyl_2_placeco_0316_0"  # 50ms
     PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
     sentence = "Put the green cylinder on top of the blue cylinder"
-GRASP_PI_ENV_NAME = "InmoovHandGraspBulletEnv-v4"
-PLACE_PI_ENV_NAME = "InmoovHandPlaceBulletEnv-v8"
+GRASP_PI_ENV_NAME = "InmoovHandGraspBulletEnv-v5"
+PLACE_PI_ENV_NAME = "InmoovHandPlaceBulletEnv-v9"
 
 USE_VISION_DELAY = True
 VISION_DELAY = 2
 PLACING_CONTROL_SKIP = 6
-GRASPING_CONTROL_SKIP = 3
+GRASPING_CONTROL_SKIP = 6
 
 
 def planning(Traj, recurrent_hidden_states, masks, pose_saver):
@@ -447,7 +445,7 @@ if USE_VISION_MODULE:
     # p_tz = P_TZ
     p_tz = pred_odicts[btm_obj_idx]["height"]
 else:
-    p_tz = P_TZ
+    p_tz = P_TZ     # TODO: need to handle place floor
 print(f"Placing position: ({p_tx}, {p_ty}, {p_tz})")
 
 """Start Bullet session."""
@@ -462,9 +460,15 @@ sess = ImaginaryArmObjSession()
 Qreach = np.array(sess.get_most_comfortable_q_and_refangle(g_tx, g_ty)[0])
 
 desired_obj_pos = [p_tx, p_ty, PLACE_CLEARANCE + p_tz]
-a = InmoovShadowHandPlaceEnvV8(renders=False, grasp_pi_name=GRASP_PI)
+a = InmoovShadowHandPlaceEnvV9(renders=False, grasp_pi_name=GRASP_PI)
 a.seed(args.seed)
-Qdestin = a.get_optimal_init_arm_q(desired_obj_pos)
+table_id = p.loadURDF(
+    os.path.join(currentdir, "my_pybullet_envs/assets/tabletop.urdf"),
+    TABLE_OFFSET,
+    useFixedBase=1,
+)
+a.floor_id = table_id   # TODO:tmp hack, v9 get_n_optimal_init_arm_qs need to do collision checking
+Qdestin = a.get_n_optimal_init_arm_qs(desired_obj_pos)[0]   # TODO: [1] is the 2nd candidate
 print("place arm q", Qdestin)
 p.resetSimulation()  # Clean up the simulation, since this is only imaginary.
 
@@ -636,11 +640,11 @@ l_t_pos, l_t_up, l_b_pos, l_b_up, l_t_half_height = (
 )
 
 # TODO: an unly hack to force Bullet compute forward kinematics
-p_obs = env_core.get_robot_contact_txty_halfh_2obj6dUp_obs_nodup_from_up(
-    p_tx, p_ty, t_half_height, t_pos, t_up, b_pos, b_up
+p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
+    p_tx, p_ty, p_tz, t_half_height, t_pos, t_up, b_pos, b_up
 )
-p_obs = env_core.get_robot_contact_txty_halfh_2obj6dUp_obs_nodup_from_up(
-    p_tx, p_ty, t_half_height, t_pos, t_up, b_pos, b_up
+p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
+    p_tx, p_ty, p_tz, t_half_height, t_pos, t_up, b_pos, b_up
 )
 p_obs = wrap_over_grasp_obs(p_obs)
 print("pobs", p_obs)
@@ -671,8 +675,8 @@ for i in tqdm(range(PLACE_END_STEP)):
                 use_vision=USE_VISION_MODULE,
                 vision_module=stacking_vision_module,
             )
-        p_obs = env_core.get_robot_contact_txty_halfh_2obj6dUp_obs_nodup_from_up(
-            p_tx, p_ty, l_t_half_height, l_t_pos, l_t_up, l_b_pos, l_b_up
+        p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
+            p_tx, p_ty, p_tz, l_t_half_height, l_t_pos, l_t_up, l_b_pos, l_b_up
         )
     else:
         t_pos, t_quat, b_pos, b_quat, t_half_height = get_stacking_obs(
@@ -681,8 +685,8 @@ for i in tqdm(range(PLACE_END_STEP)):
             use_vision=USE_VISION_MODULE,
             vision_module=stacking_vision_module,
         )
-        p_obs = env_core.get_robot_contact_txty_halfh_2obj6dUp_obs_nodup_from_up(
-            p_tx, p_ty, t_half_height, t_pos, t_up, b_pos, b_up
+        p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
+            p_tx, p_ty, p_tz, t_half_height, t_pos, t_up, b_pos, b_up
         )
 
     p_obs = wrap_over_grasp_obs(p_obs)
