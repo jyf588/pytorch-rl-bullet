@@ -1517,15 +1517,21 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --l
 python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 7000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0311_cyl_2_place_0316_0  --seed 8160 --random_shape 0 --random_size 1 --default_box 0 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 0 --random_btm 1 --place_floor 0
 python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 7000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0311_box_2_place_0316_0  --seed 8161 --random_shape 0 --random_size 1 --default_box 1 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 0 --random_btm 1 --place_floor 0
 # 0315.sh
+# stacking seems fine, placing wo noise seems fine as well. placing w/ noise seems problematic?
 
-#
-# todo: do we want to include btm_height or tz as obs?
+
+3/16 13:28
+# include btm_height or tz as obs?
         if self.init_noise:
             height_est = self.btm_obj_height + np.random.uniform(low=-0.02, high=0.02)
         else:
             height_est = self.btm_obj_height
-
 # put both on object and on floor (on other objects?)
+# grasping try dev pen 16
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 10000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0311_box_2_placeco_0316_0  --seed 8160 --random_shape 0 --random_size 1 --default_box 1 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 0 --random_btm 1 --cotrain_stack_place 1
+python main.py --env-name "InmoovHandGraspBulletEnv-v5" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 7000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_2_n --seed 9085 --up 1 --using_comfortable 1 --random_shape 1 --random_size 1 --obs_noise 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 10000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0311_cyl_2_placeco_0316_0  --seed 8161 --random_shape 0 --random_size 1 --default_box 0 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 0 --random_btm 1 --cotrain_stack_place 1
+# 0316.sh
 
 
 

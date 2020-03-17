@@ -33,6 +33,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                  random_shape=False,
                  random_size=True,
                  default_box=True,  # if not random shape, false: cylinder as default
+                 cotrain_stack_place=True,
                  place_floor=True,
                  use_gt_6d=True,
                  gt_only_init=False,
@@ -49,6 +50,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         self.random_shape = random_shape
         self.random_size = random_size
         self.default_box = default_box
+        self.cotrain_stack_place = cotrain_stack_place
         self.place_floor = place_floor
         self.use_gt_6d = use_gt_6d
         self.gt_only_init = gt_only_init
@@ -285,6 +287,9 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         self.timer = 0
         self.vision_counter = 0
 
+        if self.cotrain_stack_place:
+            self.place_floor = self.np_random.randint(10) > 6   # 30%
+
         self.floor_id = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), [0.1, 0.2, 0.0],
                           useFixedBase=1)
         mu_f = self.np_random.uniform(0.8, 1.2)
@@ -301,13 +306,15 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         init_state = self.sample_init_state()
         _ = self.reset_robot_object_from_sample(init_state, arm_q)
 
-        if not self.place_floor:
-            self.tx_act = self.tx
-            self.ty_act = self.ty
-            if self.init_noise:
-                self.tx_act += self.np_random.uniform(low=-0.015, high=0.015)       # TODO: noise large enough?
-                self.ty_act += self.np_random.uniform(low=-0.015, high=0.015)
+        self.tx_act = self.tx
+        self.ty_act = self.ty
+        if self.init_noise:
+            self.tx_act += self.np_random.uniform(low=-0.015, high=0.015)  # TODO: noise large enough?
+            self.ty_act += self.np_random.uniform(low=-0.015, high=0.015)
 
+        if self.place_floor:
+            self.bottom_obj_id = None
+        else:
             btm_xyz = np.array([self.tx_act, self.ty_act, self.btm_obj_height / 2.0])
             if self.random_btm:
                 if self.btm_obj_shape == 1:
@@ -370,6 +377,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         # enlarge 0.15 -> 0.45
         # xyzMetric = 1 - (np.minimum(np.linalg.norm(np.array(self.desired_obj_pos_final) - np.array(clPos)), 0.45) / 0.15)
         # TODO:tmp change to xy metric, allow it to free drop
+        # TODO: xyz metric should use gt value.
         xyzMetric = 1 - (np.minimum(np.linalg.norm(np.array(self.desired_obj_pos_final[:2]) - np.array(clPos[:2])), 0.45) / 0.15)
         linV_R = np.linalg.norm(clLinV)
         angV_R = np.linalg.norm(clAngV)
@@ -473,12 +481,13 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         self.observation.extend(curContact)
 
         if self.up:
-            xy = np.array([self.tx, self.ty])
-            self.observation.extend(list(xy))
+            xyz = np.array([self.tx, self.ty, self.tz])
+            self.observation.extend(list(xyz))
             if self.obs_noise:
-                self.observation.extend(list(xy))
+                self.observation.extend(list(xyz))
             else:
-                self.observation.extend([self.tx_act, self.ty_act])
+                self.tz_act = self.btm_obj_height if not self.place_floor else 0.0
+                self.observation.extend([self.tx_act, self.ty_act, self.tz_act])
 
         if self.random_size:
             if self.obs_noise:
@@ -492,7 +501,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         if self.use_gt_6d:
             self.vision_counter += 1
             if self.obj_id is None:
-                self.observation.extend(self.obj6DtoObs_UpVec([0,0,0], [0,0,0,1]))
+                self.observation.extend(self.obj6DtoObs_UpVec([0.,0,0], [0.,0,0,1]))
             else:
                 if self.gt_only_init:
                     clPos, clOrn = self.t_pos, self.t_orn
@@ -512,25 +521,26 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                     # print("act",  clPos_act, clOrn_act)
 
                 self.observation.extend(self.obj6DtoObs_UpVec(clPos, clOrn))
-            if not self.place_floor and not self.gt_only_init:  # if stacking & real-time, include bottom 6D
-                if self.bottom_obj_id is None:
-                    self.observation.extend(self.obj6DtoObs_UpVec([0,0,0], [0,0,0,1]))
-                else:
-                    # model both delayed and low-freq vision input
-                    # every vision_skip steps, update cur 6D
-                    # but feed policy with last-time updated 6D
-                    if self.vision_counter % self.vision_skip == 0:
-                        self.last_b_pos, self.last_b_orn = self.b_pos, self.b_orn
-                        self.b_pos, self.b_orn = p.getBasePositionAndOrientation(self.bottom_obj_id)
-                    clPos, clOrn = self.last_b_pos, self.last_b_orn
 
-                    # print("b feed into", clPos, clOrn)
-                    # clPos_act, clOrn_act = p.getBasePositionAndOrientation(self.bottom_obj_id)
-                    # print("b act", clPos_act, clOrn_act)
+            # if not self.place_floor and not self.gt_only_init:  # if stacking & real-time, include bottom 6D
+            if self.bottom_obj_id is None or self.gt_only_init: # TODO
+                self.observation.extend(self.obj6DtoObs_UpVec([0.,0,0], [0.,0,0,1]))
+            else:
+                # model both delayed and low-freq vision input
+                # every vision_skip steps, update cur 6D
+                # but feed policy with last-time updated 6D
+                if self.vision_counter % self.vision_skip == 0:
+                    self.last_b_pos, self.last_b_orn = self.b_pos, self.b_orn
+                    self.b_pos, self.b_orn = p.getBasePositionAndOrientation(self.bottom_obj_id)
+                clPos, clOrn = self.last_b_pos, self.last_b_orn
 
-                    # clPos, clOrn = p.getBasePositionAndOrientation(self.bottom_obj_id)
+                # print("b feed into", clPos, clOrn)
+                # clPos_act, clOrn_act = p.getBasePositionAndOrientation(self.bottom_obj_id)
+                # print("b act", clPos_act, clOrn_act)
 
-                    self.observation.extend(self.obj6DtoObs_UpVec(clPos, clOrn))
+                # clPos, clOrn = p.getBasePositionAndOrientation(self.bottom_obj_id)
+
+                self.observation.extend(self.obj6DtoObs_UpVec(clPos, clOrn))
 
         return self.observation
 
