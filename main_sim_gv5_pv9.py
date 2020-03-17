@@ -97,6 +97,8 @@ args.det = not args.non_det
 FIX_MOVE = False
 FIX_MOVE_PATH = os.path.join(homedir, "container_data/OR_MOVE.npy")
 
+PLACE_FLOOR = True
+
 SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
 USE_VISION_MODULE = args.use_vision and (not no_vision)
 RENDER = True  # If true, uses OpenGL. Else, uses TinyRenderer.
@@ -144,8 +146,8 @@ COLORS = {
 HIDE_SURROUNDING_OBJECTS = False  # If true, hides the surrounding objects.
 
 gt_odicts = demo_scenes.SCENES[args.scene]
-top_obj_idx = 1
-btm_obj_idx = 2
+top_obj_idx = 1     # TODO: in fact, moved obj
+btm_obj_idx = 2     # TODO: in fact, reference obj (place between not considered)
 
 # Override the shape and size of the top object if provided as arguments.
 if args.shape is not None:
@@ -172,14 +174,21 @@ if IS_BOX:
     PLACE_PI = "0311_box_2_placeco_0316_0"  # 50ms
     PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
-    sentence = "Put the green box on top of the blue cylinder"
+    if PLACE_FLOOR:
+        sentence = "Put the green box in front of the blue cylinder"
+    else:
+        sentence = "Put the green box on top of the blue cylinder"
 else:
     GRASP_PI = "0311_cyl_2_n_20_50"
     GRASP_DIR = "./trained_models_%s/ppo/" % "0311_cyl_2_n"  # TODO
     PLACE_PI = "0311_cyl_2_placeco_0316_0"  # 50ms
     PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
-    sentence = "Put the green cylinder on top of the blue cylinder"
+    if PLACE_FLOOR:
+        sentence = "Put the green cylinder in front of the blue cylinder"
+    else:
+        sentence = "Put the green cylinder on top of the blue cylinder"
+
 GRASP_PI_ENV_NAME = "InmoovHandGraspBulletEnv-v5"
 PLACE_PI_ENV_NAME = "InmoovHandPlaceBulletEnv-v9"
 
@@ -436,16 +445,19 @@ else:
 g_tx, g_ty = top_pos[0], top_pos[1]
 print(f"Grasp position: ({g_tx}, {g_ty})\theight: {g_half_h}")
 
-# Define the target xyz position to perform placing.
-p_tx, p_ty = placing_xyz[0], placing_xyz[1]
-if USE_VISION_MODULE:
-    # Temp: replace with GT
-    # p_tx = gt_odicts[btm_obj_idx]["position"][0]
-    # p_ty = gt_odicts[btm_obj_idx]["position"][1]
-    # p_tz = P_TZ
-    p_tz = pred_odicts[btm_obj_idx]["height"]
+if PLACE_FLOOR:
+    p_tx, p_ty, p_tz = placing_xyz[0], placing_xyz[1], placing_xyz[2]
 else:
-    p_tz = P_TZ     # TODO: need to handle place floor
+    # Define the target xyz position to perform placing.
+    p_tx, p_ty = placing_xyz[0], placing_xyz[1]
+    if USE_VISION_MODULE:
+        # Temp: replace with GT
+        # p_tx = gt_odicts[btm_obj_idx]["position"][0]
+        # p_ty = gt_odicts[btm_obj_idx]["position"][1]
+        # p_tz = P_TZ
+        p_tz = pred_odicts[btm_obj_idx]["height"]
+    else:
+        p_tz = P_TZ     # TODO: need to handle place floor
 print(f"Placing position: ({p_tx}, {p_ty}, {p_tz})")
 
 """Start Bullet session."""
