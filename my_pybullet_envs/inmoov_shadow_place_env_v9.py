@@ -30,7 +30,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                  renders=False,
                  init_noise=True,   # variation during reset
                  up=True,
-                 random_shape=False,
+                 random_shape=True,
                  random_size=True,
                  default_box=True,  # if not random shape, false: cylinder as default
                  cotrain_stack_place=True,
@@ -42,7 +42,8 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                  vision_skip=2,
                  control_skip=6,
                  obs_noise=False,    # noisy (imperfect) observation
-                 random_btm=True
+                 random_btm=True,
+                 n_best_cand=2,
                  ):
         self.renders = renders
         self.init_noise = init_noise
@@ -61,8 +62,8 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         self.vision_skip = vision_skip
         self.vision_counter = 0
 
-        self.n_best_cand = 2        # TODO
-        self.hard_orn_thres = 0.8
+        self.n_best_cand = int(n_best_cand)
+        self.hard_orn_thres = 0.85
         self.obj_mass = -1  # dummy, 2b overwritten
         self.half_height = -1   # dummy, to be overwritten
 
@@ -71,10 +72,13 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
             if not random_shape:
                 if default_box:
                     self.grasp_pi_name = '0311_box_2_n_20_50'
+                    self.is_box = True
                 else:
                     self.grasp_pi_name = '0311_cyl_2_n_20_50'
+                    self.is_box = False
             else:
-                pass    # TODO
+                self.grasp_pi_name = "0313_2_n_25_45"
+                self.is_box = False     # dummy, 2b overwritten
         else:
             self.grasp_pi_name = grasp_pi_name
 
@@ -188,7 +192,8 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         z_axis, _ = p.multiplyTransforms([0, 0, 0], o_quat, [0, 0, 1], [0, 0, 0, 1])  # R_cl * unitz[0,0,1]
         rotMetric = np.array(z_axis).dot(np.array([0, 0, 1]))
         # print(rotMetric, rotMetric)
-        if self.exclude_hard and rotMetric < self.hard_orn_thres: return False
+        if self.exclude_hard and rotMetric < self.hard_orn_thres:
+            return False
 
         self.is_box = True if state['obj_shape'] == p.GEOM_BOX else False   # TODO: ball
         self.dim = state['obj_dim']
@@ -303,8 +308,10 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
             self.btm_obj_shape = self.np_random.randint(2)
 
         arm_q = self.sample_valid_arm_q()   # reset done during solving IK
-        init_state = self.sample_init_state()
-        _ = self.reset_robot_object_from_sample(init_state, arm_q)
+        init_done = False
+        while not init_done:
+            init_state = self.sample_init_state()
+            init_done = self.reset_robot_object_from_sample(init_state, arm_q)
 
         self.tx_act = self.tx
         self.ty_act = self.ty
@@ -496,7 +503,13 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                 self.half_height_est = self.half_height
             self.observation.extend([self.half_height_est])
 
-        # TODO: if random_shape
+        # TODO: ball
+        if self.random_shape:
+            if self.is_box:
+                shape_info = [1, -1, -1]
+            else:
+                shape_info = [-1, 1, -1]
+            self.observation.extend(shape_info)
 
         if self.use_gt_6d:
             self.vision_counter += 1
