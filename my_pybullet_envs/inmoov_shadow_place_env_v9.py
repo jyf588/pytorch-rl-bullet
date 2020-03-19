@@ -81,6 +81,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                 self.is_box = False     # dummy, 2b overwritten
         else:
             self.grasp_pi_name = grasp_pi_name
+            self.is_box = False  # dummy, 2b overwritten
 
         # self.half_obj_height = 0.065 if self.is_small else 0.09
         self.start_clearance = 0.14

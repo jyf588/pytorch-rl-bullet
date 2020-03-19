@@ -1555,7 +1555,7 @@ python enjoy.py --env-name InmoovHandPlaceBulletEnv-v9 --load-dir trained_models
 3/18 11:04
 # try again with n_best_cand = 2
 python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 400 --num-processes 12  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_2_placeco_0316_2  --seed 8164 --random_shape 1 --random_size 1 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 1 --random_btm 1 --cotrain_stack_place 1 --n_best_cand 2
-
+# 78% zero transfer to include hard.
 
 # TODO: now on a different branch.
 
