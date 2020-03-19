@@ -98,6 +98,7 @@ FIX_MOVE = False
 FIX_MOVE_PATH = os.path.join(homedir, "container_data/OR_MOVE.npy")
 
 PLACE_FLOOR = True
+MIX_SHAPE_PI = False
 
 SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
 USE_VISION_MODULE = args.use_vision and (not no_vision)
@@ -168,22 +169,30 @@ T_HALF_HEIGHT = SIZE2HALF_H[top_size]
 
 
 IS_BOX = gt_odicts[top_obj_idx]["shape"] == "box"  # TODO: infer from language
-if IS_BOX:
-    GRASP_PI = "0311_box_2_n_20_50"
-    GRASP_DIR = "./trained_models_%s/ppo/" % "0311_box_2_n"  # TODO
-    PLACE_PI = "0311_box_2_placeco_0316_0"  # 50ms
-    PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
+if MIX_SHAPE_PI:
+    GRASP_PI = "0313_2_n_25_45"
+    GRASP_DIR = "./trained_models_%s/ppo/" % "0313_2_n"  # TODO
+    PLACE_PI = "0313_2_placeco_0316_1"  # 50ms
+    PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
+else:
+    if IS_BOX:
+        GRASP_PI = "0311_box_2_n_20_50"
+        GRASP_DIR = "./trained_models_%s/ppo/" % "0311_box_2_n"  # TODO
+        PLACE_PI = "0311_box_2_placeco_0316_0"  # 50ms
+        PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
+    else:
+        GRASP_PI = "0311_cyl_2_n_20_50"
+        GRASP_DIR = "./trained_models_%s/ppo/" % "0311_cyl_2_n"  # TODO
+        PLACE_PI = "0311_cyl_2_placeco_0316_0"  # 50ms
+        PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
+
+if IS_BOX:
     if PLACE_FLOOR:
         sentence = "Put the green box in front of the blue cylinder"
     else:
         sentence = "Put the green box on top of the blue cylinder"
 else:
-    GRASP_PI = "0311_cyl_2_n_20_50"
-    GRASP_DIR = "./trained_models_%s/ppo/" % "0311_cyl_2_n"  # TODO
-    PLACE_PI = "0311_cyl_2_placeco_0316_0"  # 50ms
-    PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
-
     if PLACE_FLOOR:
         sentence = "Put the green cylinder in front of the blue cylinder"
     else:
@@ -652,12 +661,21 @@ l_t_pos, l_t_up, l_b_pos, l_b_up, l_t_half_height = (
 )
 
 # TODO: an unly hack to force Bullet compute forward kinematics
-p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
-    p_tx, p_ty, p_tz, t_half_height, t_pos, t_up, b_pos, b_up
-)
-p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
-    p_tx, p_ty, p_tz, t_half_height, t_pos, t_up, b_pos, b_up
-)
+if MIX_SHAPE_PI:
+    p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
+        p_tx, p_ty, p_tz, t_half_height, IS_BOX, t_pos, t_up, b_pos, b_up
+    )
+    p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
+        p_tx, p_ty, p_tz, t_half_height, IS_BOX, t_pos, t_up, b_pos, b_up
+    )
+else:
+    p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
+        p_tx, p_ty, p_tz, t_half_height, t_pos, t_up, b_pos, b_up
+    )
+    p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
+        p_tx, p_ty, p_tz, t_half_height, t_pos, t_up, b_pos, b_up
+    )
+
 p_obs = wrap_over_grasp_obs(p_obs)
 print("pobs", p_obs)
 # input("ready to place")
@@ -687,9 +705,14 @@ for i in tqdm(range(PLACE_END_STEP)):
                 use_vision=USE_VISION_MODULE,
                 vision_module=stacking_vision_module,
             )
-        p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
-            p_tx, p_ty, p_tz, l_t_half_height, l_t_pos, l_t_up, l_b_pos, l_b_up
-        )
+        if MIX_SHAPE_PI:
+            p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
+                p_tx, p_ty, p_tz, l_t_half_height, IS_BOX, l_t_pos, l_t_up, l_b_pos, l_b_up
+            )
+        else:
+            p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
+                p_tx, p_ty, p_tz, l_t_half_height, l_t_pos, l_t_up, l_b_pos, l_b_up
+            )
     else:
         t_pos, t_quat, b_pos, b_quat, t_half_height = get_stacking_obs(
             top_oid=top_oid,
@@ -697,9 +720,15 @@ for i in tqdm(range(PLACE_END_STEP)):
             use_vision=USE_VISION_MODULE,
             vision_module=stacking_vision_module,
         )
-        p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
-            p_tx, p_ty, p_tz, t_half_height, t_pos, t_up, b_pos, b_up
-        )
+
+        if MIX_SHAPE_PI:
+            p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
+                p_tx, p_ty, p_tz, t_half_height, IS_BOX, t_pos, t_up, b_pos, b_up
+            )
+        else:
+            p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
+                p_tx, p_ty, p_tz, t_half_height, t_pos, t_up, b_pos, b_up
+            )
 
     p_obs = wrap_over_grasp_obs(p_obs)
 
