@@ -1542,7 +1542,6 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --l
 3/17 16:29
 # mix box and cyl
 python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 600 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 32 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 10000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_2_placeco_0316_0  --seed 8162 --random_shape 1 --random_size 1 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 0 --random_btm 1 --cotrain_stack_place 1
-# TODO: test
 3/17 22:11
 # provide shape as obs.
 # exclude hard for now.
@@ -1557,10 +1556,20 @@ python enjoy.py --env-name InmoovHandPlaceBulletEnv-v9 --load-dir trained_models
 python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 400 --num-processes 12  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_2_placeco_0316_2  --seed 8164 --random_shape 1 --random_size 1 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 1 --random_btm 1 --cotrain_stack_place 1 --n_best_cand 2
 # 78% zero transfer to include hard.
 
-# TODO: now on a different branch.
+3/22 21:33
+# hand jl revert to shadow default
+python main.py --env-name "InmoovHandGraspBulletEnv-v5" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_3_n --seed 9086 --up 1 --using_comfortable 1 --random_shape 1 --random_size 1 --obs_noise 1
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 400 --num-processes 12  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_2_placeco_0316_3  --seed 8165 --random_shape 1 --random_size 1 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 1 --random_btm 1 --cotrain_stack_place 1 --n_best_cand 2
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 400 --num-processes 12  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_2_placeco_0316_np_0  --seed 8166 --random_shape 1 --random_size 1 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 1 --random_btm 1 --cotrain_stack_place 1 --n_best_cand 2 --use_gt_6d 0
+# 0322.sh
+python enjoy.py --env-name InmoovHandPlaceBulletEnv-v9 --load-dir trained_models_0313_2_placeco_0316_3/ppo/ --non-det 0 --seed=1898 --random_shape 1 --random_size 1 --up 1 --renders 1 --exclude_hard 0  --obs_noise 1 --n_best_cand 2 --random_btm 1 --cotrain_stack_place 1
+# 81%
+# TODO: # collect final stat for 0313_3
+python enjoy.py --env-name InmoovHandGraspBulletEnv-v5 --load-dir trained_models_0313_3_n/ppo/ --non-det 0 --seed=189891 --random_shape 1 --random_size 1 --up 1 --using_comfortable 1 --renders 1 --obs_noise 1 --has_test_phase 0
 
 # grasping: penalize arm movement after certain time. lower obj pen.
-# (should try different batch size for placing. maybe shorten the horizon.
+# (should try different batch size for placing. maybe shorten the horizon. (test-thres need to be changed accordingly.)
+# try train with hard orn.
 
 
 
