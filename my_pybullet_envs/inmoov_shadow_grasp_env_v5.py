@@ -131,7 +131,7 @@ class InmoovShadowHandGraspEnvV5(gym.Env):
             # else:
             #     cyl_init_pos = [0, 0, 0.091]
             self.tx = self.np_random.uniform(low=-0.1, high=0.3)
-            self.ty = self.np_random.uniform(low=-0.1, high=0.5)
+            self.ty = self.np_random.uniform(low=-0.15, high=0.55)
             # self.tx = 0.1
             # self.ty = 0.0
             cyl_init_pos = np.array(cyl_init_pos) + np.array([self.tx, self.ty, 0])

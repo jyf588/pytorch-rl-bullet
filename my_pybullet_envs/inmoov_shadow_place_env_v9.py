@@ -261,7 +261,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         while True:
             if self.up:
                 self.tx = self.np_random.uniform(low=-0.1, high=0.3)
-                self.ty = self.np_random.uniform(low=-0.1, high=0.5)    # TODO: match grasp
+                self.ty = self.np_random.uniform(low=-0.15, high=0.55)    # TODO: match grasp
                 # self.tx = self.np_random.uniform(low=0, high=0.2)
                 # self.ty = self.np_random.uniform(low=-0.2, high=0.0)
             else:

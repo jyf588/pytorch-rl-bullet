@@ -1563,39 +1563,57 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --l
 python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 400 --num-processes 12  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_2_placeco_0316_np_0  --seed 8166 --random_shape 1 --random_size 1 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 1 --random_btm 1 --cotrain_stack_place 1 --n_best_cand 2 --use_gt_6d 0
 # 0322.sh
 python enjoy.py --env-name InmoovHandPlaceBulletEnv-v9 --load-dir trained_models_0313_2_placeco_0316_3/ppo/ --non-det 0 --seed=1898 --random_shape 1 --random_size 1 --up 1 --renders 1 --exclude_hard 0  --obs_noise 1 --n_best_cand 2 --random_btm 1 --cotrain_stack_place 1
-# 81%
-# TODO: # collect final stat for 0313_3
+# 81%, no_pose 61%
 python enjoy.py --env-name InmoovHandGraspBulletEnv-v5 --load-dir trained_models_0313_3_n/ppo/ --non-det 0 --seed=189891 --random_shape 1 --random_size 1 --up 1 --using_comfortable 1 --renders 1 --obs_noise 1 --has_test_phase 0
 
-# grasping: penalize arm movement after certain time. lower obj pen.
-# (should try different batch size for placing. maybe shorten the horizon. (test-thres need to be changed accordingly.)
-# try train with hard orn.
+3/23 14:54
+# with hard orn.
+# (low=-0.15, high=0.55) match grasp
+#         if self.init_noise:
+            self.tx_act += self.np_random.uniform(low=-0.02, high=0.02)
+            self.ty_act += self.np_random.uniform(low=-0.02, high=0.02)
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 400 --num-processes 12  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_2_placeco_0316_4  --seed 8167 --random_shape 1 --random_size 1 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 0 --random_btm 1 --cotrain_stack_place 1 --n_best_cand 2
+# 77%
+# same as above, but wo hard orn
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 400 --num-processes 12  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_2_placeco_0316_4  --seed 8167 --random_shape 1 --random_size 1 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 1 --random_btm 1 --cotrain_stack_place 1 --n_best_cand 2
+# 75%
 
 
-
-# PLACING:
-# obs_noise
-# do not concatenate twice (tx, obj6D)
-# add vision skip
-# box 20 is collected init using earlier iter, might want to run that again using final iter
-# put both on object and on floor (on other objects?)
-# 6 grid init
-# clean up reward terms
-
-# GRASPING:
-# grasping sphere more robustly...
-# try again to have one policy for different shapes
-# maybe clean up reward terms
-# Do we want to sample init states earlier?
-# TODO: would be interesting to grasp from top of stack.
+(# grasping: penalize arm movement after certain time. lower obj pen.
+# should try different batch size for placing. maybe shorten the horizon. (test-thres need to be changed accordingly.)
+# try train with hard orn.)
 
 # GRASPING & PLACING:
 # TODO: make a non-square range of txty, this seems matter as well
 # TODO: may want to change range of object size (short/fat)
 # TODO: some of init arm pose collide with table at forearm...
+# TODO: grasp from top of stack..
 
-# copy header
-# copy folder
+# whole system issues:
+# TODO: large obj collide during transporting --> make a large BB, move up & move down
+# TODO: collide with other objs during grasping. --> increase dev pen, or make drop condition harsh
+# TODO: new issue, might need multiple candidate for placing. --> train placing on all (or several) wrists
+# TODO: sometimes go through bottom of table.. --> maybe lower table in OR is enough
+
+# TODO: slip in hand sometimes. What is the best way to avoid this
+# TODO: new issue, hand penetrate into obj, will slip during transporting.
+
+# TODO: planning hacks:
+# move uses slightly larger forearm, while reach uses slightly smaller one --> should solve fore-arm reach in collision
+# hand BB size different -> this is fine.
+# move make table lower than reach -> should be solvable by move up first, but not really necessary
+# ---> cannot make table top higher, unless when PB calculates Qreach, filter out using elevated table. & move up first
+# move table very large -> should also be fine if move up first.
+
+MISC TODO s:
+# TODO: does obj/robot order matter
+# TODO: issue, lang seems fail when instruction wrong
+# TODO: one problem with reward is that it asks RL to finish job as fast as possible, which is unnecessary
+# place ball
+# train with thinner btm objects?
+# store screen log
+
+
 
 # run the crack
 # run grasp env to train policy for different objects
@@ -1607,19 +1625,3 @@ python enjoy.py --env-name InmoovHandGraspBulletEnv-v5 --load-dir trained_models
 # sudo docker run --gpus=all -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v ~/container_data:/data --name openravecont openrave-ha:v3 /bin/bash
 # ALWAYS TYPE source bashrc WHEN YOU BEGIN A NEW CONTAINER
 # pip install -U spacypython -m spacy download en_core_web_sm
-
-# TODO: large obj collide during transporting --> make a large BB, move up & move down
-# TODO: collide with other objs during grasping. --> increase dev pen, or make drop condition harsh
-# TODO: new issue, might need multiple candidate for placing. --> train placing on all (or several) wrists
-# TODO: sometimes go through bottom of table.. --> maybe lower table in OR is enough
-
-# TODO: slip in hand sometimes. What is the best way to avoid this
-# TODO: new issue, hand penetrate into obj, will slip during transporting.
-
-
-# TODO: does obj/robot order matter
-# TODO: issue, lang seems fail when instruction wrong
-# TODO: cyl_4 is trained with (0.6, 1.3) mu.
-# TODO: placing is trained with centered noise... at obj xyz&up, maybe this is better?
-# looks like does not really matter
-# TODO: one problem with reward is that it asks RL to finish job as fast as possible, which is unnecessary
