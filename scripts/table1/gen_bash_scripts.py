@@ -3,12 +3,12 @@ various arguments for vision."""
 
 
 def main():
-    for pose_type in ["gt", "gt_delay", "vision"]:
+    for pose_type in ["gt", "gt_delay", "vision", "baseline"]:
         with open(f"{pose_type}.sh", "w") as f:
             for scene in [1, 2, 3]:
                 for shape in ["box", "cylinder"]:
                     for size in ["small", "large"]:
-                        if pose_type in ["gt_delay", "vision"]:
+                        if pose_type in ["gt_delay", "vision", "baseline"]:
                             script_name = "main_sim_stack_new_w_delay"
                         elif pose_type in ["gt"]:
                             script_name = "main_sim_stack_new"
@@ -21,6 +21,8 @@ def main():
                         ]
                         if pose_type == "vision":
                             lines.append("  --use_vision")
+                        if pose_type == "baseline":
+                            lines.append("  --baseline")
                         cmd = " \\\n".join(lines)
                         cmd += "\n\n"
 

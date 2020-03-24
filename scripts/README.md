@@ -1,3 +1,94 @@
+## Generating vision module datasets
+
+Step 1. Generate states for planning and placing.
+
+```
+# First, generate states for various stages of manipulation. (ETA: XX:XX)
+./scripts/states/planning_v003.sh
+./scripts/states/stacking_v003_box.sh
+./scripts/states/stacking_v003_cyl.sh
+
+# Next, complete the placing states by randomly assigning values to attributes 
+that are missing from the states. (ETA: XX:XX)
+./scripts/states/complete_stacking_v003_box.sh
+
+# Subsample and merge into a single set of states. (ETA: XX:XX)
+./scripts/states/combine.sh
+```
+
+Step 2. Zip and transfer the states to the machine where you will be running 
+Unity.
+
+```
+# Current:
+scp -r sydney:~/datasets/delay_box_states workspace/lucas/states/
+
+# Desired:
+scp -r sydney:~/datasets/dash_v001/states workspace/lucas/states
+```
+
+Step 3. Generate Unity images from the states.
+
+```
+python scripts/server.py
+```
+
+Step 4. Zip up and scp the generated Unity images to the machine where training
+will occur.
+
+```
+# Zip up the images (ETA: XX:XX)
+time zip -r delay_box_states.zip delay_box_states
+
+# Transfer the the images (ETA: XX:XX)
+scp -r delay_box_states.zip sydney:~/datasets/dash_v001/
+```
+
+Step 5. Generate the dataset for training and testing.
+
+```
+./ns_vqa_dart/scripts/dash_v001/generate.sh
+```
+
+## Training and testing the vision module on datasets
+
+To run training and testing on a tiny subset of the dataset for a few 
+iterations as a dry run:
+
+```
+./ns_vqa_dart/scripts/dash_v001/dry_run.sh
+```
+
+To run training and testing on the full dataset:
+
+```
+./ns_vqa_dart/scripts/dash_v001/run.sh
+```
+
+## Generating result tables
+
+### Table 1: Results on the full system
+
+```
+TODO
+```
+
+### Table 2: Results on stacking
+
+```
+# Ground truth
+./scripts/table2/delay_box.sh
+./scripts/table2/delay_cyl.sh
+
+# Vision module
+./scripts/table2/delay_vision_box.sh
+./scripts/table2/delay_vision_cyl.sh
+
+# Baseline
+./scripts/table2/baseline_box.sh
+./scripts/table2/baseline_cyl.sh
+```
+
 ## NLP-related installation instructions
 
 Mainly to run `main_sim_stack_new.py`:
