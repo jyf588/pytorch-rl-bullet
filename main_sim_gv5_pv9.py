@@ -93,18 +93,14 @@ args.det = not args.non_det
 
 """Configurations."""
 
-# TODO:tmp add a flag to always load the same transporting traj
-FIX_MOVE = False
-FIX_MOVE_PATH = os.path.join(homedir, "container_data/OR_MOVE.npy")
-
-PLACE_FLOOR = True
-MIX_SHAPE_PI = False
+PLACE_FLOOR = False
+MIX_SHAPE_PI = True
 
 SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
 USE_VISION_MODULE = args.use_vision and (not no_vision)
 RENDER = True  # If true, uses OpenGL. Else, uses TinyRenderer.
 
-GRASP_END_STEP = 30  # TODO:tmp
+GRASP_END_STEP = 30
 PLACE_END_STEP = 50
 
 STATE_NORM = False
@@ -125,7 +121,7 @@ TABLE_OFFSET = [
     0.1,
     0.2,
     0.0,
-]  # TODO: chaged to 0.2 for vision, 0.25 may collide, need to change OR reaching.
+]  # TODO: vision should notice the 0.2->0.1 change
 HALF_OBJ_HEIGHT_L = 0.09
 HALF_OBJ_HEIGHT_S = 0.065
 SIZE2HALF_H = {"small": HALF_OBJ_HEIGHT_S, "large": HALF_OBJ_HEIGHT_L}
@@ -133,7 +129,7 @@ SHAPE2SIZE2RADIUS = {
     "box": {"small": 0.025, "large": 0.04},
     "cylinder": {"small": 0.04, "large": 0.05},
 }
-PLACE_CLEARANCE = 0.14  # TODO: different for diff envs
+PLACE_CLEARANCE = 0.14  # could be different for diff envs
 
 COLORS = {
     "red": [0.8, 0.0, 0.0, 1.0],
@@ -285,6 +281,35 @@ def unwrap_action(act_tensor):
     action = act_tensor.squeeze()
     action = action.cpu() if IS_CUDA else action
     return action.numpy()
+
+
+def get_traj_from_openrave_container(objs, q_start, q_end, save_file_path, read_file_path):
+
+    if q_start is not None:
+        np.savez(save_file_path, objs, q_start, q_end)      # move
+    else:
+        np.savez(save_file_path, objs, q_end)       # reach has q_start 0
+
+    # Wait for command from OpenRave
+
+    assert not os.path.exists(read_file_path)
+    while not os.path.exists(read_file_path):
+        time.sleep(0.2)
+    if os.path.isfile(read_file_path):
+        traj = np.load(read_file_path)
+        print("loaded")
+        try:
+            os.remove(read_file_path)
+            print("deleted")
+            # input("press enter")
+        except OSError as e:  # name the Exception `e`
+            print("Failed with:", e.strerror)  # look what it says
+            # input("press enter")
+    else:
+        raise ValueError("%s isn't a file!" % read_file_path)
+    print("Trajectory obtained from OpenRave!")
+    # input("press enter")
+    return traj
 
 
 def construct_bullet_scene(odicts):  # TODO: copied from inference code
@@ -514,6 +539,8 @@ env_core = InmoovShadowHandDemoEnvV4(
     control_skip=GRASPING_CONTROL_SKIP,
 )  # TODO: does obj/robot order matter
 
+env_core.robot.reset_with_certain_arm_q([0.0]*7)
+
 obj_ids = construct_bullet_scene(odicts=gt_odicts)
 top_oid = obj_ids[top_obj_idx]
 btm_oid = obj_ids[btm_obj_idx]
@@ -525,7 +552,15 @@ pose_saver = PoseSaver(
 
 """Prepare for grasping. Reach for the object."""
 
-env_core.robot.reset_with_certain_arm_q(Qreach)  # TODO
+print(f"Qreach: {Qreach}")
+reach_save_path = homedir + "/container_data/PB_REACH.npz"
+reach_read_path = homedir + "/container_data/OR_REACH.npy"
+Traj_reach = get_traj_from_openrave_container(OBJECTS, None, Qreach, reach_save_path, reach_read_path)
+
+planning(Traj_reach, recurrent_hidden_states, masks, pose_saver)
+# input("press enter")
+# env_core.robot.reset_with_certain_arm_q(Qreach)
+# input("press enter 2")
 
 pose_saver.get_poses()
 print(f"Pose after reset")
@@ -568,42 +603,15 @@ print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 # input("after grasping")
 
 """Send move command to OpenRAVE"""
-if FIX_MOVE:
-    Traj2 = np.load(FIX_MOVE_PATH)
-else:
-    Qmove_init = np.concatenate(
-        (
-            env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0],
-            env_core.robot.get_q_dq(env_core.robot.arm_dofs)[1],
-        )
-    )  # OpenRave initial condition
-    file_path = homedir + "/container_data/PB_MOVE.npz"
-    print(f"Qmove_init: {Qmove_init}")
-    print(f"Qdestin: {Qdestin}")
-    np.savez(file_path, OBJECTS, Qmove_init, Qdestin)
-
-    # Wait for command from OpenRave
-    file_path = homedir + "/container_data/OR_MOVE.npy"
-    assert not os.path.exists(file_path)
-    while not os.path.exists(file_path):
-        time.sleep(0.2)
-    if os.path.isfile(file_path):
-        Traj2 = np.load(file_path)
-        print("loaded")
-        try:
-            os.remove(file_path)
-            print("deleted")
-            # input("press enter")
-        except OSError as e:  # name the Exception `e`
-            print("Failed with:", e.strerror)  # look what it says
-            # input("press enter")
-    else:
-        raise ValueError("%s isn't a file!" % file_path)
-    print("Trajectory obtained from OpenRave!")
-    # input("press enter")
+Qmove_init = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
+print(f"Qmove_init: {Qmove_init}")
+print(f"Qdestin: {Qdestin}")
+move_save_path = homedir + "/container_data/PB_MOVE.npz"
+move_read_path = homedir + "/container_data/OR_MOVE.npy"
+Traj_move = get_traj_from_openrave_container(OBJECTS, Qmove_init, Qdestin, move_save_path, move_read_path)
 
 """Execute planned moving trajectory"""
-planning(Traj2, recurrent_hidden_states, masks, pose_saver)
+planning(Traj_move, recurrent_hidden_states, masks, pose_saver)
 print("after moving", get_relative_state_for_reset(top_oid))
 print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 # input("after moving")
