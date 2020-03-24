@@ -86,6 +86,9 @@ class InmoovShadowNew:
         self.fin_zerodofs = [8, 13, 18, 24]
         self.fin_tips = [12, 17, 22, 28, 34]
         self.all_findofs = list(np.sort(self.fin_actdofs+self.fin_zerodofs))
+        # fin_init =   [0.21269122473773142,   1.2217305056102568,  0.2094395103670277,  -0.6981316630905725,  1.8797404688696039e-06,]
+        #
+        # self.init_fin_q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + fin_init )
         self.init_fin_q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.0])
         self.tar_arm_q = np.zeros(len(self.arm_dofs))       # dummy
         self.tar_fin_q = np.zeros(len(self.fin_actdofs))
@@ -110,9 +113,10 @@ class InmoovShadowNew:
         self.scale_mass_inertia(-1, self.ee_id, 0.01)
         self.scale_mass_inertia(self.ee_id, p.getNumJoints(self.arm_id), 10.0)
 
-        mu = self.np_random.uniform(0.8, 1.2)
-        for i in range(self.ee_id, p.getNumJoints(self.arm_id)):
-            p.changeDynamics(self.arm_id, i, lateralFriction=mu)
+        if self.np_random:
+            mu = self.np_random.uniform(0.8, 1.2)
+            for i in range(self.ee_id, p.getNumJoints(self.arm_id)):
+                p.changeDynamics(self.arm_id, i, lateralFriction=mu)
 
         # use np for multi-indexing
         self.ll = np.array([p.getJointInfo(self.arm_id, i)[8] for i in range(p.getNumJoints(self.arm_id))])
@@ -391,7 +395,7 @@ if __name__ == "__main__":
         arm.np_random, seed = gym.utils.seeding.np_random(0)
         # arm.reset([-0.18, 0.105, 0.13, 1.8, -1.57, 0]) # obj [0,0,0]
         # arm.reset([0.02, 0.105, 0.13, 1.8, -1.57, 0]) # obj [0.2, 0, 0]
-        arm.reset([0.02, 0.105-0.2, 0.13, 1.8, -1.57, 0]) # obj [0.2, -0.2, 0]
+        arm.reset_with_certain_arm_q([0.02, 0.105-0.2, 0.13, 1.8, -1.57, 0, 0]) # obj [0.2, -0.2, 0]
         # arm.reset([-0.18, 0.105 - 0.2, 0.13, 1.8, -1.57, 0])  # obj [0, -0.2, 0]
 
         print("init", arm.get_robot_observation())

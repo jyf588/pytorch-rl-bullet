@@ -33,7 +33,8 @@ class InmoovShadowHandGraspEnvV5(gym.Env):
                  using_comfortable_range=False,
                  control_skip=6,
                  obs_noise=True,
-                 box_rot=True):
+                 box_rot=True,
+                 has_test_phase=True):
         self.renders = renders
         self.init_noise = init_noise
         self.up = up
@@ -44,6 +45,7 @@ class InmoovShadowHandGraspEnvV5(gym.Env):
         self.using_comfortable_range = using_comfortable_range
         self.obs_noise = obs_noise
         self.box_rot = box_rot
+        self.has_test_phase = has_test_phase
 
         self.vary_angle_range = 0.6
         self.obj_mass = -1  # dummy, 2b overwritten
@@ -264,18 +266,19 @@ class InmoovShadowHandGraspEnvV5(gym.Env):
         return np.array(self.observation)
 
     def step(self, action):
-        if self.timer == self.test_start * self.control_skip:
-            self.force_global = [self.np_random.uniform(-100, 100),
-                                 self.np_random.uniform(-100, 100),
-                                 -200.]
-        if self.timer > self.test_start * self.control_skip:
-            p.setCollisionFilterPair(self.obj_id, self.floorId, -1, -1, enableCollision=0)
-            # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
-            #     p.setCollisionFilterPair(self.floorId, self.robot.arm_id, -1, i, enableCollision=0)
-            _, quat = p.getBasePositionAndOrientation(self.obj_id)
-            _, quat_inv = p.invertTransform([0,0,0], quat)
-            force_local, _ = p.multiplyTransforms([0,0,0], quat_inv, self.force_global, [0,0,0,1])
-            p.applyExternalForce(self.obj_id, -1, force_local, [0, 0, 0], flags=p.LINK_FRAME)
+        if self.has_test_phase:
+            if self.timer == self.test_start * self.control_skip:
+                self.force_global = [self.np_random.uniform(-100, 100),
+                                     self.np_random.uniform(-100, 100),
+                                     -200.]
+            if self.timer > self.test_start * self.control_skip:
+                p.setCollisionFilterPair(self.obj_id, self.floorId, -1, -1, enableCollision=0)
+                # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
+                #     p.setCollisionFilterPair(self.floorId, self.robot.arm_id, -1, i, enableCollision=0)
+                _, quat = p.getBasePositionAndOrientation(self.obj_id)
+                _, quat_inv = p.invertTransform([0,0,0], quat)
+                force_local, _ = p.multiplyTransforms([0,0,0], quat_inv, self.force_global, [0,0,0,1])
+                p.applyExternalForce(self.obj_id, -1, force_local, [0, 0, 0], flags=p.LINK_FRAME)
 
         for _ in range(self.control_skip):
             # action is in -1,1
@@ -372,6 +375,9 @@ class InmoovShadowHandGraspEnvV5(gym.Env):
         # output finger q's, finger tar q's.
         # velocity will be assumed to be zero at the end of transporting phase
         # return a dict.
+
+        assert not self.has_test_phase
+
         obj_pos, obj_quat = p.getBasePositionAndOrientation(self.obj_id)      # w2o
         hand_pos, hand_quat = self.robot.get_link_pos_quat(self.robot.ee_id)    # w2p
         inv_h_p, inv_h_q = p.invertTransform(hand_pos, hand_quat)       # p2w
@@ -406,6 +412,7 @@ class InmoovShadowHandGraspEnvV5(gym.Env):
         self.final_states = []
 
     def calc_average_obj_in_palm(self):
+        assert not self.has_test_phase
         count = len(self.final_states)
         o_pos_hf_sum = np.array([0., 0, 0])
         o_quat_hf_sum = np.array([0., 0, 0, 0])
@@ -418,6 +425,7 @@ class InmoovShadowHandGraspEnvV5(gym.Env):
         return list(o_pos_hf_sum), list(o_quat_hf_sum)
 
     def calc_average_obj_in_palm_rot_invariant(self):
+        assert not self.has_test_phase
         count = len(self.final_states)
         o_pos_hf_sum = np.array([0., 0, 0])
         o_unitz_hf_sum = np.array([0., 0, 0])

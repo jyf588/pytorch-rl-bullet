@@ -246,7 +246,7 @@ def NLPmod(sentence, Vision_output):
         Returns:
             target_xyz: The xyz position of the target location.
         """
-        offset = 0.1
+        offset = 0.2
         # for i in range(len(relation)):
         if relation[0] == "right":
             target_xyz = np.asarray(
