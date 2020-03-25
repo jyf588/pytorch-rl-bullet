@@ -513,7 +513,7 @@ table_id = p.loadURDF(
     TABLE_OFFSET,
     useFixedBase=1,
 )
-a.floor_id = table_id   # TODO:tmp hack, v9 get_n_optimal_init_arm_qs need to do collision checking
+a.table_id = table_id   # TODO:tmp hack, v9 get_n_optimal_init_arm_qs need to do collision checking
 Qdestin = a.get_n_optimal_init_arm_qs(desired_obj_pos)[0]   # TODO: [1] is the 2nd candidate
 print("place arm q", Qdestin)
 p.resetSimulation()  # Clean up the simulation, since this is only imaginary.
