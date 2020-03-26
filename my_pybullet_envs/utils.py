@@ -1,6 +1,7 @@
 import numpy as np
 import pybullet as p
 
+PLACE_START_CLEARANCE = 0.14
 
 SHAPE_IND_MAP = {-1: p.GEOM_SPHERE, 0: p.GEOM_CYLINDER, 1: p.GEOM_BOX}
 # TODO: should use a config file? command line change?
@@ -23,6 +24,12 @@ TABLE_OFFSET = [0.1, 0.2, 0.0]
 
 BULLET_CONTACT_ITER = 200
 
+INIT_PALM_CANDIDATE_ANGLES = [0., 3.14 / 4, 6.28 / 4, 9.42 / 4, 3.14,
+                              -9.42 / 4, -6.28 / 4, -3.14 / 4]
+INIT_PALM_CANDIDATE_QUATS = [p.getQuaternionFromEuler([0, 0, cand_angle])
+                             for cand_angle in INIT_PALM_CANDIDATE_ANGLES]
+
+
 def perturb(np_rand_gen, arr, r=0.02):
     r = np.abs(r)
     return np.copy(np.array(arr) + np_rand_gen.uniform(low=-r, high=r, size=len(arr)))
@@ -33,7 +40,34 @@ def perturb_scalar(np_rand_gen, num, r=0.02):
     return num + np_rand_gen.uniform(low=-r, high=r)
 
 
-def create_prim_shape(mass, shape, dim, mu=1.0, init_xyz=(0, 0, 0), init_quat=(0, 0, 0, 1), color=(0.6, 0, 0, 1)):
+def sample_tx_ty_tz(np_rand_gen, is_universal_xy, is_on_floor, xy_noise, z_noise):
+    # tx ty tz can be out of arm reach
+    # tx ty used for planning, and are part of the robot obs
+    # tx_act, ty_act are the actual btm obj x y
+    # tz_act is the actual bottom obj height
+    # tz used for planning and robot obs
+
+    if is_universal_xy:
+        tx = np_rand_gen.uniform(low=TX_MIN, high=TX_MAX)
+        ty = np_rand_gen.uniform(low=TY_MIN, high=TY_MAX)
+    else:
+        tx = 0.0
+        ty = 0.0
+
+    tx_act = perturb_scalar(np_rand_gen, tx, xy_noise)
+    ty_act = perturb_scalar(np_rand_gen, ty, xy_noise)
+
+    if is_on_floor:
+        tz_act = 0
+        tz = 0
+    else:
+        tz_act = np_rand_gen.uniform(H_MIN, H_MAX)
+        tz = perturb_scalar(np_rand_gen, tz_act, z_noise)
+
+    return tx, ty, tz, tx_act, ty_act, tz_act
+
+
+def create_prim_shape(mass, shape, dim, mu=1.0, init_xyz=(0, 0, 0), init_quat=(0, 0, 0, 1), color=(0.9, 0.9, 0.9, 1)):
     # shape: p.GEOM_SPHERE or p.GEOM_BOX or p.GEOM_CYLINDER
     # dim: halfExtents (vec3) for box, (radius, length)vec2 for cylinder, (radius) vec1 for sphere
     # init_xyz vec3 of obj location
@@ -64,7 +98,7 @@ def create_prim_shape(mass, shape, dim, mu=1.0, init_xyz=(0, 0, 0), init_quat=(0
 
 
 def create_sym_prim_shape_helper(odict, init_xyz=(0, 0, 0),
-                          init_quat=(0, 0, 0, 1), color=(0.6, 0, 0, 1)):
+                          init_quat=(0, 0, 0, 1), color=(0.9, 0.9, 0.9, 1)):
     # NOTE: half_width ignored for spheres. if shape is sphere, must pass in None as half_width
     # the input odict is a dict of obj metadata.
 
@@ -102,6 +136,49 @@ def from_bullet_dimension(shape, dim):
     return half_width, height
 
 
+def get_n_optimal_init_arm_qs(robot, p_pos_of, p_quat_of, desired_obj_pos, table_id, n=2):
+    # NOTE: robot is a InMoov object
+    # NOTE: if table_id none, do not check init arm collision with table.
+    arm_qs_costs = []
+    ref = np.array([0.] * 3 + [-1.57] + [0.] * 3)
+    for ind, cand_quat in enumerate(INIT_PALM_CANDIDATE_QUATS):
+        # p_pos_of_ave, p_quat_of_ave = p.invertTransform(o_pos_pf, o_quat_pf)
+        p_pos, p_quat = p.multiplyTransforms(desired_obj_pos, cand_quat,
+                                             p_pos_of, p_quat_of)
+        cand_arm_q = robot.solve_arm_IK(p_pos, p_quat)
+        if cand_arm_q is not None:
+            cps = []
+            if table_id is not None:
+                p.stepSimulation()      # TODO
+                cps = p.getContactPoints(bodyA=robot.arm_id, bodyB=table_id)
+            if len(cps) == 0:
+                diff = np.array(cand_arm_q) - ref
+                cand_cost = np.sum(np.abs(diff))  # changed to l1
+                arm_qs_costs.append((cand_arm_q, cand_cost))
+    arm_qs_costs_sorted = sorted(arm_qs_costs, key=lambda x: x[1])[:n]  # fine if length < n
+    return [arm_q_cost[0] for arm_q_cost in arm_qs_costs_sorted]
+
+
+def obj_pos_and_upv_to_obs(o_pos, o_upv, tx, ty):
+    objObs = []
+    o_pos = np.array(o_pos)
+    o_pos -= [tx, ty, 0]
+    o_pos = o_pos * 3.0
+    objObs.extend(o_pos)
+    objObs.extend(o_upv)
+    return objObs
+
+
+def quat_to_upv(quat):
+    rotmat = np.array(p.getMatrixFromQuaternion(quat))
+    upv = [rotmat[2], rotmat[5], rotmat[8]]
+    return upv
+
+# def get_pos_upv_height_from_obj(use_vision, odict):
+#     if odict['id']
+
+
+
 # looks like need two dicts for info of two objs.
 # --> do we need a class?
 # --> do we want to store the current 6D of objects? And update
@@ -109,8 +186,19 @@ def from_bullet_dimension(shape, dim):
 # just a dict of obj_dict['id'], ['mass'], ['shape'], (['dim']) ['color'], ['friction'], ['half_width'], ['height']
 # small class might be useful
 
-# need a function getCurrentState, so state saver can be deprecated.
+# need a function getCurrentState, so state saver can be deprecated. (no need to put track obj etc.)
+# visionObj class and visionInfer class still need to be added to env code.
+# the input shall be a list of obj metadata *dicts*, and robot arm id.
 # save pickle does not seem necessary. why?
 
 # obj6DtoObs_UpVec(
-# obj_pos_and_up_to_obs in demo env.
+# obj_pos_and_upv_to_obs in demo env.
+
+# predict() currently takes a list of BULLET o_ids, which means vision prediction has BULLET id as field.
+# it should instead always output the predictions of ALL objects with ids 0..N-1
+# How do we know which xyz is what we want? indexed by language module.
+# easy fix: init vision module should be fine even if each obj segmentation does not have bullet id.
+# stacking vision always output top obj 6D followed by btm obj so no indexing is needed.
+
+
+# TODO: there are two tables in demo...

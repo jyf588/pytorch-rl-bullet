@@ -1580,9 +1580,15 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --l
 
 
 3/24 23:24
+# noise back to 0.015
 python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 400 --num-processes 12  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_2_placeco_0316_5  --seed 8168 --random_top_shape 1 --up 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 1 --cotrain_stack_place 1 --n_best_cand 2
 test: (at traj 40 is a "rescue" policy)
 python enjoy.py --env-name InmoovHandPlaceBulletEnv-v9 --load-dir trained_models_0313_2_placeco_0316_5/ppo/ --non-det 0 --seed=1898 --random_top_shape 1  --up 1 --renders 1 --exclude_hard 0 --obs_noise 1 --n_best_cand 2 --cotrain_stack_place 1
+
+
+3/25 21:38
+# cotrain grasp from stack and on floor init
+python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 8000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_0_n --seed 10000 --up 1 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2
 
 
 

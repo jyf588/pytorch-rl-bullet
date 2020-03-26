@@ -5,6 +5,9 @@ import time
 import numpy as np
 import os
 import inspect
+
+from . import utils
+
 currentdir = os.path.dirname(
     os.path.abspath(inspect.getfile(inspect.currentframe()))
 )
@@ -58,15 +61,6 @@ class InmoovShadowHandDemoEnvV4:
         self.action_scale = np.array(
             [arm_scale / self.control_skip] * 7 + [fin_scale / self.control_skip] * 17
         )
-
-    def obj_pos_and_up_to_obs(self, o_pos, o_upv, tx, ty):
-        objObs = []
-        o_pos = np.array(o_pos)
-        o_pos -= [tx, ty, 0]
-        o_pos = o_pos * 3.0
-        objObs.extend(o_pos)
-        objObs.extend(o_upv)
-        return objObs
 
     def reset(self):  # deprecated
         self.timer = 0
@@ -132,10 +126,10 @@ class InmoovShadowHandDemoEnvV4:
         """
         self.get_robot_contact_txty_halfh_obs_nodup(tx, ty, half_h)
         self.observation.extend(
-            self.obj_pos_and_up_to_obs(t_pos, t_up, tx, ty)
+            utils.obj_pos_and_upv_to_obs(t_pos, t_up, tx, ty)
         )
         self.observation.extend(
-            self.obj_pos_and_up_to_obs(b_pos, b_up, tx, ty)
+            utils.obj_pos_and_upv_to_obs(b_pos, b_up, tx, ty)
         )
         return self.observation
 
@@ -155,10 +149,10 @@ class InmoovShadowHandDemoEnvV4:
         """
         self.get_robot_contact_txtytz_halfh_obs_nodup(tx, ty, tz, half_h)
         self.observation.extend(
-            self.obj_pos_and_up_to_obs(t_pos, t_up, tx, ty)
+            utils.obj_pos_and_upv_to_obs(t_pos, t_up, tx, ty)
         )
         self.observation.extend(
-            self.obj_pos_and_up_to_obs(b_pos, b_up, tx, ty)
+            utils.obj_pos_and_upv_to_obs(b_pos, b_up, tx, ty)
         )
         return self.observation
 
@@ -186,10 +180,10 @@ class InmoovShadowHandDemoEnvV4:
         self.observation.extend(shape_info)
 
         self.observation.extend(
-            self.obj_pos_and_up_to_obs(t_pos, t_up, tx, ty)
+            utils.obj_pos_and_upv_to_obs(t_pos, t_up, tx, ty)
         )
         self.observation.extend(
-            self.obj_pos_and_up_to_obs(b_pos, b_up, tx, ty)
+            utils.obj_pos_and_upv_to_obs(b_pos, b_up, tx, ty)
         )
         return self.observation
 

@@ -21,6 +21,7 @@ from .inmoov_shadow_place_env_v4 import InmoovShadowHandPlaceEnvV4
 from .inmoov_shadow_place_env_v4_det import InmoovShadowHandPlaceEnvV4Det
 from .inmoov_shadow_grasp_env_v4 import InmoovShadowHandGraspEnvV4
 from .inmoov_shadow_grasp_env_v5 import InmoovShadowHandGraspEnvV5
+from .inmoov_shadow_grasp_env_v6 import InmoovShadowHandGraspEnvV6
 from .inmoov_shadow_place_env_v5 import InmoovShadowHandPlaceEnvV5
 from .inmoov_shadow_grasp_place_env_v1 import InmoovShadowHandGraspPlaceEnvV1
 
@@ -84,6 +85,12 @@ register(
 register(
     id="InmoovHandGraspBulletEnv-v5",
     entry_point="my_pybullet_envs:InmoovShadowHandGraspEnvV5",
+    max_episode_steps=65,
+)
+
+register(
+    id="InmoovHandGraspBulletEnv-v6",
+    entry_point="my_pybullet_envs:InmoovShadowHandGraspEnvV6",
     max_episode_steps=65,
 )
 
