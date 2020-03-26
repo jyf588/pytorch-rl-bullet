@@ -22,16 +22,16 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
                  init_noise=True,
                  up=True,
 
-                 random_top_shape=True,
+                 random_top_shape=False,
                  det_top_shape_ind=1,  # if not random shape, 1 box, 0 cyl, -1 sphere,
 
-                 cotrain_onstack_grasp=True,
+                 cotrain_onstack_grasp=False,
                  grasp_floor=True,  # if not cotrain, is grasp from stack or grasp on table
 
                  control_skip=6,
                  obs_noise=True,
 
-                 n_best_cand=2,
+                 n_best_cand=1,
 
                  has_test_phase=True,
                  ):
@@ -128,7 +128,8 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
             # obj frame (o_pos) in the COM of obj.
 
             arm_qs = utils.get_n_optimal_init_arm_qs(self.robot, self.p_pos_of_init, self.p_quat_of_init,
-                                                     desired_obj_pos, self.table_id, n=self.n_best_cand)
+                                                     desired_obj_pos, self.table_id, n=self.n_best_cand,
+                                                     wrist_gain=3.0)    # TODO
             if len(arm_qs) == 0:
                 continue
             else:
@@ -265,7 +266,9 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
             bo['mass'] = self.np_random.uniform(utils.MASS_MIN, utils.MASS_MAX)
             bo['mu'] = self.np_random.uniform(utils.MU_MIN, utils.MU_MAX)
 
-            btm_xyz = np.array([self.tx_act, self.ty_act, self.tz_act / 2.0])
+            btm_xy = utils.perturb(self.np_random, [self.tx_act, self.ty_act], 0.015)
+            btm_xyz = np.array(list(btm_xy) + [self.tz_act / 2.0])
+
             btm_quat = p.getQuaternionFromEuler([0., 0., self.np_random.uniform(low=0, high=2.0 * math.pi)])
             bo['id'] = utils.create_sym_prim_shape_helper(bo, btm_xyz, btm_quat)
 
@@ -281,7 +284,7 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
             to['height'] *= 0.75
         to['height'] = self.np_random.uniform(utils.H_MIN, utils.H_MAX)
 
-        top_xyz = np.array([self.tx, self.ty, self.tz_act + to['height']/2.0])
+        top_xyz = np.array([self.tx_act, self.ty_act, self.tz_act + to['height'] / 2.0])
         top_quat = p.getQuaternionFromEuler([0., 0., self.np_random.uniform(low=0, high=2.0 * math.pi)])
         to['id'] = utils.create_sym_prim_shape_helper(to, top_xyz, top_quat)
 
@@ -367,18 +370,18 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         bottom_id = self.table_id if self.grasp_floor else self.btm_obj['id']
 
         if self.has_test_phase:
-            if self.timer == self.test_start * self.control_skip:
-                self.force_global = [self.np_random.uniform(-100, 100),
-                                     self.np_random.uniform(-100, 100),
-                                     -200.]
+            # if self.timer == self.test_start * self.control_skip:
+            #     self.force_global = [self.np_random.uniform(-100, 100),
+            #                          self.np_random.uniform(-100, 100),
+            #                          -200.]
             if self.timer > self.test_start * self.control_skip:
                 p.setCollisionFilterPair(self.top_obj['id'], bottom_id, -1, -1, enableCollision=0)
                 # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
                 #     p.setCollisionFilterPair(self.floorId, self.robot.arm_id, -1, i, enableCollision=0)
-                _, quat = p.getBasePositionAndOrientation(self.top_obj['id'])
-                _, quat_inv = p.invertTransform([0, 0, 0], quat)
-                force_local, _ = p.multiplyTransforms([0, 0, 0], quat_inv, self.force_global, [0, 0, 0, 1])
-                p.applyExternalForce(self.top_obj['id'], -1, force_local, [0, 0, 0], flags=p.LINK_FRAME)
+                # _, quat = p.getBasePositionAndOrientation(self.top_obj['id'])
+                # _, quat_inv = p.invertTransform([0, 0, 0], quat)
+                # force_local, _ = p.multiplyTransforms([0, 0, 0], quat_inv, self.force_global, [0, 0, 0, 1])
+                # p.applyExternalForce(self.top_obj['id'], -1, force_local, [0, 0, 0], flags=p.LINK_FRAME)
 
         for _ in range(self.control_skip):
             # action is in -1,1
@@ -397,18 +400,25 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
         # rewards is height of target object
         top_pos, _ = p.getBasePositionAndOrientation(self.top_obj['id'])
-        # palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
-        # dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(top_pos)), 0.5)
-        # reward += -dist * 2.0
 
-        top_xyz_ideal = np.array([self.tx, self.ty, self.tz_act + self.top_obj['height'] / 2.0 + 0.05])
-        reward += -np.minimum(np.linalg.norm(top_xyz_ideal - np.array(top_pos)), 0.4) * 12.0    # TODO
+        palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
+        dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(top_pos)), 0.5)
+        reward += -dist * 2.0       # TODO: is this necessary?
+
+        top_xyz_ideal = np.array([self.tx_act, self.ty_act, self.tz_act + self.top_obj['height'] / 2.0 + 0.05])
+        reward += -np.minimum(np.linalg.norm(top_xyz_ideal - np.array(top_pos)), 0.4) * 6.0    # TODO
 
         for i in self.robot.fin_tips[:4]:
             tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
             reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(top_pos)), 0.5)  # 4 finger tips
         tip_pos = p.getLinkState(self.robot.arm_id, self.robot.fin_tips[4])[0]      # thumb tip
         reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(top_pos)), 0.5) * 5.0
+
+        # not used when grasp from floor
+        btm_vels = p.getBaseVelocity(bottom_id)
+        btm_linv = np.array(btm_vels[0])
+        btm_angv = np.array(btm_vels[1])
+        reward += np.maximum(-np.linalg.norm(btm_linv) - np.linalg.norm(btm_angv), -10.0) * 0.3
 
         cps = p.getContactPoints(self.top_obj['id'], self.robot.arm_id, -1, self.robot.ee_id)    # palm
         if len(cps) > 0:
@@ -429,7 +439,8 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
         reward -= self.robot.get_4_finger_deviation() * 0.5
 
-        if top_pos[2] < self.tz_act:    # object dropped
+        # object dropped during testing
+        if top_pos[2] < self.tz_act and self.timer > self.test_start * self.control_skip:
             reward += -15.
 
         return self.getExtendedObservation(), reward, False, {}

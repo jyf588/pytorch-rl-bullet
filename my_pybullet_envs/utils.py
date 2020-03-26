@@ -4,6 +4,9 @@ import pybullet as p
 PLACE_START_CLEARANCE = 0.14
 
 SHAPE_IND_MAP = {-1: p.GEOM_SPHERE, 0: p.GEOM_CYLINDER, 1: p.GEOM_BOX}
+SHAPE_NAME_MAP = {"sphere": p.GEOM_SPHERE, "cylinder": p.GEOM_CYLINDER, "box": p.GEOM_BOX}
+# only used for construct GT scene, language should be more forgiving wrt shape name, see lang module.
+
 # TODO: should use a config file? command line change?
 MASS_MIN = 1.0
 MASS_MAX = 5.0
@@ -20,7 +23,7 @@ TX_MAX = 0.3
 TY_MIN = -0.15
 TY_MAX = 0.55
 
-TABLE_OFFSET = [0.1, 0.2, 0.0]
+TABLE_OFFSET = [0.1, 0.2, 0.01]     # TODO: during training, make table a bit thicker/higher
 
 BULLET_CONTACT_ITER = 200
 
@@ -97,14 +100,17 @@ def create_prim_shape(mass, shape, dim, mu=1.0, init_xyz=(0, 0, 0), init_quat=(0
     return sid
 
 
-def create_sym_prim_shape_helper(odict, init_xyz=(0, 0, 0),
-                          init_quat=(0, 0, 0, 1), color=(0.9, 0.9, 0.9, 1)):
+def create_sym_prim_shape_helper(odict, init_xyz=(0, 0, 0), init_quat=(0, 0, 0, 1)):
     # NOTE: half_width ignored for spheres. if shape is sphere, must pass in None as half_width
     # the input odict is a dict of obj metadata.
 
     shape = odict['shape']
     dim = to_bullet_dimension(shape, odict['half_width'], odict['height'])
-    sid = create_prim_shape(odict['mass'], shape, dim, odict['mu'], init_xyz, init_quat, color)
+    if "color" in odict:
+        sid = create_prim_shape(odict['mass'], shape, dim, odict['mu'], init_xyz, init_quat, odict["color"])
+    else:
+        sid = create_prim_shape(odict['mass'], shape, dim, odict['mu'], init_xyz, init_quat, (0.9, 0.9, 0.9, 1))
+        # give some default white color.
     return sid
 
 
@@ -136,7 +142,7 @@ def from_bullet_dimension(shape, dim):
     return half_width, height
 
 
-def get_n_optimal_init_arm_qs(robot, p_pos_of, p_quat_of, desired_obj_pos, table_id, n=2):
+def get_n_optimal_init_arm_qs(robot, p_pos_of, p_quat_of, desired_obj_pos, table_id, n=2, wrist_gain=1.0):
     # NOTE: robot is a InMoov object
     # NOTE: if table_id none, do not check init arm collision with table.
     arm_qs_costs = []
@@ -153,6 +159,7 @@ def get_n_optimal_init_arm_qs(robot, p_pos_of, p_quat_of, desired_obj_pos, table
                 cps = p.getContactPoints(bodyA=robot.arm_id, bodyB=table_id)
             if len(cps) == 0:
                 diff = np.array(cand_arm_q) - ref
+                diff[-1] *= wrist_gain
                 cand_cost = np.sum(np.abs(diff))  # changed to l1
                 arm_qs_costs.append((cand_arm_q, cand_cost))
     arm_qs_costs_sorted = sorted(arm_qs_costs, key=lambda x: x[1])[:n]  # fine if length < n
