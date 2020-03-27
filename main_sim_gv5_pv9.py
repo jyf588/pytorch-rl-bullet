@@ -104,17 +104,11 @@ DET_CONTACT = 0  # 0 false, 1 true
 OBJ_MU = 1.0
 FLOOR_MU = 1.0
 HAND_MU = 1.0
-BULLET_SOLVER_ITER = 200
 
 IS_CUDA = True  # TODO:tmp odd. seems no need to use cuda
 DEVICE = "cuda" if IS_CUDA else "cpu"
 
 TS = 1.0 / 240
-TABLE_OFFSET = [
-    0.1,
-    0.2,
-    0.0,
-]  # TODO: vision should notice the 0.2->0.1 change
 
 
 # HALF_OBJ_HEIGHT_L = 0.09
@@ -124,16 +118,6 @@ TABLE_OFFSET = [
 #     "box": {"small": 0.025, "large": 0.04},
 #     "cylinder": {"small": 0.04, "large": 0.05},
 # }
-
-PLACE_CLEARANCE = 0.14  # could be different for diff envs
-
-COLORS = {
-    "red": [0.8, 0.0, 0.0, 1.0],
-    "grey": [0.4, 0.4, 0.4, 1.0],
-    "yellow": [0.8, 0.8, 0.0, 1.0],
-    "blue": [0.0, 0.0, 0.8, 1.0],
-    "green": [0.0, 0.8, 0.0, 1.0],
-}
 
 # Ground-truth scene:
 HIDE_SURROUNDING_OBJECTS = False  # If true, hides the surrounding objects.
@@ -328,7 +312,7 @@ def construct_obj_dict_bullet(odicts):
             odict_new["half_width"] *= 0.8
         elif odict_new["shape"] == p.GEOM_SPHERE:
             odict_new["height"] *= 0.75
-        odict_new["color"] = COLORS[odict["color"]]
+        odict_new["color"] = utils.COLOR2RGBA[odict["color"]]
 
         odicts_internal.append(odict_new)
 
@@ -339,10 +323,10 @@ def construct_bullet_scene(odicts, odicts_internal):
     # p.resetSimulation()
     table_id = p.loadURDF(
         os.path.join(currentdir, "my_pybullet_envs/assets/tabletop.urdf"),
-        TABLE_OFFSET,
+        utils.TABLE_OFFSET,
         useFixedBase=1,
     )
-    p.changeVisualShape(table_id, -1, rgbaColor=COLORS["grey"])
+    p.changeVisualShape(table_id, -1, rgbaColor=utils.COLOR2RGBA["grey"])
     p.changeDynamics(table_id, -1, lateralFriction=FLOOR_MU)
 
     for o_ind in range(len(odicts)):
@@ -455,7 +439,7 @@ if USE_VISION_MODULE:
             0.03197646764976494,
             0.4330631992464512,
         ],
-        camera_offset=[-0.05, TABLE_OFFSET[1], 0.0],
+        camera_offset=[-0.05, utils.TABLE_OFFSET[1], 0.0],
         camera_directed_offset=[0.02, 0.0, 0.0],
         apply_offset_to_preds=True,
         html_dir="/home/michelle/html/vision_inference_initial",
@@ -527,13 +511,13 @@ sess = ImaginaryArmObjSession()
 
 Qreach = np.array(sess.get_most_comfortable_q_and_refangle(g_tx, g_ty)[0])
 
-desired_obj_pos = [p_tx, p_ty, PLACE_CLEARANCE + p_tz]
+desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + p_tz]
 a = InmoovShadowHandPlaceEnvV9(renders=False, grasp_pi_name=GRASP_PI)
 a.seed(args.seed)
 # TODO:tmp, get_n_optimal_init_arm_qs need to do collision checking
 table_id = p.loadURDF(
     os.path.join(currentdir, "my_pybullet_envs/assets/tabletop.urdf"),
-    TABLE_OFFSET,
+    utils.TABLE_OFFSET,
     useFixedBase=1,
 )
 
@@ -549,7 +533,7 @@ print("place arm q", Qdestin)
 p.resetSimulation()  # Clean up the simulation, since this is only imaginary.
 
 """Setup Bullet world."""
-p.setPhysicsEngineParameter(numSolverIterations=BULLET_SOLVER_ITER)
+p.setPhysicsEngineParameter(numSolverIterations=utils.BULLET_CONTACT_ITER)
 p.setPhysicsEngineParameter(deterministicOverlappingPairs=DET_CONTACT)
 p.setTimeStep(TS)
 p.setGravity(0, 0, -10)
@@ -683,7 +667,7 @@ if USE_VISION_MODULE:
         state_saver=state_saver,
         checkpoint_path="/home/michelle/outputs/stacking_v003/checkpoint_best.pt",
         camera_position=[-0.2237938867122504, 0.0, 0.5425],
-        camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
+        camera_offset=[0.0, utils.TABLE_OFFSET[1], 0.0],
         apply_offset_to_preds=False,
         html_dir="/home/michelle/html/demo_delay_vision_v003_{top_shape}",
     )
