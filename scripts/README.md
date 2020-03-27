@@ -4,27 +4,30 @@ Step 1. Generate states for planning and placing.
 
 ```
 # First, generate states for various stages of manipulation. (ETA: XX:XX)
-./scripts/states/planning_v003.sh
+./scripts/states/planning_v003.sh  # TODO
 ./scripts/states/stacking_v003_box.sh
 ./scripts/states/stacking_v003_cyl.sh
 
 # Next, complete the placing states by randomly assigning values to attributes 
-that are missing from the states. (ETA: XX:XX)
-./scripts/states/complete_stacking_v003_box.sh
+that are missing from the states. (ETA: 15 seconds)
+./scripts/states/complete_states.sh
 
-# Subsample and merge into a single set of states. (ETA: XX:XX)
+# Subsample and merge into a single set of states. (ETA: 1 second)
 ./scripts/states/combine.sh
 ```
 
-Step 2. Zip and transfer the states to the machine where you will be running 
-Unity.
+Step 2. Transfer the states (23 M) to the machine where you will be
+running Unity.
 
 ```
-# Current:
-scp -r sydney:~/datasets/delay_box_states workspace/lucas/states/
+# Zip up the states.
+time zip -r ~/data/states/full/dash_v001.zip dash_v001  # ETA: 1 second
 
-# Desired:
-scp -r sydney:~/datasets/dash_v001/states workspace/lucas/states
+# Transfer the states.
+time rsync -azP sydney:~/data/states/full/dash_v001.zip ~/workspace/lucas/states  # ETA: 3 minutes
+
+# Unzip the states.
+unzip ~/workspace/lucas/states/dash_v001.zip
 ```
 
 Step 3. Generate Unity images from the states.
@@ -33,21 +36,37 @@ Step 3. Generate Unity images from the states.
 python scripts/server.py
 ```
 
-Step 4. Zip up and scp the generated Unity images to the machine where training
-will occur.
+Step 4. Zip up and scp the generated Unity images to the machine where 
+training will occur.
 
 ```
-# Zip up the images (ETA: XX:XX)
-time zip -r delay_box_states.zip delay_box_states
+# To transfer a subset:
+rsync -azP <image_dir> sydney:/media/michelle/68B62784B62751BC/data/datasets/dash_v001/
 
-# Transfer the the images (ETA: XX:XX)
-scp -r delay_box_states.zip sydney:~/datasets/dash_v001/
+# Zip up the images (ETA: 2 minutes)
+time zip -r dash_v002_images.zip dash_v002_images
+
+# Transfer the the images (ETA: 40 minutes)
+time rsync -azP dash_v002_images.zip sydney:/media/michelle/68B62784B62751BC/data/datasets/dash_v002/
+
+# Unzip the images. (ETA: 1 minute 30 seconds)
+time unzip dash_v001_images.zip
 ```
 
-Step 5. Generate the dataset for training and testing.
+Step 5. Generate the dataset for training and testing. (ETA: 7 hours)
 
 ```
-./ns_vqa_dart/scripts/dash_v001/generate.sh
+# To generate a subset (ETA: 2 minutes)
+./ns_vqa_dart/scripts/dash_v001/generate_subset.sh
+
+# To generate the full set (ETA: 1 hour):
+./ns_vqa_dart/scripts/dash_v002/generate.sh
+```
+
+Step 6. (Optional) Check whether there are any corrupt pickle files.
+
+```
+./ns_vqa_dart/scripts/dash_v001/check_pickles.sh
 ```
 
 ## Training and testing the vision module on datasets
@@ -65,12 +84,31 @@ To run training and testing on the full dataset:
 ./ns_vqa_dart/scripts/dash_v001/run.sh
 ```
 
+## To visualize results in an HTML webpage
+
+Start the server:
+```
+cd /media/michelle/68B62784B62751BC/html
+python -m http.server
+```
+
 ## Generating result tables
 
 ### Table 1: Results on the full system
 
+Below are instructions on how to generate a demo video of Lucas.
+
+Step 1. First, follow instructions below on running reaching and transporting
+OpenRAVE programs in docker containers.
+
+Step 2. Run the following bash script to generate the demos.
 ```
-TODO
+./scripts/table1/gv5_pv9_gt_delay.sh
+```
+
+Step 3. Transfer the poses to the machine where Unity will be run.
+```
+rsync -azP ~/demo_poses ~/workspace/lucas/
 ```
 
 ### Table 2: Results on stacking
@@ -174,18 +212,19 @@ Update `tabletop_2.kinbody.xml` to the following:
 </KinBody>
 ```
 
-Inside of docker container:
+Inside of docker container, run the following to run reaching:
 ```
 source bashrc
 cd /data/or_planning_scripts
-python move_single.py
+python move_single.py 0
 ```
 
+Start a second docker container session to run transport:
 If you need to run reach_single.py also, open another session for the same 
 container:
 ```
 sudo docker exec -it openravecont /bin/bash
 source bashrc
 cd /data/or_planning_scripts
-python reach_single.py
+python move_single.py 1
 ```
