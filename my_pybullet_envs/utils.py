@@ -23,7 +23,7 @@ TX_MAX = 0.3
 TY_MIN = -0.15
 TY_MAX = 0.55
 
-TABLE_OFFSET = [0.1, 0.2, 0.01]     # TODO: during training, make table a bit thicker/higher
+TABLE_OFFSET = [0.1, 0.2, 0.0]     # TODO: during training, make table a bit thicker/higher
 
 BULLET_CONTACT_ITER = 200
 

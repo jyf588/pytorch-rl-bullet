@@ -22,16 +22,16 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
                  init_noise=True,
                  up=True,
 
-                 random_top_shape=False,
+                 random_top_shape=True,
                  det_top_shape_ind=1,  # if not random shape, 1 box, 0 cyl, -1 sphere,
 
-                 cotrain_onstack_grasp=False,
+                 cotrain_onstack_grasp=True,
                  grasp_floor=True,  # if not cotrain, is grasp from stack or grasp on table
 
                  control_skip=6,
                  obs_noise=True,
 
-                 n_best_cand=1,
+                 n_best_cand=2,
 
                  has_test_phase=True,
                  ):
@@ -267,10 +267,15 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
             bo['mu'] = self.np_random.uniform(utils.MU_MIN, utils.MU_MAX)
 
             btm_xy = utils.perturb(self.np_random, [self.tx_act, self.ty_act], 0.015)
-            btm_xyz = np.array(list(btm_xy) + [self.tz_act / 2.0])
+            btm_xyz = list(np.array(list(btm_xy) + [self.tz_act / 2.0]))
 
             btm_quat = p.getQuaternionFromEuler([0., 0., self.np_random.uniform(low=0, high=2.0 * math.pi)])
             bo['id'] = utils.create_sym_prim_shape_helper(bo, btm_xyz, btm_quat)
+
+            # https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/examples/constraint.py#L11
+            cid = p.createConstraint(bo['id'], -1, -1, -1, p.JOINT_FIXED, [0, 0, 0], [0, 0, 0],
+                                     childFramePosition=btm_xyz,
+                                     childFrameOrientation=btm_quat)
 
         to = self.top_obj
         shape_ind = self.np_random.randint(2) if self.random_top_shape else self.det_top_shape_ind
@@ -405,8 +410,10 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(top_pos)), 0.5)
         reward += -dist * 2.0       # TODO: is this necessary?
 
-        top_xyz_ideal = np.array([self.tx_act, self.ty_act, self.tz_act + self.top_obj['height'] / 2.0 + 0.05])
-        reward += -np.minimum(np.linalg.norm(top_xyz_ideal - np.array(top_pos)), 0.4) * 6.0    # TODO
+        # top_xyz_ideal = np.array([self.tx_act, self.ty_act, self.tz_act + self.top_obj['height'] / 2.0 + 0.05])
+        # reward += -np.minimum(np.linalg.norm(top_xyz_ideal - np.array(top_pos)), 0.4) * 6.0    # TODO
+        top_xy_ideal = np.array([self.tx_act, self.ty_act])
+        reward += -np.minimum(np.linalg.norm(top_xy_ideal - np.array(top_pos[:2])), 0.4) * 6.0    # TODO
 
         for i in self.robot.fin_tips[:4]:
             tip_pos = p.getLinkState(self.robot.arm_id, i)[0]

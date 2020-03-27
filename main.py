@@ -68,6 +68,8 @@ def main():
 
     dummy = gym.make(args.env_name, renders=False, **extra_dict)
     save_path = os.path.join(args.save_dir, args.algo)
+    print("SAVE PATH:")
+    print(save_path)
     try:
         os.makedirs(save_path)
     except FileExistsError:
