@@ -169,6 +169,13 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         # print(self.init_states[51])
         # print(self.init_states[89])
 
+        # Instantiate a state saver if requested.
+        self.save_states = save_states
+        if self.save_states:
+            self.state_saver = StateSaver(
+                out_dir="/home/michelle/mguo/data/states/partial/placing"
+            )
+
         self.reset()  # and update init obs
 
         action_dim = len(self.action_scale)
@@ -184,6 +191,18 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         )
 
     def reset_robot_top_object_from_sample(self, arm_q):
+        """
+        Returns:
+            to: A dictionary of the top object, with the format:
+                {
+                    "id": <id>,
+                    "shape": <shape>,
+                    "half_width": <half_width>,
+                    "height": <height>,
+                    "mass": <mass>,
+                    "mu": <mu>,
+                }
+        """
         while True:
             ran_ind = int(
                 self.np_random.uniform(low=0, high=len(self.init_states) - 0.1)
@@ -245,7 +264,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                 self.t_pos, self.t_orn = o_pos, o_quat
                 self.last_t_pos, self.last_t_orn = o_pos, o_quat
 
-                return
+                return to
 
     def sample_valid_arm_q(self):
         while True:
@@ -349,11 +368,18 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
             self.b_pos, self.b_orn = btm_xyz, btm_quat
             self.last_b_pos, self.last_b_orn = btm_xyz, btm_quat
 
-        self.reset_robot_top_object_from_sample(arm_q)
+        to = self.reset_robot_top_object_from_sample(arm_q)
 
         p.stepSimulation()  # TODO
 
         self.observation = self.getExtendedObservation()
+
+        if self.save_states:
+            if self.place_floor:
+                odicts = [to]
+            else:
+                odicts = [to, bo]
+            self.state_saver.track(odicts=odicts, robot_id=self.robot.arm_id)
 
         return np.array(self.observation)
 
@@ -472,6 +498,9 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         # print("r_total", reward)
 
         obs = self.getExtendedObservation()
+
+        if self.save_states:
+            self.state_saver.save_state()
 
         return obs, reward, False, {}
 

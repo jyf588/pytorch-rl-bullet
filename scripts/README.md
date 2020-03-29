@@ -3,14 +3,17 @@
 Step 1. Generate states for planning and placing.
 
 ```
-# First, generate states for various stages of manipulation. (ETA: XX:XX)
+# First, generate states for planning and stacking. (ETA: XX:XX)
 ./scripts/states/planning_v003.sh  # TODO
 ./scripts/states/stacking_v003_box.sh
 ./scripts/states/stacking_v003_cyl.sh
 
-# Next, complete the placing states by randomly assigning values to attributes 
-that are missing from the states. (ETA: 15 seconds)
+# Next, complete the stacking states by assigning values to attributes that are
+missing from the states (e.g., color, object ID). (ETA: 15 seconds)
 ./scripts/states/complete_states.sh
+
+# Add surrounding objects to the stacking states. (ETA: XX)
+./scripts/states/add_surrounding_states.sh
 
 # Subsample and merge into a single set of states. (ETA: 1 second)
 ./scripts/states/combine.sh
