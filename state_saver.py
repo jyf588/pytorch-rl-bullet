@@ -3,8 +3,8 @@
 Generated output structure:
     <args.out_dir>/
         <sid>.p = {
-            "objects": {
-                <oid>: {
+            "objects": [
+                {
                     "shape": <shape>,
                     "color": <color>,
                     "radius": <radius>,
@@ -13,7 +13,7 @@ Generated output structure:
                     "orientation": <orientation>
                 },
                 ...
-            },
+            ],
             "robot": {
                 <joint_name>: <joint_angle>,
                 ...
@@ -117,12 +117,12 @@ class StateSaver:
         """
         Queries bullet for the current state of tracked objects and robot.
         """
-        oid2state = self.get_object_states()
+        object_states = self.get_object_states()
         robot_state = self.get_robot_state()
 
         # Combine in a state dictionary.
         state = {
-            "objects": oid2state,
+            "objects": object_states,
             "robot": robot_state,
         }
 
@@ -132,28 +132,31 @@ class StateSaver:
         print(f"Saved poses to: {path}")
         self.sid += 1
 
-    def get_object_states(self) -> Dict[int, Dict]:
+    def get_object_states(self) -> List[Dict]:
         """Updates object states.
         
         Returns:
-            oid2state: A dictionary with the following format:
-                {
-                    <oid>: {
+            object_states: A list of object state dictionaries with the format:
+                [
+                    {
                         "shape": <shape>,
                         "color": <color>,
                         "radius": <radius>,
                         "height": <height>,
                         "position": <position>,
                         "orientation": <orientation>
-                    }
-                }
+                    },
+                    ...
+                ]
         """
-        oid2state = copy.deepcopy(self.oid2attr)
-        for oid in self.oid2attr.keys():
+        object_states = []
+        for oid, attr in self.oid2attr.items():
+            state = copy.deepcopy(attr)
             position, orientation = p.getBasePositionAndOrientation(oid)
-            oid2state[oid]["position"] = position
-            oid2state[oid]["orientation"] = orientation
-        return oid2state
+            state["position"] = position
+            state["orientation"] = orientation
+            object_states.append(state)
+        return object_states
 
     def get_robot_state(self) -> Dict[str, float]:
         """Updates robot states.

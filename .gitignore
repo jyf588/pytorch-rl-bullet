@@ -107,3 +107,5 @@ baselines/
 .idea/
 .fuse_hidden*
 train_*.sh
+
+.vscode/
