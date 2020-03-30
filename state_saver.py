@@ -28,7 +28,7 @@ import pybullet as p
 from typing import *
 
 import my_pybullet_envs
-import ns_vqa_dart.bullet.util as util
+# import ns_vqa_dart.bullet.util as util
 
 
 class StateSaver:
@@ -128,7 +128,7 @@ class StateSaver:
 
         # Save into a pickle file.
         path = os.path.join(self.out_dir, f"{self.sid:06}.p")
-        util.save_pickle(path=path, data=state)
+        my_pybullet_envs.utils.save_pickle(path=path, data=state)
         print(f"Saved poses to: {path}")
         self.sid += 1
 

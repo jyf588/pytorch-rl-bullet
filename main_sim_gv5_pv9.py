@@ -30,6 +30,9 @@ from my_pybullet_envs.inmoov_shadow_demo_env_v4 import (
     InmoovShadowHandDemoEnvV4,
 )
 
+# TODO; deprecate posesaver
+
+
 no_vision = False
 try:
     from ns_vqa_dart.bullet.state_saver import StateSaver
@@ -37,7 +40,7 @@ try:
     import ns_vqa_dart.bullet.util as util
 except ImportError:
     no_vision = True
-from pose_saver import PoseSaver
+# from pose_saver import PoseSaver
 
 currentdir = os.path.dirname(
     os.path.abspath(inspect.getfile(inspect.currentframe()))
@@ -76,7 +79,7 @@ parser.add_argument("--size", type=str, help="Shape of top size.")
 args = parser.parse_args()
 args.det = not args.non_det
 
-# np.random.seed(args.seed)     # turn this off so each scene will have different random shapes
+# np.random.seed(11)     # turn this off so each scene will have different random shapes
 
 """Configurations."""
 
@@ -185,7 +188,7 @@ PLACING_CONTROL_SKIP = 6
 GRASPING_CONTROL_SKIP = 6
 
 
-def planning(Traj, recurrent_hidden_states, masks, pose_saver):
+def planning(Traj, recurrent_hidden_states, masks, pose_saver=None):
     print("end of traj", Traj[-1, 0:7])
     for ind in range(0, len(Traj)):
         tar_armq = Traj[ind, 0:7]
@@ -193,14 +196,14 @@ def planning(Traj, recurrent_hidden_states, masks, pose_saver):
         env_core.robot.apply_action([0.0] * 24)
         p.stepSimulation()
         time.sleep(TS)
-        pose_saver.get_poses()
+        # pose_saver.get_poses()
 
     for _ in range(50):
         # print(env_core.robot.tar_arm_q)
         env_core.robot.tar_arm_q = tar_armq
         env_core.robot.apply_action([0.0] * 24)  # stay still for a while
         p.stepSimulation()
-        pose_saver.get_poses()
+        # pose_saver.get_poses()
         # print("act", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
     #     #time.sleep(1. / 240.)
 
@@ -560,13 +563,13 @@ construct_bullet_scene(gt_odicts, gt_odicts_internal)
 top_oid = gt_odicts_internal[top_obj_idx]["id"]
 btm_oid = gt_odicts_internal[btm_obj_idx]["id"]
 
-# Initialize a PoseSaver to save poses throughout robot execution.
-pose_saver = PoseSaver(
-    path=args.pose_path,
-    odicts=gt_odicts_internal,
-    # oids=[gt_odict_new["id"] for gt_odict_new in gt_odicts_internal],
-    robot_id=env_core.robot.arm_id,
-)
+# # Initialize a PoseSaver to save poses throughout robot execution.
+# pose_saver = PoseSaver(
+#     path=args.pose_path,
+#     odicts=gt_odicts_internal,
+#     # oids=[gt_odict_new["id"] for gt_odict_new in gt_odicts_internal],
+#     robot_id=env_core.robot.arm_id,
+# )
 
 """Prepare for grasping. Reach for the object."""
 
@@ -577,14 +580,14 @@ Traj_reach = get_traj_from_openrave_container(
     OBJECTS, None, Qreach, reach_save_path, reach_read_path
 )
 
-planning(Traj_reach, recurrent_hidden_states, masks, pose_saver)
+planning(Traj_reach, recurrent_hidden_states, masks)
 # input("press enter")
 # env_core.robot.reset_with_certain_arm_q(Qreach)
 # input("press enter 2")
 
-pose_saver.get_poses()
-print(f"Pose after reset")
-pprint.pprint(pose_saver.poses[-1])
+# pose_saver.get_poses()
+# print(f"Pose after reset")
+# pprint.pprint(pose_saver.poses[-1])
 
 g_obs = env_core.get_robot_contact_txty_halfh_obs_nodup(g_tx, g_ty, g_half_h)
 g_obs = wrap_over_grasp_obs(g_obs)
@@ -609,10 +612,10 @@ for i in range(GRASP_END_STEP):
     # control_steps += 1
     # input("press enter g_obs")
     masks.fill_(1.0)
-    pose_saver.get_poses()
+    # pose_saver.get_poses()
 
-print(f"Pose after grasping")
-pprint.pprint(pose_saver.poses[-1])
+# print(f"Pose after grasping")
+# pprint.pprint(pose_saver.poses[-1])
 
 final_g_obs = copy.copy(g_obs)
 del g_obs, g_tx, g_ty, g_actor_critic, g_ob_rms, g_half_h
@@ -633,16 +636,16 @@ Traj_move = get_traj_from_openrave_container(
 )
 
 """Execute planned moving trajectory"""
-planning(Traj_move, recurrent_hidden_states, masks, pose_saver)
+planning(Traj_move, recurrent_hidden_states, masks)
 print("after moving", get_relative_state_for_reset(top_oid))
 print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
 # input("after moving")
 
 print("palm", env_core.robot.get_link_pos_quat(env_core.robot.ee_id))
 
-pose_saver.get_poses()
-print(f"Pose before placing")
-pprint.pprint(pose_saver.poses[-1])
+# pose_saver.get_poses()
+# print(f"Pose before placing")
+# pprint.pprint(pose_saver.poses[-1])
 
 """Prepare for placing"""
 env_core.change_control_skip_scaling(c_skip=PLACING_CONTROL_SKIP)
@@ -792,20 +795,20 @@ for i in tqdm(range(PLACE_END_STEP)):
     # input("press enter g_obs")
 
     masks.fill_(1.0)
-    pose_saver.get_poses()
+    # pose_saver.get_poses()
 
-print(f"Pose after placing")
-pprint.pprint(pose_saver.poses[-1])
+# print(f"Pose after placing")
+# pprint.pprint(pose_saver.poses[-1])
 
 print(f"Starting release trajectory")
 # execute_release_traj()
 for ind in range(0, 100):
     p.stepSimulation()
     time.sleep(TS)
-    pose_saver.get_poses()
+    # pose_saver.get_poses()
 
-if SAVE_POSES:
-    pose_saver.save()
+# if SAVE_POSES:
+#     pose_saver.save()
 
 if USE_VISION_MODULE:
     initial_vision_module.close()
