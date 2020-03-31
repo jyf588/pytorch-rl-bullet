@@ -34,10 +34,13 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
                  n_best_cand=2,
 
                  has_test_phase=True,
+                 warm_start_phase=False,
                  ):
         self.renders = renders
         self.init_noise = init_noise
         self.up = up
+
+        self.warm_start = warm_start_phase
 
         self.random_top_shape = random_top_shape
         self.det_top_shape_ind = det_top_shape_ind
@@ -133,8 +136,14 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         p.setGravity(0, 0, -10)
         self.timer = 0
 
-        if self.cotrain_onstack_grasp:
-            self.grasp_floor = self.np_random.randint(10) > 5   # 40%, TODO
+        # if self.cotrain_onstack_grasp:
+        #     self.grasp_floor = self.np_random.randint(10) > 5
+        if self.warm_start:
+            if self.cotrain_onstack_grasp:
+                self.grasp_floor = self.np_random.randint(10) >= 7  # 30%, TODO
+        else:
+            if self.cotrain_onstack_grasp:
+                self.grasp_floor = self.np_random.randint(10) >= 6  # 40%, TODO
 
         self.table_id = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), utils.TABLE_OFFSET,
                                    useFixedBase=1)
@@ -162,10 +171,11 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
             btm_quat = p.getQuaternionFromEuler([0., 0., self.np_random.uniform(low=0, high=2.0 * math.pi)])
             bo['id'] = utils.create_sym_prim_shape_helper(bo, btm_xyz, btm_quat)
 
-            # https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/examples/constraint.py#L11
-            _ = p.createConstraint(bo['id'], -1, -1, -1, p.JOINT_FIXED, [0, 0, 0], [0, 0, 0],
-                                   childFramePosition=btm_xyz,
-                                   childFrameOrientation=btm_quat)
+            if not self.warm_start:
+                # https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/examples/constraint.py#L11
+                _ = p.createConstraint(bo['id'], -1, -1, -1, p.JOINT_FIXED, [0, 0, 0], [0, 0, 0],
+                                       childFramePosition=btm_xyz,
+                                       childFrameOrientation=btm_quat)
 
         to = self.top_obj
         shape_ind = self.np_random.randint(2) if self.random_top_shape else self.det_top_shape_ind
@@ -200,18 +210,22 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         bottom_id = self.table_id if self.grasp_floor else self.btm_obj['id']
 
         if self.has_test_phase:
-            # if self.timer == self.test_start * self.control_skip:
-            #     self.force_global = [self.np_random.uniform(-100, 100),
-            #                          self.np_random.uniform(-100, 100),
-            #                          -200.]
+            if self.warm_start:
+                if self.timer == self.test_start * self.control_skip:
+                    self.force_global = [self.np_random.uniform(-100, 100),
+                                         self.np_random.uniform(-100, 100),
+                                         -200.]
+            else:
+                self.force_global = [0., 0, 0]
+
             if self.timer > self.test_start * self.control_skip:
                 p.setCollisionFilterPair(self.top_obj['id'], bottom_id, -1, -1, enableCollision=0)
                 # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
                 #     p.setCollisionFilterPair(self.floorId, self.robot.arm_id, -1, i, enableCollision=0)
-                # _, quat = p.getBasePositionAndOrientation(self.top_obj['id'])
-                # _, quat_inv = p.invertTransform([0, 0, 0], quat)
-                # force_local, _ = p.multiplyTransforms([0, 0, 0], quat_inv, self.force_global, [0, 0, 0, 1])
-                # p.applyExternalForce(self.top_obj['id'], -1, force_local, [0, 0, 0], flags=p.LINK_FRAME)
+                _, quat = p.getBasePositionAndOrientation(self.top_obj['id'])
+                _, quat_inv = p.invertTransform([0, 0, 0], quat)
+                force_local, _ = p.multiplyTransforms([0, 0, 0], quat_inv, self.force_global, [0, 0, 0, 1])
+                p.applyExternalForce(self.top_obj['id'], -1, force_local, [0, 0, 0], flags=p.LINK_FRAME)
 
         for _ in range(self.control_skip):
             # action is in -1,1
@@ -250,11 +264,20 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         tip_pos = p.getLinkState(self.robot.arm_id, self.robot.fin_tips[4])[0]      # thumb tip
         reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(top_pos)), 0.5) * 5.0
 
-        # # not used when grasp from floor
-        # btm_vels = p.getBaseVelocity(bottom_id)
-        # btm_linv = np.array(btm_vels[0])
-        # btm_angv = np.array(btm_vels[1])
-        # reward += np.maximum(-np.linalg.norm(btm_linv) - np.linalg.norm(btm_angv) / 2.0, -10.0) * 1.0
+        if self.warm_start:
+            # not used when grasp from floor
+            _, btm_quat = p.getBasePositionAndOrientation(bottom_id)
+
+            btm_vels = p.getBaseVelocity(bottom_id)
+            btm_linv = np.array(btm_vels[0])
+            btm_angv = np.array(btm_vels[1])
+            reward += np.maximum(-np.linalg.norm(btm_linv) - np.linalg.norm(btm_angv) / 2.0, -10.0) * 1.0
+
+            z_axis, _ = p.multiplyTransforms(
+                [0, 0, 0], btm_quat, [0, 0, 1], [0, 0, 0, 1]
+            )  # R_cl * unitz[0,0,1]
+            rot_metric = np.array(z_axis).dot(np.array([0, 0, 1]))
+            reward += np.maximum(rot_metric * 20 - 15, 0.0) * 3
 
         cps = p.getContactPoints(self.top_obj['id'], self.robot.arm_id, -1, self.robot.ee_id)    # palm
         if len(cps) > 0:
