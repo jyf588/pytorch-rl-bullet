@@ -89,7 +89,7 @@ class InmoovShadowNew:
         # fin_init =   [0.21269122473773142,   1.2217305056102568,  0.2094395103670277,  -0.6981316630905725,  1.8797404688696039e-06,]
         #
         # self.init_fin_q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + fin_init )
-        self.init_fin_q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.0])
+        self.init_fin_q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.1])
         self.tar_arm_q = np.zeros(len(self.arm_dofs))       # dummy
         self.tar_fin_q = np.zeros(len(self.fin_actdofs))
 
@@ -271,6 +271,10 @@ class InmoovShadowNew:
         diff_arm = np.array(self.tar_arm_q) - self.get_q_dq(self.arm_dofs)[0]
         return np.linalg.norm(np.concatenate((diff_fin, diff_arm)))
 
+    def get_norm_diff_tar_arm(self):
+        diff_arm = np.array(self.tar_arm_q) - self.get_q_dq(self.arm_dofs)[0]
+        return np.linalg.norm(diff_arm)
+
     def get_robot_observation(self, withVel=False, diff_tar=False):
         obs = []
 
@@ -288,6 +292,7 @@ class InmoovShadowNew:
         obs.extend(list(a_q))
         obs.extend(list(a_dq))
         obs.extend(list(self.get_q_dq(self.fin_actdofs)[0]))    # no finger vel
+        # print("thumb", self.get_q_dq(self.fin_actdofs)[0][-5:])
 
         # tar pos
         if diff_tar:

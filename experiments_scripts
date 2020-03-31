@@ -1610,21 +1610,71 @@ python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --l
 # revert jl
 python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_6_n --seed 10006 --up 1 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2
 
-
+3/27 20:08
+# TXTY back to -0.1 0.5
 # add a constraint
 # change floor back
-python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_7_n --seed 10007 --up 1 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2
+python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_8_n --seed 10008 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2
+python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_9_n --seed 10009 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2
+# try placing again
+# exclude hard
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 300 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_2_placeco_0316_6  --seed 8170 --random_top_shape 1 --cotrain_stack_place 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 1 --n_best_cand 2
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 300 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0313_2_placeco_0316_7  --seed 8171 --random_top_shape 1 --cotrain_stack_place 1 --obs_noise 0 --control_skip 6 --vision_skip 2 --exclude_hard 1 --n_best_cand 2
+3/29 00:44
+# 0329.sh
+# remove constraint and warm-start
 
 
-(# grasping: penalize arm movement after certain time. lower obj pen.
-# should try different batch size for placing. maybe shorten the horizon. (test-thres need to be changed accordingly.)
-# try train with hard orn.)
+3/29 11:00
+# btm 0.3->0.6 (not used during btm fixed pre-training)
+# add control regularize:
+        reward = 0.0
 
-# GRASPING & PLACING:
-# TODO: make a non-square range of txty, this seems matter as well
-# TODO: may want to change range of object size (short/fat)
-# TODO: some of init arm pose collide with table at forearm...
-# TODO: grasp from top of stack..
+        diff_norm = self.robot.get_norm_diff_tar_arm()
+        reward += 5. / (diff_norm + 1.)
+# btm fixed pre-training
+python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_10_n --seed 10015 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2
+
+3/29 15:50
+#         reward = 0.0
+
+        diff_norm = self.robot.get_norm_diff_tar_arm() * 50
+        reward += np.maximum(5. - diff_norm, 0)
+python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_11_n --seed 10016 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2
+
+3/29 22:19
+# try again
+        reward = 0.0
+
+        diff_norm = self.robot.get_norm_diff_tar_arm() * 20
+        reward += np.maximum(2. - diff_norm, 0)
+python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_12_n --seed 10017 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2
+
+3/30 00:00
+# try without fixed base
+python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_13_n --seed 10018 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2
+# not working...
+
+3/30 11:00
+# fixed base pretrain # 50% cid
+# add perturbation force back
+# btm vel pen 1.0
+# diff_norm *20-->*10
+
+python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 650 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_14_n --seed 10019 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2
+python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 650 --num-processes 8  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_15_n --seed 10020 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2
+
+
+3/30 17:00
+# fixed-btm stack grasping
+# diff_norm * 10
+# thumb distal 0.1
+# no perturbation force
+
+python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 520 --num-processes 10  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 10000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_16_n --seed 10021 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2
+python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 520 --num-processes 10  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 10000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_17_n --seed 10022 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2
+
+
 
 # whole system issues:
 # TODO: large obj collide during transporting --> make a large BB, move up & move down

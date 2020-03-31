@@ -1,5 +1,8 @@
 import numpy as np
 import pybullet as p
+import os
+import pickle
+from typing import *
 
 PLACE_START_CLEARANCE = 0.14
 
@@ -34,8 +37,8 @@ H_MAX = 0.18
 
 TX_MIN = -0.1
 TX_MAX = 0.3
-TY_MIN = -0.15
-TY_MAX = 0.55
+TY_MIN = -0.1
+TY_MAX = 0.5
 
 TABLE_OFFSET = [0.1, 0.2, 0.0]
 # TODO: during training, make table a bit thicker/higher?
@@ -248,6 +251,17 @@ def quat_to_upv(quat):
     rotmat = np.array(p.getMatrixFromQuaternion(quat))
     upv = [rotmat[2], rotmat[5], rotmat[8]]
     return upv
+
+
+def save_pickle(path: str, data: Any):
+    """
+    Args:
+        path: The path of the pickle file to save.
+        data: The data to save.
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        pickle.dump(data, f)
 
 
 # def get_pos_upv_height_from_obj(use_vision, odict):
