@@ -153,8 +153,8 @@ class StateSaver:
         for oid, attr in self.oid2attr.items():
             state = copy.deepcopy(attr)
             position, orientation = p.getBasePositionAndOrientation(oid)
-            state["position"] = position
-            state["orientation"] = orientation
+            state["position"] = list(position)
+            state["orientation"] = list(orientation)
             object_states.append(state)
         return object_states
 
