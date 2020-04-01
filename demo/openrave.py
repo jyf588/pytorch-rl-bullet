@@ -34,8 +34,15 @@ def compute_trajectory(
     """
     name = STAGE2NAME[stage]
 
-    # Extract object positions from the state.
-    object_positions = [o["position"] for o in state["objects"].values()]
+    # Extract object positions from the state. Target comes first.
+    object_positions = []
+    for oid in [1, 0, 2, 3]:
+        position = state["objects"][oid]["position"]
+        position[
+            2
+        ] = 0.0  # Set object z to zero because that's what OR expects.
+        object_positions.append(position)
+    # object_positions = [o["position"] for o in state["objects"].values()]
 
     # Pad a fourth dimension with zero because open rave expects it.
     object_positions = np.array([p + [0.0] for p in object_positions])
@@ -72,6 +79,11 @@ def get_traj_from_openrave_container(
     Returns:
         traj: The trajectory computed by OpenRAVE of shape (200, 7).
     """
+    print("Printing inputs to computing trajectory")
+    print(f"object_positions: {object_positions}")
+    print(f"q_start: {q_start}")
+    print(f"q_end: {q_end}")
+
     if q_start is not None:
         np.savez(save_path, object_positions, q_start, q_end)  # move
     else:
