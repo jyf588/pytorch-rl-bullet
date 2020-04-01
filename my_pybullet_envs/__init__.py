@@ -29,12 +29,12 @@ from .inmoov_shadow_place_env_v7 import InmoovShadowHandPlaceEnvV7
 from .inmoov_shadow_place_env_v9 import InmoovShadowHandPlaceEnvV9
 from .inmoov_shadow_place_env_v6 import InmoovShadowHandPlaceEnvV6
 
-no_vision = False
-try:
-    from .inmoov_shadow_place_env_v8 import InmoovShadowHandPlaceEnvV8
-except ImportError as e:
-    print(e)
-    no_vision = True
+# no_vision = False
+# try:
+#     from .inmoov_shadow_place_env_v8 import InmoovShadowHandPlaceEnvV8
+# except ImportError as e:
+#     print(e)
+no_vision = True
 
 
 def register(id, *args, **kvargs):
@@ -144,8 +144,8 @@ register(
 )
 
 register(
-    id='InmoovHandPlaceBulletEnv-v9',
-    entry_point='my_pybullet_envs:InmoovShadowHandPlaceEnvV9',
+    id="InmoovHandPlaceBulletEnv-v9",
+    entry_point="my_pybullet_envs:InmoovShadowHandPlaceEnvV9",
     max_episode_steps=100,
 )
 
@@ -205,4 +205,3 @@ def getList():
         if spec.id.find("Bullet") >= 0
     ]
     return btenvs
-

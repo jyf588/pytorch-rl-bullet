@@ -20,7 +20,8 @@ currentdir = os.path.dirname(
 
 from ns_vqa_dart.bullet.dash_object import DashObject, DashTable
 from ns_vqa_dart.bullet.renderer import BulletRenderer
-from ns_vqa_dart.bullet.state_saver import StateSaver
+
+# from ns_vqa_dart.bullet.state_saver import StateSaver
 from ns_vqa_dart.bullet.vision_inference import VisionInference
 import ns_vqa_dart.bullet.util
 
