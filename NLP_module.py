@@ -6,6 +6,39 @@ Created on Fri Jan 17 10:59:40 2020
 @author: yannis
 """
 
+# TODO:
+# multiple names for single shape
+# multiple names for verb
+# test on, on top of, right, to the right side of, etc.
+# remove size
+
+# define scope:
+# one verb, one target object, one destination object (2 or if between B and C)
+# Since multiple "blue ball"s may exist, both target and desti obj should be able to have one modifier obj
+# Since multiple "blue ball"s may exist, both target and desti obj should handle "leftmost" & "rightmost"
+# -- "Put the red box right to the blue ball that is on the left" (?)
+# will not include shape (smaller/ larger) since there are boxes that are taller but thinner than another
+
+
+# infer place floor or not
+#   infer btm obj idx
+# infer target obj idx & target xyz
+#
+# idx here means
+# infer the shape of target obj (may not be necessary if mixed shape pi)
+
+# Input 1, a list of obj dicts without any order (gt or vision, should have fields "shape", "color", (init)"position", "height")
+# Input 2, the sentence
+# Output 1, idx (wrt Input 1) of the obj to be manipulated
+# Output 2, destination x and y
+# Output 3, idx (wrt Input 1) of the obj to be stacked on (None if placing on floor)
+
+
+# Note:
+# Build structured OBJECTS list in which first entry is the target object
+# looks like this code assumes 1st obj in sentence to be pick_obj, 2nd (and 3rd if "between") to be desti_obj
+# modifier objs are later
+# do not seem to handle right to & behind of
 
 import spacy
 from nltk import Tree
@@ -26,21 +59,24 @@ def PlotTree(doc):
     [to_nltk_tree(sent.root).pretty_print() for sent in doc.sents]
 
 
-def NLPmod(sentence, Vision_output):
+def NLPmod(sentence, vision_output):
     """
     Args:
         sentence: The sentence to parse.
-        Vision_output: Object dictionaries.
+        vision_output: a list of obj dicts without any order (gt or vision)
+             should have fields "shape", "color", (init)"position", "height" (not used in this module)
     
     Returns:
-        Object_coord: xyz position coordinates of all the objects.
-        target_xyz: The xyz position of the target object.
+        pick_idx: idx (wrt Input 1) of the obj to be manipulated
+        dest_xy: destination [x, y] in world frame
+        stack_idx: idx (wrt Input 1) of the obj to be stacked on, None if placing on floor at (x, y)
     """
+
     nlp = spacy.load("en_core_web_sm")
     doc = nlp(sentence)
     Color_list = ["red", "green", "blue", "yellow", "grey"]
     Shape_list = ["square", "box", "block", "cylinder", "ball"]
-    Size_list = ["small", "smaller", "big", "bigger", "large", "larger"]
+    # Size_list = ["small", "smaller", "big", "bigger", "large", "larger"]
     Relation_list = ["right", "left", "behind", "front", "top", "between"]
 
     target_object = {}
@@ -82,7 +118,10 @@ def NLPmod(sentence, Vision_output):
         return attribute
 
     i = 0
+    print(doc)
     for token in doc:
+        # TODO: this is saying searching from left to right
+
         if token.pos_ == "VERB":
             # print('Found the verb! i = ', i)
             target_object["shape"] = search_dep_tree_of_token(
@@ -91,7 +130,7 @@ def NLPmod(sentence, Vision_output):
             target_object["color"] = search_dep_tree_of_token(
                 token, Color_list
             )
-            target_object["size"] = search_dep_tree_of_token(token, Size_list)
+            # target_object["size"] = search_dep_tree_of_token(token, Size_list)
 
         if token.text in Relation_list:
             # print('Found the relation! i = ', i)
@@ -101,21 +140,25 @@ def NLPmod(sentence, Vision_output):
                 reference_object2 = {}
                 shapes = search_dep_tree_of_token_multi(token, Shape_list)
                 colors = search_dep_tree_of_token_multi(token, Color_list)
-                sizes = search_dep_tree_of_token_multi(token, Size_list)
+                # sizes = search_dep_tree_of_token_multi(token, Size_list)
 
                 reference_object1["shape"] = shapes[0]
                 reference_object2["shape"] = shapes[1]
                 reference_object1["color"] = colors[0]
                 reference_object2["color"] = colors[1]
-                if sizes:
-                    reference_object1["size"] = sizes[0]
-                    reference_object2["size"] = sizes[1]
-                else:
-                    reference_object1["size"] = None
-                    reference_object2["size"] = None
-                    reference_objects.append(
-                        [reference_object1, reference_object2]
-                    )
+
+                reference_objects.append(
+                    [reference_object1, reference_object2]
+                )
+                # if sizes:
+                #     reference_object1["size"] = sizes[0]
+                #     reference_object2["size"] = sizes[1]
+                # else:
+                #     reference_object1["size"] = None
+                #     reference_object2["size"] = None
+                #     reference_objects.append(
+                #         [reference_object1, reference_object2]
+                #     )
 
             else:
                 reference_object = {}
@@ -126,9 +169,9 @@ def NLPmod(sentence, Vision_output):
                 reference_object["color"] = search_dep_tree_of_token(
                     token, Color_list
                 )
-                reference_object["size"] = search_dep_tree_of_token(
-                    token, Size_list
-                )
+                # reference_object["size"] = search_dep_tree_of_token(
+                #     token, Size_list
+                # )
                 reference_objects.append(reference_object)
 
         i = i + 1
@@ -141,18 +184,19 @@ def NLPmod(sentence, Vision_output):
 
     def Parse_objects(querry, Object_list):
         object_index = []
-        for i in range(len(Vision_output)):
+        for i in range(len(vision_output)):
             if (
-                querry["shape"] == Vision_output[i]["shape"]
-                and querry["color"] == Vision_output[i]["color"]
+                querry["shape"] == vision_output[i]["shape"]
+                and querry["color"] == vision_output[i]["color"]
             ):
                 object_index = object_index + [i]
         if not object_index:
             print("No object of matching description found.")
+            exit()
         return object_index
 
     # First, get the target object ID
-    target_ID = Parse_objects(target_object, Vision_output)
+    target_ID = Parse_objects(target_object, vision_output)
     print("Target ID:", target_ID)
     # Then, get the reference object ID. There might be more than one fitting the description!
     reference_ID = []
@@ -160,9 +204,9 @@ def NLPmod(sentence, Vision_output):
         if relation[i] == "between":
             ID = []
             for j in range(len(reference_objects[i])):
-                ID = ID + Parse_objects(reference_objects[i][j], Vision_output)
+                ID = ID + Parse_objects(reference_objects[i][j], vision_output)
         else:
-            ID = Parse_objects(reference_objects[i], Vision_output)
+            ID = Parse_objects(reference_objects[i], vision_output)
         reference_ID.append(ID)
     print("Reference IDs: ", reference_ID)
 
@@ -173,56 +217,56 @@ def NLPmod(sentence, Vision_output):
         if relation[1] == "right":
             for i in range(mult):
                 if (
-                    Vision_output[reference_ID[0][i]]["position"][1]
-                    < Vision_output[reference_ID[1][0]]["position"][1]
+                    vision_output[reference_ID[0][i]]["position"][1]
+                    < vision_output[reference_ID[1][0]]["position"][1]
                 ):
                     flag[i] = 1
         if relation[1] == "left":
             for i in range(mult):
                 if (
-                    Vision_output[reference_ID[0][i]]["position"][1]
-                    > Vision_output[reference_ID[1][0]]["position"][1]
+                    vision_output[reference_ID[0][i]]["position"][1]
+                    > vision_output[reference_ID[1][0]]["position"][1]
                 ):
                     flag[i] = 1
         if relation[1] == "front":
             for i in range(mult):
                 if (
-                    Vision_output[reference_ID[0][i]]["position"][0]
-                    < Vision_output[reference_ID[1][0]]["position"][0]
+                    vision_output[reference_ID[0][i]]["position"][0]
+                    < vision_output[reference_ID[1][0]]["position"][0]
                 ):
                     flag[i] = 1
         if relation[1] == "behind":
             for i in range(mult):
                 if (
-                    Vision_output[reference_ID[0][i]]["position"][0]
-                    > Vision_output[reference_ID[1][0]]["position"][0]
+                    vision_output[reference_ID[0][i]]["position"][0]
+                    > vision_output[reference_ID[1][0]]["position"][0]
                 ):
                     flag[i] = 1
         if relation[1] == "between":
             max_x = max(
-                Vision_output[reference_ID[1][0]]["position"][0],
-                Vision_output[reference_ID[1][1]]["position"][0],
+                vision_output[reference_ID[1][0]]["position"][0],
+                vision_output[reference_ID[1][1]]["position"][0],
             )
             min_x = min(
-                Vision_output[reference_ID[1][0]]["position"][0],
-                Vision_output[reference_ID[1][1]]["position"][0],
+                vision_output[reference_ID[1][0]]["position"][0],
+                vision_output[reference_ID[1][1]]["position"][0],
             )
             max_y = max(
-                Vision_output[reference_ID[1][0]]["position"][1],
-                Vision_output[reference_ID[1][1]]["position"][1],
+                vision_output[reference_ID[1][0]]["position"][1],
+                vision_output[reference_ID[1][1]]["position"][1],
             )
             min_y = min(
-                Vision_output[reference_ID[1][0]]["position"][1],
-                Vision_output[reference_ID[1][1]]["position"][1],
+                vision_output[reference_ID[1][0]]["position"][1],
+                vision_output[reference_ID[1][1]]["position"][1],
             )
             for i in range(mult):
                 if (
-                    Vision_output[reference_ID[0][i]]["position"][0] > min_x
-                    and Vision_output[reference_ID[0][i]]["position"][0]
+                    vision_output[reference_ID[0][i]]["position"][0] > min_x
+                    and vision_output[reference_ID[0][i]]["position"][0]
                     < max_x
-                    and Vision_output[reference_ID[0][i]]["position"][1]
+                    and vision_output[reference_ID[0][i]]["position"][1]
                     > min_y
-                    and Vision_output[reference_ID[0][i]]["position"][1]
+                    and vision_output[reference_ID[0][i]]["position"][1]
                     < max_y
                 ):
                     flag[i] = 1
@@ -276,29 +320,61 @@ def NLPmod(sentence, Vision_output):
         return target_xyz
 
     target_xyz = obtain_target_loc_coordinates(
-        reference_ID, Vision_output, relation
+        reference_ID, vision_output, relation
     )
     print("--------")
     print(target_xyz)
     # Build structured OBJECTS list in which first entry is the target object
-    OBJECT_coord = np.array([Vision_output[target_ID[0]]["position"]])
-    for i in range(len(Vision_output)):
+    OBJECT_coord = np.array([vision_output[target_ID[0]]["position"]])
+    for i in range(len(vision_output)):
         if i != target_ID[0]:
             OBJECT_coord = np.concatenate(
-                (OBJECT_coord, np.array([Vision_output[i]["position"]]))
+                (OBJECT_coord, np.array([vision_output[i]["position"]]))
             )
     return OBJECT_coord, target_xyz
 
 
 if __name__ == "__main__":
-    sentence = "Put the smaller red block between the blue ball and yellow box"
+    # sentence = "Put the red box between the blue ball and yellow box"
+    # obj1 = {
+    #     "shape": "box",
+    #     "color": "yellow",
+    #     "position": np.array([1.0, 0.5, 0, 0]),
+    # }  # ref 1
+    # obj2 = {
+    #     "shape": "box",
+    #     "color": "red",
+    #     "position": np.array([0.0, 0.0, 0, 0]),
+    # }  # target
+    # obj3 = {
+    #     "shape": "ball",
+    #     "color": "blue",
+    #     "position": np.array([0.0, 1, 0, 0]),
+    # }  # ref 2
+    # obj4 = {
+    #     "shape": "ball",
+    #     "color": "yellow",
+    #     "position": np.array([0.8, 0.5, 0, 0]),
+    # }  # irrelevant
+    # Vision_output = [obj1, obj2, obj3, obj4]
+    # [OBJECTS, dest] = NLPmod(sentence=sentence, vision_output=Vision_output)
+
+    # "Put the red box right to the blue ball" two matching - error.
+    sentence = "Put the red box right to the blue ball behind the yellow box"
+    # # sentence = "Put the red box right to the blue ball that is behind the yellow box"   # same as above
+    # # sentence = "Put the red box that is right to the blue ball behind the yellow box"       # wrong(?) behavior
+    # # for the above, the parsing is not expected already
+    # # if the tree is "correct",
+
+    # sentence = "Place the leftmost red box behind the yellow box"
+
     obj1 = {
-        "shape": "box",
-        "color": "yellow",
+        "shape": "ball",
+        "color": "blue",
         "position": np.array([1.0, 0.5, 0, 0]),
     }  # ref 1
     obj2 = {
-        "shape": "block",
+        "shape": "box",
         "color": "red",
         "position": np.array([0.0, 0.0, 0, 0]),
     }  # target
@@ -308,10 +384,11 @@ if __name__ == "__main__":
         "position": np.array([0.0, 1, 0, 0]),
     }  # ref 2
     obj4 = {
-        "shape": "ball",
+        "shape": "box",
         "color": "yellow",
         "position": np.array([0.8, 0.5, 0, 0]),
     }  # irrelevant
     Vision_output = [obj1, obj2, obj3, obj4]
-    [OBJECTS, dest] = NLPmod(sentence=sentence, Vision_output=Vision_output)
+    [OBJECTS, dest] = NLPmod(sentence=sentence, vision_output=Vision_output)
+
 
