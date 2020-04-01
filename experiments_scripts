@@ -1674,6 +1674,14 @@ python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --l
 python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 520 --num-processes 10  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 10000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_16_n --seed 10021 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2
 python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 520 --num-processes 10  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 10000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_17_n --seed 10022 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2
 
+np.set_printoptions(precision=3, suppress=True)
+
+3/30 22:23
+# warm start
+python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 520 --num-processes 10  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 10000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_16_n_w0 --seed 10023 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2 --warm_start_phase 1 \
+--warm-start "./trained_models_0325_graspco_16_n/ppo/InmoovHandGraspBulletEnv-v6.pt"
+python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 520 --num-processes 10  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 10000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0325_graspco_16_n_w1 --seed 10024 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2 --warm_start_phase 1 \
+--warm-start "./trained_models_0325_graspco_16_n/ppo/InmoovHandGraspBulletEnv-v6.pt"
 
 
 # whole system issues:
