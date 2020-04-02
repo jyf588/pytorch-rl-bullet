@@ -1737,6 +1737,8 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --l
 # move make table lower than reach -> should be solvable by move up first, but not really necessary
 # ---> cannot make table top higher, unless when PB calculates Qreach, filter out using elevated table. & move up first
 # move table very large -> should also be fine if move up first.
+# reaching/moving: <box size="0.15 0.15 0.18"/>
+# hack: making obstacles smaller (0.2->0.16)
 
 MISC TODO s:
 # TODO: does obj/robot order matter

@@ -6,6 +6,9 @@ from typing import *
 
 PLACE_START_CLEARANCE = 0.14
 
+PALM_POS_OF_INIT = [-0.18, 0.095, 0.11]
+PALM_EULER_OF_INIT = [1.8, -1.57, 0]
+
 SHAPE_IND_MAP = {-1: p.GEOM_SPHERE, 0: p.GEOM_CYLINDER, 1: p.GEOM_BOX}
 SHAPE_NAME_MAP = {
     "sphere": p.GEOM_SPHERE,

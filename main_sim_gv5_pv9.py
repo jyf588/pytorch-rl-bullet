@@ -155,6 +155,7 @@ if MIX_SHAPE_PI:
     GRASP_PI = "0313_2_n_25_45"
     GRASP_DIR = "./trained_models_%s/ppo/" % "0313_2_n"  # TODO
     PLACE_PI = "0313_2_placeco_0316_1"  # 50ms
+    PLACE_PI = "0313_2_placeco_0316_3"  # 50ms
     PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 else:
     if IS_BOX:

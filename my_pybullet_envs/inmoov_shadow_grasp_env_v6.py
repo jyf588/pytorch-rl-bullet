@@ -89,8 +89,8 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         # shadow hand is 22-5=17dof
         self.action_scale = np.array([0.009 / self.control_skip] * 7 + [0.024 / self.control_skip] * 17)
 
-        self.p_pos_of_init = [-0.18, 0.095, 0.11]
-        self.p_quat_of_init = p.getQuaternionFromEuler([1.8, -1.57, 0])
+        self.p_pos_of_init = utils.PALM_POS_OF_INIT
+        self.p_quat_of_init = p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT)
 
         self.tx = -1    # dummy
         self.ty = -1    # dummy

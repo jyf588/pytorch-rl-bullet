@@ -7,9 +7,9 @@ Created on Fri Jan 17 10:59:40 2020
 """
 
 # TODO:
-# multiple names for single shape
-# multiple names for verb
-# test on, on top of, right, to the right side of, etc. (no "on" for now) (on top of is tricky)
+# multiple names for single shape x
+# multiple names for verb x
+# test on, on top of, right, to the right side of, etc. (no "on" for now) (on top of is tricky) x
 # remove size x
 #  need another fix on the code, does not handle ambiguity for between
 
@@ -31,7 +31,7 @@ Created on Fri Jan 17 10:59:40 2020
 # Place A between B that is on top of D and C (dependency parsing "fails", thinking B should be on C&D)
 #     plan to just give up this case and ask user to do the case above.
 
-
+# TODO: to the right side of something wont work, right and something are both children of side
 
 
 # infer place floor or not
@@ -416,7 +416,7 @@ if __name__ == "__main__":
 
     # sentence = "For the red box in front of the blue ball, put it behind the yellow box"
 
-    sentence = "For the red block in front of the blue ball, put it behind the yellow box"
+    sentence = "For the red block to the right of the blue ball, put it behind the yellow box"
 
     # # sentence = "Put the red box right to the blue ball that is behind the yellow box"   # same as above
     # # sentence = "Put the red box that is right to the blue ball behind the yellow box"       # wrong(?) behavior
