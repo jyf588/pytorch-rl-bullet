@@ -24,6 +24,7 @@ from typing import *
 
 import bullet2unity.states
 from demo.env import DemoEnvironment
+from demo.options import OPTIONS
 
 global args
 
@@ -51,38 +52,50 @@ async def send_to_client(websocket, path):
         path: The URI path.
     """
     env = DemoEnvironment(
-        observation_mode="vision", renderer="unity", visualize_bullet=True
+        opt=OPTIONS,
+        observation_mode="vision",
+        renderer="unity",
+        visualize_bullet=False,
+        visualize_unity=False,
     )
 
     # Send states one by one.
+    i = 0
     while 1:
-        state_id, object_tags, bullet_state = env.get_current_state()
+        if i >= 430:
+            (
+                state_id,
+                object_tags,
+                bullet_state,
+                look_at_oids,
+            ) = env.get_current_state()
 
-        message = encode(state_id, bullet_state)
+            message = encode(state_id, bullet_state, look_at_oids)
 
-        # Send the message to client.
-        print(f"Sending to unity: state {state_id}")
-        await websocket.send(message)
+            # Send the message to client.
+            print(f"Sending to unity: state {state_id}")
+            await websocket.send(message)
 
-        # Wait util we receive message from client.
-        reply = await websocket.recv()
-        print(f"Received from client: {len(reply)} characters")
+            # Wait util we receive message from client.
+            reply = await websocket.recv()
+            print(f"Received from client: {len(reply)} characters")
 
-        received_state_id, data = decode(reply, object_tags=object_tags)
+            received_state_id, data = decode(reply, look_at_oids)
 
-        # Verify that the sent ID and received ID are equivalent.
-        assert received_state_id == state_id
+            # Verify that the sent ID and received ID are equivalent.
+            assert received_state_id == state_id
 
-        # Hand the data to the env for processing.
-        env.set_unity_data(data)
+            # Hand the data to the env for processing.
+            env.set_unity_data(data)
         is_done = env.step()
+        i += 1
 
         # If we've reached the end of the sequence, we are done.
         if is_done:
             sys.exit(0)
 
 
-def encode(state_id: str, bullet_state: List[Any]) -> str:
+def encode(state_id: str, bullet_state: List[Any], look_at_oids) -> str:
     """Converts the provided bullet state into a Unity state, and encodes the
     message for sending to Unity.
 
@@ -111,7 +124,7 @@ def encode(state_id: str, bullet_state: List[Any]) -> str:
         message: The message to send to unity.
     """
     unity_state = bullet2unity.states.bullet2unity_state(
-        bullet_state=bullet_state
+        bullet_state=bullet_state, look_at_oids=look_at_oids
     )
 
     # Combine the id and state, and stringify into a msg.
@@ -120,7 +133,7 @@ def encode(state_id: str, bullet_state: List[Any]) -> str:
     return message
 
 
-def decode(reply: str, object_tags: List[str]):
+def decode(reply: str, look_at_oids: List[int]):
     """Decodes messages received from Unity.
 
     Args:
@@ -157,29 +170,29 @@ def decode(reply: str, object_tags: List[str]):
 
     idx = 1
     data = {}
-    for otag in object_tags:
+    for _ in range(len(look_at_oids)):
         unity_otag = reply[idx]
         idx += 1
-
-        # Verify that the object tag received from Unity matches the sent
-        # object tag.
-        assert unity_otag == otag
 
         camera_position = [float(x) for x in reply[idx : idx + 3]]
         idx += 3
         camera_orientation = [float(x) for x in reply[idx : idx + 4]]
         idx += 4
 
+        # Convert from base 64 to an image tensor.
+        rgb = base64_to_numpy_image(b64=reply[idx])
+        idx += 1
+        seg_img = base64_to_numpy_image(b64=reply[idx])
+        idx += 1
+
         # Store the data.
-        data[otag] = {
+        data[int(unity_otag)] = {
             "camera_position": camera_position,
             "camera_orientation": camera_orientation,
+            "rgb": rgb,
+            "seg_img": seg_img,
         }
 
-    # Convert from base 64 to an image tensor.
-    image = base64_to_numpy_image(b64=reply[idx])
-    idx += 1
-    data["image"] = image
     return state_id, data
 
 

@@ -13,7 +13,7 @@ from typing import *
 import bullet2unity.const as const
 
 
-def bullet2unity_state(bullet_state: Dict):
+def bullet2unity_state(bullet_state: Dict, look_at_oids):
     """Converts a bullet state to a unity state.
 
     Args:
@@ -61,6 +61,7 @@ def bullet2unity_state(bullet_state: Dict):
     unity_object_states = bullet2unity_objects(
         bullet_state=bullet_state["objects"],
         bullet_shoulder_pos=const.ROBOT_SHOULDER_POS,
+        look_at_oids=look_at_oids,
     )
 
     # Combine the robot and object states.
@@ -90,7 +91,9 @@ def bullet2unity_robot(bullet_state: Dict[str, float]) -> List[float]:
 
 
 def bullet2unity_objects(
-    bullet_state: Dict[int, Dict], bullet_shoulder_pos: List[float]
+    bullet_state: Dict[int, Dict],
+    bullet_shoulder_pos: List[float],
+    look_at_oids,
 ):
     """Convert object states from bullet to unity.
     
@@ -154,8 +157,9 @@ def bullet2unity_objects(
 
         # Create the state for the current object.
         otag = f"{oid:02}"
+        look_at_flag = int(oid in look_at_oids)
         ostate = (
-            [otag, shape, color]
+            [otag, look_at_flag, shape, color]
             + list(unity_size)
             + list(unity_rel_position)
             + list(unity_rotation)  # Euler angles (degrees)

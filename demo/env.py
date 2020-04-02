@@ -1,5 +1,6 @@
 import argparse
 import copy
+import cv2
 import numpy as np
 import os
 import pprint
@@ -24,7 +25,7 @@ from my_pybullet_envs.inmoov_shadow_place_env_v9 import (
 import my_pybullet_envs.utils as utils
 
 from ns_vqa_dart.bullet.renderer import BulletRenderer
-import ns_vqa_dart.bullet.util as util
+from ns_vqa_dart.bullet import dash_object, util
 
 
 class DemoEnvironment:
@@ -33,6 +34,7 @@ class DemoEnvironment:
         opt: argparse.Namespace,
         observation_mode: str,
         visualize_bullet: bool,
+        visualize_unity: bool,
         renderer: Optional[str] = None,
         floor_mu: Optional[float] = 1.0,
     ):
@@ -43,6 +45,8 @@ class DemoEnvironment:
                 ground truth (`gt`) or vision (`vision`).
             visualize_bullet: Whether to visualize the demo in pybullet in 
                 real-time in an OpenGL window.
+            visualize_unity: Whether to visualize the unity image stream sent
+                from unity to the current class in a live OpenCV window.
             renderer: The renderer to use to generate images, if 
                 `observation_mode` is `vision`.
         """
@@ -51,13 +55,14 @@ class DemoEnvironment:
         self.opt = opt
         self.observation_mode = observation_mode
         self.visualize_bullet = visualize_bullet
+        self.visualize_unity = visualize_unity
         self.renderer = renderer
 
         # Get the initial state.
-        self.init_state = self.get_initial_state()
-        self.state = copy.deepcopy(self.init_state)
-        self.src_oid = 1
-        self.dst_oid = 2
+        self.init_odicts = self.get_initial_objects()
+        # self.state = copy.deepcopy(self.init_state)
+        self.src_idx = 1
+        self.dst_idx = 2
 
         # We need to do this at the beginning before the actual bullet world is
         # setup because it involves an imaginary session. Another option is to
@@ -68,13 +73,23 @@ class DemoEnvironment:
 
         # Initialize the pybullet world with the initial state.
         self.bc = self.create_bullet_client()
-        self.robot_env, self.table_id = self.initialize_bullet_world(
-            state=self.state
-        )
+        (
+            self.robot_env,
+            self.oids,
+            self.table_id,
+        ) = self.initialize_bullet_world(odicts=self.init_odicts)
+        self.src_oid = self.oids[self.src_idx]
+        self.dst_oid = self.oids[self.dst_idx]
+        self.state = self.construct_state()
+
+        print("constructed state:")
+        pprint.pprint(self.state)
 
         # Initialize the vision module if we are using vision.
         if self.observation_mode == "vision":
             self.vision_module = VisionModule()
+
+        self.reach_trajectory = None
 
         self.timestep = 0
         self.n_plan_steps = 200
@@ -85,27 +100,25 @@ class DemoEnvironment:
             + self.opt.n_release_steps
         )
 
-    def get_initial_state(self) -> Dict:
-        """Loads the initial state of the demo.
+    def get_initial_objects(self) -> List:
+        """Loads the demo objects in their initial configuration.
         
         Returns:
-            state: The initial state of the demo, with the format: 
-            {
-                "objects": {
-                    "<oid>": {
-                        "shape": shape,
-                        "color": color,
-                        "radius": radius,
-                        "height": height,
-                        "position": [x, y, z],
-                        "orientation": [x, y, z, w],
-                    },
-                    ...
+            odicts: Object dictionaries, with the format: 
+            [
+                {
+                    "shape": shape,
+                    "color": color,
+                    "radius": radius,
+                    "height": height,
+                    "position": [x, y, z],
+                    "orientation": [x, y, z, w],
                 },
-            }.
+                ...
+            ]
         """
-        odicts = {
-            0: {
+        odicts = [
+            {
                 "shape": "box",
                 "color": "yellow",
                 "position": [0.15, 0.7, 0.09],
@@ -113,7 +126,7 @@ class DemoEnvironment:
                 "radius": 0.03,
                 "height": 0.18,
             },
-            1: {
+            {
                 "shape": "box",
                 "color": "green",
                 "position": [0.2, 0.4, 0.09],
@@ -121,7 +134,7 @@ class DemoEnvironment:
                 "radius": 0.03,
                 "height": 0.18,
             },
-            2: {
+            {
                 "shape": "cylinder",
                 "color": "blue",
                 "position": [0.1, -0.05, 0.09],
@@ -129,7 +142,7 @@ class DemoEnvironment:
                 "radius": 0.03,
                 "height": 0.18,
             },
-            3: {
+            {
                 "shape": "box",
                 "color": "yellow",
                 "position": [0.0, 0.1, 0.09],
@@ -137,8 +150,10 @@ class DemoEnvironment:
                 "radius": 0.03,
                 "height": 0.18,
             },
-        }
-        for oid, odict in odicts.items():
+        ]
+
+        # Fill in additional attributes programmatically.
+        for idx, odict in enumerate(odicts):
             odict["mass"] = np.random.uniform(utils.MASS_MIN, utils.MASS_MAX)
             odict["mu"] = self.opt.obj_mu
             odict["height"] = np.random.uniform(utils.H_MIN, utils.H_MAX)
@@ -147,19 +162,71 @@ class DemoEnvironment:
             )
             if odict["shape"] == "box":
                 odict["radius"] *= 0.8
-            odicts[oid] = odict
-        state = {"objects": odicts}
+            odict["position"][2] = odict["height"] / 2
+            odicts[idx] = odict
+        return odicts
+
+    def construct_state(self):
+        """Constructs the state dictionary of the bullet environment.
+            state: The state of the bullet environment, in the format:
+                {
+                    "objects": {
+                        "<oid>": {
+                            "shape": shape,
+                            "color": color,
+                            "radius": radius,
+                            "height": height,
+                            "position": [x, y, z],
+                            "orientation": [x, y, z, w],
+                        },
+                        ...
+                    },
+                    "robot": {
+                        "<joint_name>": <joint_angle>,
+                        ...
+                    }
+                }
+
+        """
+        state = {"objects": {}, "robot": self.get_robot_state()}
+        for idx in range(len(self.oids)):
+            oid = self.oids[idx]
+            odict = self.init_odicts[idx]
+            state["objects"][oid] = odict
         return state
 
     def update_state(self):
         for oid, odict in self.state["objects"].items():
+            position = odict["position"]
             position, orientation = self.bc.getBasePositionAndOrientation(oid)
-            odict["position"] = position
-            odict["orientation"] = orientation
+            odict["position"] = list(position)
+            odict["orientation"] = list(orientation)
             odict["up_vector"] = util.orientation_to_up(
                 orientation=orientation
             )
             self.state["objects"][oid] = odict
+        self.state["robot"] = self.get_robot_state()
+
+    def get_robot_state(self):
+        """Gets the current robot state.
+        
+        Returns:
+            robot_state: A dictionary with the following format:
+                {
+                    <joint_name>: <joint_angle>
+                }
+        """
+        robot_state = {}
+        robot_id = self.robot_env.robot.arm_id
+        for joint_idx in range(self.bc.getNumJoints(robot_id)):
+            joint_name = self.bc.getJointInfo(robot_id, joint_idx)[1].decode(
+                "utf-8"
+            )
+            joint_angle = self.bc.getJointState(
+                bodyUniqueId=robot_id, jointIndex=joint_idx
+            )[0]
+            robot_state[joint_name] = joint_angle
+        return robot_state
 
     def create_bullet_client(self):
         """Creates the bullet client.
@@ -175,25 +242,23 @@ class DemoEnvironment:
         bc = util.create_bullet_client(mode=mode)
         return bc
 
-    def initialize_bullet_world(self, state: Dict):
+    def initialize_bullet_world(self, odicts: List[Dict]):
         """Initializes the bullet world by create a bullet client and loading 
         the initial state containing the robot, table, and tabletop objects.
 
         Args:
-            state: The state dictionary, with the format: 
+            odicts: Object dictionaries, with the format: 
+            [
                 {
-                    "objects": {
-                        "<oid>": {
-                            "shape": shape,
-                            "color": color,
-                            "radius": radius,
-                            "height": height,
-                            "position": [x, y, z],
-                            "orientation": [x, y, z, w],
-                        },
-                        ...
-                    },
-                }
+                    "shape": shape,
+                    "color": color,
+                    "radius": radius,
+                    "height": height,
+                    "position": [x, y, z],
+                    "orientation": [x, y, z, w],
+                },
+                ...
+            ]
         
         Returns:
             robot_env: The robot environment.
@@ -211,8 +276,8 @@ class DemoEnvironment:
 
         # Load robot, table, and objects.
         robot_env = self.load_robot()
-        table_id = self.load_table_and_objects(state=state)
-        return robot_env, table_id
+        oids, table_id = self.load_table_and_objects(odicts=odicts)
+        return robot_env, oids, table_id
 
     def load_robot(self):
         # Load the robot.
@@ -230,36 +295,34 @@ class DemoEnvironment:
         robot_env.robot.reset_with_certain_arm_q([0.0] * 7)
         return robot_env
 
-    def load_table_and_objects(self, state: Dict):
+    def load_table_and_objects(self, odicts: List[Dict]):
         """Loads a state into bullet.
 
         Args:
-            state: The state dictionary, with the format: 
-            {
-                "objects": {
-                    "<oid>": {
-                        "shape": shape,
-                        "color": color,
-                        "radius": radius,
-                        "height": height,
-                        "position": [x, y, z],
-                        "orientation": [x, y, z, w],
-                    },
-                    ...
+            odicts: Object dictionaries, with the format: 
+            [
+                {
+                    "shape": shape,
+                    "color": color,
+                    "radius": radius,
+                    "height": height,
+                    "position": [x, y, z],
+                    "orientation": [x, y, z, w],
                 },
-            }.
+                ...
+            ]
         
         Returns:
             table_id: The bullet ID of the tabletop.
         """
         renderer = BulletRenderer(p=self.bc)
-        renderer.load_objects_from_state(
-            ostates=list(state["objects"].values()), position_mode="com"
+        oids = renderer.load_objects_from_state(
+            ostates=odicts, position_mode="com"
         )
 
         # Load the tabletop.
         table_id = self.load_table()
-        return table_id
+        return oids, table_id
 
     def load_table(self):
         table_id = self.bc.loadURDF(
@@ -274,8 +337,8 @@ class DemoEnvironment:
         return table_id
 
     def compute_qs(self):
-        src_x, src_y, _ = self.state["objects"][self.src_oid]["position"]
-        dst_x, dst_y, dst_z = self.state["objects"][self.dst_oid]["position"]
+        src_x, src_y, _ = self.init_odicts[self.src_idx]["position"]
+        dst_x, dst_y, dst_z = self.init_odicts[self.dst_idx]["position"]
         dst_position = [dst_x, dst_y, dst_z + utils.PLACE_START_CLEARANCE]
 
         sess = ImaginaryArmObjSession()
@@ -316,6 +379,7 @@ class DemoEnvironment:
 
         trajectory = openrave.compute_trajectory(
             state=self.state,
+            dst_oid=self.src_oid,
             q_start=None,
             q_end=self.q_reach_dst,
             stage="reach",
@@ -371,6 +435,7 @@ class DemoEnvironment:
 
         trajectory = openrave.compute_trajectory(
             state=self.state,
+            dst_oid=self.src_oid,
             q_start=q_src,
             # q_end=self.q_transport_dst,
             q_end=q_dst,
@@ -395,6 +460,10 @@ class DemoEnvironment:
         place_end = place_start + self.opt.n_place_steps
         release_start = place_end
         release_end = release_start + self.opt.n_release_steps
+
+        print(f"place_start: {place_start}")
+        print(f"place_end: {place_end}")
+
         # Execute reaching.
         if reach_start <= self.timestep < reach_end:
             self.reach()
@@ -411,18 +480,13 @@ class DemoEnvironment:
             self.release()
         else:
             raise ValueError(f"Invalid timestep: {self.timestep}")
-        # obs = self.get_observation(
-        #     observation_mode=self.observation_mode, renderer=self.renderer
-        # )
-        # self.act(obs)
-        # self.bc.stepSimulation()
 
         self.timestep += 1
         return self.is_done()
 
     def reach(self):
         print("reach")
-        if self.timestep == 0:
+        if self.reach_trajectory is None:
             self.reach_trajectory = self.compute_reach_trajectory()
         self.execute_plan(trajectory=self.reach_trajectory, idx=self.timestep)
 
@@ -502,12 +566,14 @@ class DemoEnvironment:
     def get_placing_observation(self):
         # Update the state only every `vision_delay` steps.
         if self.timestep % self.opt.vision_delay == 0:
-            self.update_state()
+            self.obs = self.get_observation(
+                observation_mode=self.observation_mode, renderer=self.renderer
+            )
 
         # Compute the observation vector from object poses and placing position.
-        tdict = self.state["objects"][self.src_oid]
-        bdict = self.state["objects"][self.dst_oid]
-        t_init_dict = self.init_state["objects"][self.src_oid]
+        tdict = self.obs["objects"][self.src_oid]
+        bdict = self.obs["objects"][self.dst_oid]
+        t_init_dict = self.init_odicts[self.src_idx]
         x, y, z = t_init_dict["position"]
         is_box = t_init_dict["shape"] == "box"
         p_obs = self.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
@@ -545,37 +611,60 @@ class DemoEnvironment:
         Returns:
             observation:
         """
-        if observation_mode == "gt":
-            observation = []
-        elif observation_mode == "vision":
-            observation = self.get_observation_from_vision(renderer=renderer)
+        obs = copy.deepcopy(self.state)
+        if self.observation_mode == "gt":
+            pass
+        elif self.observation_mode == "vision":
+            y_dict = self.get_observation_from_vision(renderer=renderer)
+            src_odict = obs["objects"][self.src_oid]
+            src_odict["position"] = y_dict["position"]
+            src_odict["up_vector"] = y_dict["up_vector"]
+            obs["objects"][self.src_oid] = src_odict
         else:
-            raise ValueError(f"Invalid observation mode: {observation_mode}")
-        return observation
+            raise ValueError(
+                "Unsupported observation mode: {self.observation_mode}"
+            )
+        return obs
 
     def get_observation_from_vision(self, renderer: str):
-        observation = []
-        image = self.get_image(renderer=renderer)
-        pred_dict = self.vision_module.predict(image=image)
-        observation = self.obs_dict_to_vec(obs_dict=pred_dict)
-        return observation
+        oid = 2
+        rgb, seg_img = self.get_image(oid=oid, renderer=renderer)
+        pred = self.vision_module.predict(oid=oid, rgb=rgb, seg_img=seg_img)
+        # Convert vectorized predictions to dictionary form using camera
+        # information.
+        y_dict = dash_object.y_vec_to_dict(
+            y=list(pred[0]),
+            coordinate_frame="camera",
+            cam_position=self.unity_data[oid]["camera_position"],
+            cam_orientation=self.unity_data[oid]["camera_orientation"],
+        )
+
+        print(f"Vision predictions: {y_dict}")
+        return y_dict
 
     def obs_dict_to_vec(self, obs_dict: Dict) -> np.ndarray:
         """Converts an observation dictionary to an observation vector."""
         obs_vec = np.zeros((15,))
         return obs_vec
 
-    def get_image(self, renderer: str):
+    def get_image(self, oid: int, renderer: str):
         if renderer == "opengl":
             raise NotImplementedError
         elif renderer == "tiny_renderer":
             raise NotImplementedError
         elif renderer == "unity":
             # Unity should have already called set_unity_data before this.
-            image = self.data["image"]
+            rgb = self.unity_data[oid]["rgb"]
+            seg_rgb = self.unity_data[oid]["seg_img"]
+            if self.visualize_unity:
+                bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+                seg_bgr = cv2.cvtColor(seg_rgb, cv2.COLOR_RGB2BGR)
+                cv2.imshow("rgb", bgr)
+                cv2.imshow("seg", seg_bgr)
+                cv2.waitKey(5)
         else:
             raise ValueError(f"Invalid renderer: {renderer}")
-        return image
+        return rgb, seg_rgb
 
     def get_current_state(self):
         """Retrieves the current state of the bullet environment.
@@ -602,10 +691,11 @@ class DemoEnvironment:
                 }
             }.
         """
-        state = self.state
+        self.update_state()
         state_id = f"{self.timestep:06}"
-        object_tags = [f"{oid:02}" for oid in state["objects"].keys()]
-        return state_id, object_tags, state
+        object_tags = [f"{oid:02}" for oid in self.state["objects"].keys()]
+        look_at_oids = [2]
+        return state_id, object_tags, self.state, look_at_oids
 
     def state2obs(self, state: Dict) -> np.ndarray:
         """
@@ -670,7 +760,7 @@ class DemoEnvironment:
                     ...
                 }        
         """
-        self.data = data
+        self.unity_data = data
 
     def is_done(self) -> bool:
         """Determines whether we have finished the sequence.

@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 import os
 import time
@@ -13,7 +14,11 @@ STAGE2NAME = {
 
 
 def compute_trajectory(
-    state: Dict, q_start: np.ndarray, q_end: np.ndarray, stage: str
+    state: Dict,
+    dst_oid: int,
+    q_start: np.ndarray,
+    q_end: np.ndarray,
+    stage: str,
 ) -> np.ndarray:
     """Computes a trajectory using OpenRAVE.
     Args:
@@ -34,13 +39,20 @@ def compute_trajectory(
     """
     name = STAGE2NAME[stage]
 
-    # Extract object positions from the state. Target comes first.
+    # Extract object positions from the state. Destination object needs to come
+    # first.
+    state = copy.deepcopy(state)
     object_positions = []
-    for oid in [1, 0, 2, 3]:
+    oids = list(state["objects"].keys())
+    ordered_oids = [dst_oid]
+    for oid in oids:
+        if oid != dst_oid:
+            ordered_oids.append(oid)
+    for oid in ordered_oids:
         position = state["objects"][oid]["position"]
-        position[
-            2
-        ] = 0.0  # Set object z to zero because that's what OR expects.
+
+        # Set object z to zero because that's what OR expects.
+        position[2] = 0.0
         object_positions.append(position)
     # object_positions = [o["position"] for o in state["objects"].values()]
 
