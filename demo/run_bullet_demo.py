@@ -6,7 +6,10 @@ from demo.env import DemoEnvironment
 
 def main():
     env = DemoEnvironment(
-        opt=OPTIONS, observation_mode="gt", visualize_bullet=True,
+        opt=OPTIONS,
+        observation_mode="gt",
+        visualize_bullet=True,
+        visualize_unity=False,
     )
 
     while 1:
