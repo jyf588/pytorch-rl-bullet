@@ -69,8 +69,10 @@ async def send_to_client(websocket, path):
     # Send states one by one.
     i = 0
     while 1:
+        stage = env.get_current_stage()
+
         # Only run unity for placing.
-        if 430 <= i < 480:
+        if stage == "place":
             bullet_state = env.get_state()
             state_id = f"{env.timestep:06}"
             look_at_oids = [2]

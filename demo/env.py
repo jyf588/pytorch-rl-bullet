@@ -9,8 +9,9 @@ import time
 import torch
 from typing import *
 
-from demo import openrave, policy
+from demo import openrave
 from demo.bullet_world import BulletWorld
+import demo.policy
 from demo.vision_module import VisionModule
 
 from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import (
@@ -69,7 +70,6 @@ class DemoEnvironment:
         # Set the initial scene.
         self.scene = scene
 
-        # self.state = copy.deepcopy(self.init_state)
         self.src_idx = 1
         self.dst_idx = 2
 
@@ -77,6 +77,7 @@ class DemoEnvironment:
         # setup because it involves an imaginary session. Another option is to
         # do this in a separate session using direct rendering.
         self.q_reach_dst, self.q_transport_dst = self.compute_qs()
+        self.reach_trajectory = None
 
         # Initialize the pybullet world with the initial state.
         self.world = BulletWorld(
@@ -90,15 +91,13 @@ class DemoEnvironment:
         if self.observation_mode == "vision":
             self.vision_module = VisionModule()
 
-        self.reach_trajectory = None
-
         self.timestep = 0
-        self.n_plan_steps = 200
         self.n_total_steps = (
-            self.n_plan_steps * 2
-            + self.opt.n_grasp_steps
-            + self.opt.n_place_steps
-            + self.opt.n_release_steps
+            self.opt.n_plan_steps  # reach
+            + self.opt.n_grasp_steps  # grasp
+            + self.opt.n_plan_steps  # transport
+            + self.opt.n_place_steps  # place
+            + self.opt.n_release_steps  # release
         )
 
     def get_state(self):
@@ -126,6 +125,66 @@ class DemoEnvironment:
         """
         state = self.world.get_state()
         return state
+
+    def step(self):
+        """Policy performs a single action based on the current state.
+        
+        Returns:
+            is_done: Whether we are done with the demo.
+        """
+        stage = self.get_current_stage()
+
+        print(f"Step info:")
+        print(f"\tTimestep: {self.timestep}")
+        print(f"\tStage: {stage}")
+
+        if stage == "reach":
+            self.reach()
+        elif stage == "grasp":
+            self.grasp()
+        elif stage == "transport":
+            self.transport()
+        elif stage == "place":
+            self.place()
+        elif stage == "release":
+            self.release()
+        else:
+            raise ValueError(f"Invalid stage: {stage}")
+
+        self.timestep += 1
+        done = self.is_done()
+        return done
+
+    def get_current_stage(self) -> str:
+        """Retrieves the current stage of the demo.
+
+        Returns:
+            stage: The stage of the demo.
+        """
+        reach_start = 0
+        reach_end = reach_start + self.opt.n_plan_steps
+        grasp_start = reach_end
+        grasp_end = grasp_start + self.opt.n_grasp_steps
+        transport_start = grasp_end
+        transport_end = transport_start + self.opt.n_plan_steps
+        place_start = transport_end
+        place_end = place_start + self.opt.n_place_steps
+        release_start = place_end
+        release_end = release_start + self.opt.n_release_steps
+
+        if reach_start <= self.timestep < reach_end:
+            stage = "reach"
+        elif grasp_start <= self.timestep < grasp_end:
+            stage = "grasp"
+        elif transport_start <= self.timestep < transport_end:
+            stage = "transport"
+        elif place_start <= self.timestep < place_end:
+            stage = "place"
+        elif release_start <= self.timestep < release_end:
+            stage = "release"
+        else:
+            raise ValueError(f"Invalid timestep: {self.timestep}")
+        return stage
 
     def compute_qs(self):
         src_x, src_y, _ = self.scene[self.src_idx]["position"]
@@ -161,11 +220,6 @@ class DemoEnvironment:
         Returns:
             trajectory: The reaching trajectory of shape (200, 7).
         """
-        # sess = ImaginaryArmObjSession()
-        # reach_position = self.state["objects"][self.src_oid]["position"]
-        # x, y = reach_position[0], reach_position[1]
-        # Qreach = np.array(sess.get_most_comfortable_q_and_refangle(x, y)[0])
-
         trajectory = openrave.compute_trajectory(
             state=self.initial_state,
             dst_oid=self.src_oid,
@@ -173,7 +227,6 @@ class DemoEnvironment:
             q_end=self.q_reach_dst,
             stage="reach",
         )
-        # self.world.bc.resetSimulation()
         return trajectory
 
     def compute_transport_trajectory(self) -> np.ndarray:
@@ -186,9 +239,6 @@ class DemoEnvironment:
             self.world.robot_env.robot.arm_dofs
         )[0]
 
-        # print(f"q_transport_dst: {self.q_transport_dst}")
-        # print(f"q_transport_dst type: {type(self.q_transport_dst)}")
-        # print(f"q_transport_dst shape: {self.q_transport_dst.shape}")
         q_src = [
             -0.1950513,
             -0.79553950,
@@ -207,71 +257,32 @@ class DemoEnvironment:
             -0.6234920041770489,
             -0.18889481363039415,
         ]
+        # q_dst = self.q_transport_dst
 
         trajectory = openrave.compute_trajectory(
             state=self.initial_state,
             dst_oid=self.src_oid,
             q_start=q_src,
-            # q_end=self.q_transport_dst,
             q_end=q_dst,
             stage="transport",
         )
         return trajectory
 
-    def step(self):
-        """Policy performs a single action based on the current state.
-        
-        Returns:
-            res: If we are done, return -1. Otherwise, we return 0.
-        """
-        print(f"Step: timestep: {self.timestep}")
-        reach_start = 0
-        reach_end = reach_start + self.n_plan_steps
-        grasp_start = reach_end
-        grasp_end = grasp_start + self.opt.n_grasp_steps
-        transport_start = grasp_end
-        transport_end = transport_start + self.n_plan_steps
-        place_start = transport_end
-        place_end = place_start + self.opt.n_place_steps
-        release_start = place_end
-        release_end = release_start + self.opt.n_release_steps
-
-        # Execute reaching.
-        if reach_start <= self.timestep < reach_end:
-            self.reach()
-        # Execute grasping.
-        elif grasp_start <= self.timestep < grasp_end:
-            self.grasp()
-        # Transport.
-        elif transport_start <= self.timestep < transport_end:
-            self.transport()
-        # Place.
-        elif place_start <= self.timestep < place_end:
-            self.place()
-        elif release_start <= self.timestep < release_end:
-            self.release()
-        else:
-            raise ValueError(f"Invalid timestep: {self.timestep}")
-
-        self.timestep += 1
-        return self.is_done()
-
     def reach(self):
-        print("reach")
         if self.reach_trajectory is None:
             self.reach_trajectory = self.compute_reach_trajectory()
         self.execute_plan(trajectory=self.reach_trajectory, idx=self.timestep)
 
     def grasp(self):
-        print("grasp")
         # Load the grasping actor critic model.
-        if self.timestep - self.n_plan_steps == 0:
-            self.policy, _, self.hidden_states, self.masks = policy.load(
+        if self.timestep - self.opt.n_plan_steps == 0:
+            self.policy, _, self.hidden_states, self.masks = demo.policy.load(
                 policy_dir=self.opt.grasp_dir,
                 env_name=self.opt.grasp_env_name,
                 is_cuda=self.opt.is_cuda,
             )
         obs = self.get_grasping_observation()
+        obs = demo.policy.wrap_obs(obs, is_cuda=self.opt.is_cuda)
         with torch.no_grad():
             _, action, _, self.hidden_states = self.policy.act(
                 obs,
@@ -279,23 +290,26 @@ class DemoEnvironment:
                 self.masks,
                 deterministic=self.opt.det,
             )
-        self.world.robot_env.step(self.unwrap_action(act_tensor=action))
+        action = demo.policy.unwrap_action(
+            action=action, is_cuda=self.opt.is_cuda
+        )
+        self.world.step_robot(action=action)
 
     def transport(self):
-        print("transport")
-        idx = self.timestep - self.n_plan_steps - self.opt.n_grasp_steps
+        idx = self.timestep - self.opt.n_plan_steps - self.opt.n_grasp_steps
         if idx == 0:
             self.transport_trajectory = self.compute_transport_trajectory()
         self.execute_plan(trajectory=self.transport_trajectory, idx=idx)
 
     def place(self):
-        print("place")
-        idx = self.timestep - self.n_plan_steps * 2 - self.opt.n_grasp_steps
+        idx = (
+            self.timestep - self.opt.n_plan_steps * 2 - self.opt.n_grasp_steps
+        )
         if idx == 0:
             self.world.robot_env.change_control_skip_scaling(
                 c_skip=self.opt.placing_control_skip
             )
-            self.policy, _, self.hidden_states, self.masks = policy.load(
+            self.policy, _, self.hidden_states, self.masks = demo.policy.load(
                 policy_dir=self.opt.place_dir,
                 env_name=self.opt.place_env_name,
                 is_cuda=self.opt.is_cuda,
@@ -303,26 +317,27 @@ class DemoEnvironment:
 
         # Get the current observation.
         obs = self.get_placing_observation()
+        obs = demo.policy.wrap_obs(obs, is_cuda=self.opt.is_cuda)
         with torch.no_grad():
-            value, action, _, self.hidden_states = self.policy.act(
+            _, action, _, self.hidden_states = self.policy.act(
                 obs,
                 self.hidden_states,
                 self.masks,
                 deterministic=self.opt.det,
             )
 
-        self.world.robot_env.step(self.unwrap_action(action))
+        action = demo.policy.unwrap_action(
+            action=action, is_cuda=self.opt.is_cuda
+        )
+        self.world.step_robot(action=action)
 
     def release(self):
-        print("release")
-        self.world.bc.stepSimulation()
-        time.sleep(self.opt.ts)
+        self.world.step()
 
     def execute_plan(self, trajectory: np.ndarray, idx: int):
         self.world.robot_env.robot.tar_arm_q = trajectory[idx]
         self.world.robot_env.robot.apply_action([0.0] * 24)
-        self.world.bc.stepSimulation()
-        time.sleep(self.opt.ts)
+        self.world.step()
 
     def get_grasping_observation(self) -> torch.Tensor:
         odict = self.initial_state["objects"][self.src_oid]
@@ -332,7 +347,6 @@ class DemoEnvironment:
         obs = self.world.robot_env.get_robot_contact_txty_halfh_obs_nodup(
             x, y, half_height
         )
-        obs = self.wrap_obs(obs)
         return obs
 
     def get_placing_observation(self):
@@ -359,19 +373,7 @@ class DemoEnvironment:
             bdict["position"],
             bdict["up_vector"],
         )
-        p_obs = self.wrap_obs(p_obs)
         return p_obs
-
-    def wrap_obs(self, obs: np.ndarray) -> torch.Tensor:
-        obs = torch.Tensor([obs])
-        if self.opt.is_cuda:
-            obs = obs.cuda()
-        return obs
-
-    def unwrap_action(self, act_tensor: torch.Tensor) -> np.ndarray:
-        action = act_tensor.squeeze()
-        action = action.cpu() if self.opt.is_cuda else action
-        return action.numpy()
 
     def get_observation(self, observation_mode: str, renderer: str):
         """Gets the observation for the current timestep.
@@ -400,7 +402,7 @@ class DemoEnvironment:
 
     def get_observation_from_vision(self, renderer: str):
         oid = 2
-        rgb, seg_img = self.get_image(oid=oid, renderer=renderer)
+        rgb, seg_img = self.get_images(oid=oid, renderer=renderer)
         start = time.time()
         pred = self.vision_module.predict(oid=oid, rgb=rgb, seg_img=seg_img)
         print(f"Vision inference time: {time.time() - start}")
@@ -417,7 +419,17 @@ class DemoEnvironment:
         print(f"Vision predictions: {y_dict}")
         return y_dict
 
-    def get_image(self, oid: int, renderer: str):
+    def get_images(self, oid: int, renderer: str):
+        """Retrieves the images that are input to the vision module.
+
+        Args:
+            oid: The object ID to retrieve images for.
+            renderer: The renderer that the images are rendered with.
+        
+        Returns:
+            rgb: The RGB image of the object.
+            seg_rgb: The RGB segmentation image of the object.
+        """
         if renderer == "opengl":
             raise NotImplementedError
         elif renderer == "tiny_renderer":
@@ -437,12 +449,12 @@ class DemoEnvironment:
         return rgb, seg_rgb
 
     def set_unity_data(self, data: Dict):
-        """Processes data received from Unity.
+        """Sets the data received from Unity.
 
         Args:
             data: Unity data, in the format
                 {
-                    <otag>:{
+                    <oid>:{
                         "camera_position": <camera_position>,
                         "camera_orientation": <camera_orientation>,
                         "image": <image>,
