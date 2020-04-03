@@ -629,7 +629,10 @@ class DemoEnvironment:
     def get_observation_from_vision(self, renderer: str):
         oid = 2
         rgb, seg_img = self.get_image(oid=oid, renderer=renderer)
+        start = time.time()
         pred = self.vision_module.predict(oid=oid, rgb=rgb, seg_img=seg_img)
+        print(f"Vision inference time: {time.time() - start}")
+
         # Convert vectorized predictions to dictionary form using camera
         # information.
         y_dict = dash_object.y_vec_to_dict(

@@ -62,7 +62,7 @@ async def send_to_client(websocket, path):
     # Send states one by one.
     i = 0
     while 1:
-        if i >= 430:
+        if 430 <= i < 480:
             (
                 state_id,
                 object_tags,
@@ -73,12 +73,14 @@ async def send_to_client(websocket, path):
             message = encode(state_id, bullet_state, look_at_oids)
 
             # Send the message to client.
-            print(f"Sending to unity: state {state_id}")
+            print(f"Sending to unity: state {state_id}\tTime: {time.time()}")
             await websocket.send(message)
 
             # Wait util we receive message from client.
             reply = await websocket.recv()
-            print(f"Received from client: {len(reply)} characters")
+            print(
+                f"Received from client: {len(reply)} characters\tTime: {time.time()}"
+            )
 
             received_state_id, data = decode(reply, look_at_oids)
 
