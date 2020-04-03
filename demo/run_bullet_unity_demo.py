@@ -23,8 +23,10 @@ import time
 from typing import *
 
 import bullet2unity.states
+import demo.base_scenes
 from demo.env import DemoEnvironment
 from demo.options import OPTIONS
+from demo.scene import SceneGenerator
 
 global args
 
@@ -51,8 +53,13 @@ async def send_to_client(websocket, path):
         websocket: The websocket protocol instance.
         path: The URI path.
     """
+    scene = SceneGenerator(
+        base_scene=demo.base_scenes.SCENE, seed=OPTIONS.seed, mu=OPTIONS.obj_mu
+    ).generate()
+
     env = DemoEnvironment(
         opt=OPTIONS,
+        scene=scene,
         observation_mode="vision",
         renderer="unity",
         visualize_bullet=False,
@@ -62,13 +69,11 @@ async def send_to_client(websocket, path):
     # Send states one by one.
     i = 0
     while 1:
+        # Only run unity for placing.
         if 430 <= i < 480:
-            (
-                state_id,
-                object_tags,
-                bullet_state,
-                look_at_oids,
-            ) = env.get_current_state()
+            bullet_state = env.get_state()
+            state_id = f"{env.timestep:06}"
+            look_at_oids = [2]
 
             message = encode(state_id, bullet_state, look_at_oids)
 

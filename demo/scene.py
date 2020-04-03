@@ -6,7 +6,9 @@ import my_pybullet_envs.utils as utils
 
 
 class SceneGenerator:
-    def __init__(self, base_scene: List[Dict], mu: Optional[float] = None):
+    def __init__(
+        self, base_scene: List[Dict], seed: int, mu: Optional[float] = None
+    ):
         """
         Args:
             base_scene: The scene to base generated scenes off of, in the 
@@ -25,11 +27,13 @@ class SceneGenerator:
                     },
                     ...
                 ]
+            seed: The random seed.
             mu: The object friction.
         """
         self.base_scene = base_scene
-
         self.mu = mu
+
+        np.random.seed(seed)
 
     def generate(self):
         scene = copy.deepcopy(self.base_scene)
