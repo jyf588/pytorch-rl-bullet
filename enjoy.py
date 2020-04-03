@@ -67,6 +67,17 @@ args, unknown = parser.parse_known_args()  # this is an 'internal' method
 # the difference to parse_args() is that it does not exit when it finds redundant arguments
 
 
+def try_numerical(string):
+    # convert all extra arguments to numerical type (float) if possible
+    # assume always float (pass bool as 0 or 1)
+    # else, keep the argument as string type
+    try:
+        num = float(string)
+        return num
+    except ValueError:
+        return string
+
+
 def pairwise(iterable):
     "s -> (s0, s1), (s2, s3), (s4, s5), ..."
     a = iter(iterable)
@@ -78,7 +89,7 @@ for arg, value in pairwise(
 ):  # note: assume always --arg value (no --arg)
     assert arg.startswith(("-", "--"))
     parser.add_argument(
-        arg, type=float
+        arg, type=try_numerical
     )  # assume always float (pass bool as 0 or 1)
 
 args_w_extra = parser.parse_args()
