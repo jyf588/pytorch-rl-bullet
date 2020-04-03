@@ -6,12 +6,73 @@ Created on Fri Jan 17 10:59:40 2020
 @author: yannis
 """
 
+# TODO:
+# multiple names for single shape x
+# multiple names for verb x
+# test on, on top of, right, to the right side of, etc. (no "on" for now) (on top of is tricky) x
+# remove size x
+#  need another fix on the code, does not handle ambiguity for between
+
+# define scope:
+# one verb, one target object, one destination object (2 or if between B and C)
+# Since multiple "blue ball"s may exist, both target and desti obj should be able to have one modifier obj
+# Since multiple "blue ball"s may exist, both target and desti obj should handle "leftmost" & "rightmost"
+# -- "Put the red box right to the blue ball that is on the left" (?)
+# will not include shape (smaller/ larger) since there are boxes that are taller but thinner than another
+
+# Place A on B
+# Place A between B and C
+# Place A that is behind C on B (dependency parsing "fails", thinking C should be on B)
+#    (One possible remedy: For the A that is behind C, place it on B)
+#    need a fix still on current code
+# Place A on B that is behind C
+# Place A between B and C that is on top of D
+#     need another fix on the code, does not handle ambiguity for between
+# Place A between B that is on top of D and C (dependency parsing "fails", thinking B should be on C&D)
+#     plan to just give up this case and ask user to do the case above.
+
+# TODO: to the right side of something wont work, right and something are both children of side
+
+
+# infer place floor or not
+#   infer btm obj idx
+# infer target obj idx & target xyz
+#
+# idx here means
+# infer the shape of target obj (may not be necessary if mixed shape pi)
+
+# Input 1, a list of obj dicts without any order (gt or vision, should have fields "shape", "color", (init)"position", "height")
+# Input 2, the sentence
+# Output 1, idx (wrt Input 1) of the obj to be manipulated
+# Output 2, destination x and y
+# Output 3, idx (wrt Input 1) of the obj to be stacked on (None if placing on floor)
+
+
+# Note:
+# Build structured OBJECTS list in which first entry is the target object
+# looks like this code assumes 1st obj in sentence to be pick_obj, 2nd (and 3rd if "between") to be desti_obj
+# modifier objs are later
+# do not seem to handle right to & behind of
 
 import spacy
 from nltk import Tree
 import collections
 import numpy as np
 from pdb import set_trace as bp
+
+SHAPE_NAME_LIST = ["square", "box", "block", "cylinder", "ball"]
+SHAPE_NAME_MAP = {"box": "box", "block": "box", "square": "box",
+                  "cylinder": "cylinder",
+                  "sphere": "sphere", "ball": "sphere"}
+COLOR_NAME_LIST = ["red", "green", "blue", "yellow", "grey"]
+RELATION_NAME_LIST = ["right", "left", "behind", "front", "top", "on", "between"]
+RELATION_NAME_MAP = {"right": "right",
+                     "left": "left",
+                     "behind": "behind", "back": "behind",
+                     "front": "front",
+                     "top": "top", "on": "top", "above": "top",
+                     "between": "between"}
+# DISAMBIGUATE relation: leftmost, rightmost
 
 
 def PlotTree(doc):
@@ -26,203 +87,236 @@ def PlotTree(doc):
     [to_nltk_tree(sent.root).pretty_print() for sent in doc.sents]
 
 
-def NLPmod(sentence, Vision_output):
+def traverse_and_print_from_token(token):
+    # breadth first traverse of subtree with token as root
+    queue = collections.deque([token])
+    # print(token)
+    while queue:
+        vertex = queue.popleft()
+        print(vertex.text)
+        for neighbour in vertex.children:
+            queue.append(neighbour)
+
+    print()
+
+
+# breadth-first search for shallowest match
+def search_dep_tree_of_token(token, Attribute_list):
+    # visited = set()
+    queue = collections.deque([token])
+    while queue:
+        vertex = queue.popleft()
+        if vertex.text in Attribute_list:
+            # print('Attribute found,', vertex.text)
+            return vertex.text
+
+        for neighbour in vertex.children:
+            #        if neighbour not in visited:
+            #            visited.add(neighbour)
+            queue.append(neighbour)
+
+
+# complete breadth-first search
+def search_dep_tree_of_token_multi(token, Attribute_list):
+    attribute = []
+    # visited = set()
+    queue = collections.deque([token])
+    while queue:
+        vertex = queue.popleft()
+        if vertex.text in Attribute_list:
+            # print('Attribute found,', vertex.text)
+            attribute.append(vertex.text)
+
+        for neighbour in vertex.children:
+            #        if neighbour not in visited:
+            #            visited.add(neighbour)
+            queue.append(neighbour)
+    return attribute
+
+
+def NLPmod(sentence, vision_output):
     """
     Args:
         sentence: The sentence to parse.
-        Vision_output: Object dictionaries.
+        vision_output: a list of obj dicts without any order (gt or vision)
+             should have fields "shape", "color", (init)"position", "height" (not used in this module)
     
     Returns:
-        Object_coord: xyz position coordinates of all the objects.
-        target_xyz: The xyz position of the target object.
+        pick_idx: idx (wrt Input 1) of the obj to be manipulated
+        dest_xy: destination [x, y] in world frame
+        stack_idx: idx (wrt Input 1) of the obj to be stacked on, None if placing on floor at (x, y)
     """
+
     nlp = spacy.load("en_core_web_sm")
     doc = nlp(sentence)
-    Color_list = ["red", "green", "blue", "yellow", "grey"]
-    Shape_list = ["square", "box", "block", "cylinder", "ball"]
-    Size_list = ["small", "smaller", "big", "bigger", "large", "larger"]
-    Relation_list = ["right", "left", "behind", "front", "top", "between"]
+
+    print(doc)
 
     target_object = {}
     reference_objects = []
-    relation = []
+    relations = []
 
     PlotTree(doc)
 
-    # breadth-first search for shallowest match
-    def search_dep_tree_of_token(token, Attribute_list):
-        # visited = set()
-        queue = collections.deque([token])
-        while queue:
-            vertex = queue.popleft()
-            if vertex.text in Attribute_list:
-                # print('Attribute found,', vertex.text)
-                return vertex.text
-
-            for neighbour in vertex.children:
-                #        if neighbour not in visited:
-                #            visited.add(neighbour)
-                queue.append(neighbour)
-
-    # complete breadth-first search
-    def search_dep_tree_of_token_multi(token, Attribute_list):
-        attribute = []
-        # visited = set()
-        queue = collections.deque([token])
-        while queue:
-            vertex = queue.popleft()
-            if vertex.text in Attribute_list:
-                # print('Attribute found,', vertex.text)
-                attribute.append(vertex.text)
-
-            for neighbour in vertex.children:
-                #        if neighbour not in visited:
-                #            visited.add(neighbour)
-                queue.append(neighbour)
-        return attribute
-
-    i = 0
+    root_word = None
     for token in doc:
+        if token.pos_ == "VERB":
+            root_word = token
+            break
+
+    queue = collections.deque([root_word])
+    while queue:
+        token = queue.popleft()
+
         if token.pos_ == "VERB":
             # print('Found the verb! i = ', i)
             target_object["shape"] = search_dep_tree_of_token(
-                token, Shape_list
+                token, SHAPE_NAME_LIST
             )
+            target_object["shape"] = SHAPE_NAME_MAP[target_object["shape"]]
             target_object["color"] = search_dep_tree_of_token(
-                token, Color_list
+                token, COLOR_NAME_LIST
             )
-            target_object["size"] = search_dep_tree_of_token(token, Size_list)
 
-        if token.text in Relation_list:
-            # print('Found the relation! i = ', i)
-            if token.text == "between":
-                relation.append("between")
-                reference_object1 = {}
-                reference_object2 = {}
-                shapes = search_dep_tree_of_token_multi(token, Shape_list)
-                colors = search_dep_tree_of_token_multi(token, Color_list)
-                sizes = search_dep_tree_of_token_multi(token, Size_list)
+        if token.text in RELATION_NAME_LIST:
 
-                reference_object1["shape"] = shapes[0]
-                reference_object2["shape"] = shapes[1]
-                reference_object1["color"] = colors[0]
-                reference_object2["color"] = colors[1]
-                if sizes:
-                    reference_object1["size"] = sizes[0]
-                    reference_object2["size"] = sizes[1]
-                else:
-                    reference_object1["size"] = None
-                    reference_object2["size"] = None
+            # TODO:tmp HACK, avoid double counting for "on top"/"on the top of"
+            # "top" is always immediate child of "on" in the parsing tree
+            ignore_on = False
+
+            if token.text == "on":
+                for child in token.children:
+                    if child.text in RELATION_NAME_LIST:
+                        ignore_on = True
+                        break
+
+            if not ignore_on:
+                # print('Found the relations! i = ', i)
+
+                relations.append(RELATION_NAME_MAP[token.text])
+
+                if token.text == "between":
+                    reference_object1 = {}
+                    reference_object2 = {}
+                    shapes = search_dep_tree_of_token_multi(token, SHAPE_NAME_LIST)
+                    colors = search_dep_tree_of_token_multi(token, COLOR_NAME_LIST)
+                    # sizes = search_dep_tree_of_token_multi(token, Size_list)
+
+                    reference_object1["shape"] = SHAPE_NAME_MAP[shapes[0]]
+                    reference_object2["shape"] = SHAPE_NAME_MAP[shapes[1]]
+                    reference_object1["color"] = colors[0]
+                    reference_object2["color"] = colors[1]
+
                     reference_objects.append(
                         [reference_object1, reference_object2]
                     )
+                else:
+                    reference_object = {}
 
-            else:
-                reference_object = {}
-                relation.append(token.text)
-                reference_object["shape"] = search_dep_tree_of_token(
-                    token, Shape_list
-                )
-                reference_object["color"] = search_dep_tree_of_token(
-                    token, Color_list
-                )
-                reference_object["size"] = search_dep_tree_of_token(
-                    token, Size_list
-                )
-                reference_objects.append(reference_object)
+                    reference_object["shape"] = search_dep_tree_of_token(
+                        token, SHAPE_NAME_LIST
+                    )
+                    reference_object["shape"] = SHAPE_NAME_MAP[reference_object["shape"]]
+                    reference_object["color"] = search_dep_tree_of_token(
+                        token, COLOR_NAME_LIST
+                    )
+                    reference_objects.append(reference_object)
 
-        i = i + 1
+        for child in token.children:
+            queue.append(child)
 
     print("--------")
     print("Target object: ", target_object)
-    print("Relations: ", relation)
+    print("Relations: ", relations)
     print("Reference object(s) ", reference_objects)
     print("--------")
 
     def Parse_objects(querry, Object_list):
         object_index = []
-        for i in range(len(Vision_output)):
+        for i in range(len(vision_output)):
             if (
-                querry["shape"] == Vision_output[i]["shape"]
-                and querry["color"] == Vision_output[i]["color"]
+                querry["shape"] == vision_output[i]["shape"]
+                and querry["color"] == vision_output[i]["color"]
             ):
                 object_index = object_index + [i]
         if not object_index:
             print("No object of matching description found.")
+            exit()
         return object_index
 
     # First, get the target object ID
-    target_ID = Parse_objects(target_object, Vision_output)
+    target_ID = Parse_objects(target_object, vision_output)
     print("Target ID:", target_ID)
     # Then, get the reference object ID. There might be more than one fitting the description!
     reference_ID = []
-    for i in range(len(relation)):
-        if relation[i] == "between":
+    for i in range(len(relations)):
+        if relations[i] == "between":
             ID = []
             for j in range(len(reference_objects[i])):
-                ID = ID + Parse_objects(reference_objects[i][j], Vision_output)
+                ID = ID + Parse_objects(reference_objects[i][j], vision_output)
         else:
-            ID = Parse_objects(reference_objects[i], Vision_output)
+            ID = Parse_objects(reference_objects[i], vision_output)
         reference_ID.append(ID)
     print("Reference IDs: ", reference_ID)
 
     # remove ambiguity
+    # TODO: secondary relations could modify between, or modify the target object (rather than desti object)
     mult = len(reference_ID[0])
-    if mult > 1 and relation[0] != "between":
-        flag = [0, 0, 0, 0]
-        if relation[1] == "right":
+    if mult > 1 and relations[0] != "between":
+        flag = [0, 0, 0, 0]         # TODO: hardcoded, at most 4 candidates
+        if relations[1] == "right":
             for i in range(mult):
                 if (
-                    Vision_output[reference_ID[0][i]]["position"][1]
-                    < Vision_output[reference_ID[1][0]]["position"][1]
+                    vision_output[reference_ID[0][i]]["position"][1]
+                    < vision_output[reference_ID[1][0]]["position"][1]
                 ):
                     flag[i] = 1
-        if relation[1] == "left":
+        if relations[1] == "left":
             for i in range(mult):
                 if (
-                    Vision_output[reference_ID[0][i]]["position"][1]
-                    > Vision_output[reference_ID[1][0]]["position"][1]
+                    vision_output[reference_ID[0][i]]["position"][1]
+                    > vision_output[reference_ID[1][0]]["position"][1]
                 ):
                     flag[i] = 1
-        if relation[1] == "front":
+        if relations[1] == "front":
             for i in range(mult):
                 if (
-                    Vision_output[reference_ID[0][i]]["position"][0]
-                    < Vision_output[reference_ID[1][0]]["position"][0]
+                    vision_output[reference_ID[0][i]]["position"][0]
+                    < vision_output[reference_ID[1][0]]["position"][0]
                 ):
                     flag[i] = 1
-        if relation[1] == "behind":
+        if relations[1] == "behind":
             for i in range(mult):
                 if (
-                    Vision_output[reference_ID[0][i]]["position"][0]
-                    > Vision_output[reference_ID[1][0]]["position"][0]
+                    vision_output[reference_ID[0][i]]["position"][0]
+                    > vision_output[reference_ID[1][0]]["position"][0]
                 ):
                     flag[i] = 1
-        if relation[1] == "between":
+        if relations[1] == "between":
             max_x = max(
-                Vision_output[reference_ID[1][0]]["position"][0],
-                Vision_output[reference_ID[1][1]]["position"][0],
+                vision_output[reference_ID[1][0]]["position"][0],
+                vision_output[reference_ID[1][1]]["position"][0],
             )
             min_x = min(
-                Vision_output[reference_ID[1][0]]["position"][0],
-                Vision_output[reference_ID[1][1]]["position"][0],
+                vision_output[reference_ID[1][0]]["position"][0],
+                vision_output[reference_ID[1][1]]["position"][0],
             )
             max_y = max(
-                Vision_output[reference_ID[1][0]]["position"][1],
-                Vision_output[reference_ID[1][1]]["position"][1],
+                vision_output[reference_ID[1][0]]["position"][1],
+                vision_output[reference_ID[1][1]]["position"][1],
             )
             min_y = min(
-                Vision_output[reference_ID[1][0]]["position"][1],
-                Vision_output[reference_ID[1][1]]["position"][1],
+                vision_output[reference_ID[1][0]]["position"][1],
+                vision_output[reference_ID[1][1]]["position"][1],
             )
             for i in range(mult):
                 if (
-                    Vision_output[reference_ID[0][i]]["position"][0] > min_x
-                    and Vision_output[reference_ID[0][i]]["position"][0]
+                    vision_output[reference_ID[0][i]]["position"][0] > min_x
+                    and vision_output[reference_ID[0][i]]["position"][0]
                     < max_x
-                    and Vision_output[reference_ID[0][i]]["position"][1]
+                    and vision_output[reference_ID[0][i]]["position"][1]
                     > min_y
-                    and Vision_output[reference_ID[0][i]]["position"][1]
+                    and vision_output[reference_ID[0][i]]["position"][1]
                     < max_y
                 ):
                     flag[i] = 1
@@ -241,13 +335,13 @@ def NLPmod(sentence, Vision_output):
         Args:
             reference_ID: The ID(s) of the objects.
             Vision_output: The object dictionaries.
-            relation: The positional relation w.r.t. the target object.
+            relations: The positional relations w.r.t. the target object.
         
         Returns:
             target_xyz: The xyz position of the target location.
         """
         offset = 0.2
-        # for i in range(len(relation)):
+        # for i in range(len(relations)):
         if relation[0] == "right":
             target_xyz = np.asarray(
                 Vision_output[reference_ID[0][0]]["position"]
@@ -276,42 +370,89 @@ def NLPmod(sentence, Vision_output):
         return target_xyz
 
     target_xyz = obtain_target_loc_coordinates(
-        reference_ID, Vision_output, relation
+        reference_ID, vision_output, relations
     )
     print("--------")
     print(target_xyz)
     # Build structured OBJECTS list in which first entry is the target object
-    OBJECT_coord = np.array([Vision_output[target_ID[0]]["position"]])
-    for i in range(len(Vision_output)):
+    OBJECT_coord = np.array([vision_output[target_ID[0]]["position"]])
+    for i in range(len(vision_output)):
         if i != target_ID[0]:
             OBJECT_coord = np.concatenate(
-                (OBJECT_coord, np.array([Vision_output[i]["position"]]))
+                (OBJECT_coord, np.array([vision_output[i]["position"]]))
             )
     return OBJECT_coord, target_xyz
 
 
 if __name__ == "__main__":
-    sentence = "Put the smaller red block between the blue ball and yellow box"
+    # sentence = "Put the red box between the blue ball and yellow box"
+    # obj1 = {
+    #     "shape": "box",
+    #     "color": "yellow",
+    #     "position": np.array([1.0, 0.5, 0, 0]),
+    # }  # ref 1
+    # obj2 = {
+    #     "shape": "box",
+    #     "color": "red",
+    #     "position": np.array([0.0, 0.0, 0, 0]),
+    # }  # target
+    # obj3 = {
+    #     "shape": "sphere",
+    #     "color": "blue",
+    #     "position": np.array([0.0, 1, 0, 0]),
+    # }  # ref 2
+    # obj4 = {
+    #     "shape": "sphere",
+    #     "color": "yellow",
+    #     "position": np.array([0.8, 0.5, 0, 0]),
+    # }  # irrelevant
+    # Vision_output = [obj1, obj2, obj3, obj4]
+    # [OBJECTS, dest] = NLPmod(sentence=sentence, vision_output=Vision_output)
+
+    # "Put the red box right to the blue ball" two matching - error.
+    # sentence = "Put the red box right to the yellow box that is on top of the green ball"
+
+    # sentence = "Put the red box on the right of the yellow box that is on top of the green ball"
+
+    # sentence = "For the red box in front of the blue ball, put it behind the yellow box"
+
+    sentence = "For the red block to the right of the blue ball, put it behind the yellow box"
+
+    # # sentence = "Put the red box right to the blue ball that is behind the yellow box"   # same as above
+    # # sentence = "Put the red box that is right to the blue ball behind the yellow box"       # wrong(?) behavior
+    # # for the above, the parsing is not expected already
+    # # if the tree is "correct",
+
+    # sentence = "Place the leftmost red box behind the yellow box"
+
+    # sentence = "Place the red box between the blue ball and the yellow box that is in front of the green ball"
+
     obj1 = {
-        "shape": "box",
-        "color": "yellow",
+        "shape": "sphere",
+        "color": "green",
         "position": np.array([1.0, 0.5, 0, 0]),
-    }  # ref 1
+    }
     obj2 = {
-        "shape": "block",
+        "shape": "box",
         "color": "red",
         "position": np.array([0.0, 0.0, 0, 0]),
-    }  # target
+    }
     obj3 = {
-        "shape": "ball",
+        "shape": "sphere",
         "color": "blue",
         "position": np.array([0.0, 1, 0, 0]),
-    }  # ref 2
+    }
     obj4 = {
-        "shape": "ball",
+        "shape": "box",
         "color": "yellow",
-        "position": np.array([0.8, 0.5, 0, 0]),
-    }  # irrelevant
-    Vision_output = [obj1, obj2, obj3, obj4]
-    [OBJECTS, dest] = NLPmod(sentence=sentence, Vision_output=Vision_output)
+        "position": np.array([1.2, 0.5, 0, 0]),
+    }
+    obj5 = {
+        "shape": "box",
+        "color": "yellow",
+        "position": np.array([0.8, 0.4, 0, 0]),
+    }
+    Vision_output = [obj1, obj2, obj3, obj4, obj5]
+    [OBJECTS, dest] = NLPmod(sentence=sentence, vision_output=Vision_output)
+
 

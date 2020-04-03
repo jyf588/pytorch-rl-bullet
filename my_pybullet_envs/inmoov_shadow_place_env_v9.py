@@ -109,7 +109,8 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                 else:
                     self.grasp_pi_name = "0311_cyl_2_n_20_50"
             else:
-                self.grasp_pi_name = "0313_2_n_25_45"
+                # self.grasp_pi_name = "0313_2_n_25_45"
+                self.grasp_pi_name = "0325_graspco_16_n_w0_25_45"
         else:
             self.grasp_pi_name = grasp_pi_name
 
@@ -402,7 +403,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         # if no contact, reward
         # if use small force, reward
 
-        bottom_id = self.table_id if self.place_floor else self.btm_obj["id"]
+        # bottom_id = self.table_id if self.place_floor else self.btm_obj["id"]
 
         reward = 0.0
         top_pos, top_quat = p.getBasePositionAndOrientation(self.top_obj["id"])
@@ -416,23 +417,19 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         )  # R_cl * unitz[0,0,1]
         rot_metric = np.array(z_axis).dot(np.array([0, 0, 1]))
 
-        # enlarge 0.15 -> 0.45
-        # xyz_metric = 1 - (np.minimum(np.linalg.norm(np.array(self.desired_obj_pos_final) - np.array(clPos)), 0.45) / 0.15)
-        # TODO:tmp change to xy metric, allow it to free drop
-        # TODO: xyz metric should use gt value.
         xyz_metric = 1 - (
             np.minimum(
                 np.linalg.norm(
-                    np.array(self.desired_obj_pos_final[:2])
-                    - np.array(top_pos[:2])
+                    np.array(self.desired_obj_pos_final)
+                    - np.array(top_pos)
                 ),
-                0.45,
+                0.15,
             )
             / 0.15
         )
         lin_v_r = np.linalg.norm(top_lin_v)
         ang_v_r = np.linalg.norm(top_ang_v)
-        vel_metric = 1 - np.minimum(lin_v_r + ang_v_r / 2.0, 5.0) / 5.0
+        vel_metric = 1 - np.minimum(lin_v_r * 2.0 + ang_v_r, 2.5) / 2.5
 
         reward += np.maximum(rot_metric * 20 - 15, 0.0)
         # print(np.maximum(rot_metric * 20 - 15, 0.))
@@ -441,58 +438,79 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         reward += vel_metric * 5
         # print(vel_metric * 5)
 
-        total_nf = 0
-        cps_floor = p.getContactPoints(self.top_obj["id"], bottom_id, -1, -1)
-        for cp in cps_floor:
-            total_nf += cp[9]
-        if np.abs(total_nf) > (
-            self.top_obj["mass"] * 4.0
-        ):  # mg        # TODO:tmp contact force hack
-            meaningful_c = True
-            reward += 5.0
-        else:
-            meaningful_c = False
-        #     # reward += np.abs(total_nf) / 10.
+        # total_nf = 0
+        # cps_floor = p.getContactPoints(self.top_obj["id"], bottom_id, -1, -1)
+        # for cp in cps_floor:
+        #     total_nf += cp[9]
+        # if np.abs(total_nf) > (
+        #     self.top_obj["mass"] * 4.0
+        # ):  # mg        # TODO:tmp contact force hack
+        #     meaningful_c = True
+        #     reward += 5.0
+        # else:
+        #     meaningful_c = False
+        # #     # reward += np.abs(total_nf) / 10.
 
-        # not used when placing on floor
-        btm_vels = p.getBaseVelocity(bottom_id)
-        btm_linv = np.array(btm_vels[0])
-        btm_angv = np.array(btm_vels[1])
-        reward += (
-            np.maximum(
-                -np.linalg.norm(btm_linv) - np.linalg.norm(btm_angv), -10.0
-            )
-            * 0.3
-        )
-        # print(np.maximum(-np.linalg.norm(btm_linv) - np.linalg.norm(btm_angv), -10.0) * 0.3)
+        # # not used when placing on floor
+        # btm_vels = p.getBaseVelocity(bottom_id)
+        # btm_linv = np.array(btm_vels[0])
+        # btm_angv = np.array(btm_vels[1])
+        # reward += (
+        #     np.maximum(
+        #         -np.linalg.norm(btm_linv) - np.linalg.norm(btm_angv) / 2.0, -5.0
+        #     )
+        # )
 
         diff_norm = self.robot.get_norm_diff_tar()
-        reward += 15.0 / (diff_norm + 1.0)
+        reward += 10.0 / (diff_norm + 1.0)
         # print(15. / (diff_norm + 1.))
+
+        # any_hand_contact = False
+        # hand_r = 0
+        # for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
+        #     cps = p.getContactPoints(
+        #         self.top_obj["id"], self.robot.arm_id, -1, i
+        #     )
+        #     if len(cps) == 0:
+        #         hand_r += 1.0  # the fewer links in contact, the better
+        #     else:
+        #         any_hand_contact = True
+        # # print(hand_r)
+        # reward += hand_r - 15
 
         any_hand_contact = False
         hand_r = 0
         for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
-            cps = p.getContactPoints(
-                self.top_obj["id"], self.robot.arm_id, -1, i
-            )
-            if len(cps) == 0:
-                hand_r += 1.0  # the fewer links in contact, the better
-            else:
+            cps = p.getContactPoints(bodyA=self.robot.arm_id, linkIndexA=i)
+            con_this_link = False
+            for cp in cps:
+                if cp[1] != cp[2]:  # not self-collision of the robot
+                    con_this_link = True
+                    break
+            if con_this_link:
                 any_hand_contact = True
-        # print(hand_r)
-        reward += hand_r - 15
+            else:
+                hand_r += 0.5
+        reward += hand_r - 7
+        # print(hand_r - 7.0)
+
+        #
+        # if self.timer == 99 * self.control_skip:
+        #     print(rot_metric, xyz_metric, vel_metric, meaningful_c)
+        #     print(any_hand_contact)
 
         if (
             rot_metric > 0.9
-            and xyz_metric > 0.8
-            and vel_metric > 0.8
-            and meaningful_c
+            and xyz_metric > 0.6
+            and vel_metric > 0.6
+            # and meaningful_c
         ):  # close to placing
             reward += 5.0
             # print("upright")
             if not any_hand_contact:
-                reward += 20
+                reward += 15.0
+                if self.timer == 100 * self.control_skip:       # TODO: hard coded length
+                    reward += 500      # TODO
                 # print("no hand con")
 
         # print("r_total", reward)

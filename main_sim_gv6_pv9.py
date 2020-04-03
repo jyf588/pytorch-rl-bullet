@@ -19,9 +19,9 @@ import time
 
 import inspect
 from NLP_module import NLPmod
-from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import (
-    ImaginaryArmObjSession,
-)
+# from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import (
+#     ImaginaryArmObjSession,
+# )
 
 from my_pybullet_envs.inmoov_shadow_place_env_v9 import (
     InmoovShadowHandPlaceEnvV9,
@@ -29,9 +29,6 @@ from my_pybullet_envs.inmoov_shadow_place_env_v9 import (
 from my_pybullet_envs.inmoov_shadow_demo_env_v4 import (
     InmoovShadowHandDemoEnvV4,
 )
-
-# TODO; deprecate posesaver
-
 
 no_vision = False
 try:
@@ -90,6 +87,11 @@ gt_odicts = demo_scenes_rand_size.SCENES[args.scene]
 # TODO: merge some config with utils
 
 PLACE_FLOOR = False  # TODO: language
+g_tz = 0.0
+# TODO:tmp
+if args.scene == 4:
+    g_tz = 0.16
+
 MIX_SHAPE_PI = True
 
 SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
@@ -152,10 +154,10 @@ if HIDE_SURROUNDING_OBJECTS:
 IS_BOX = gt_odicts[top_obj_idx]["shape"] == "box"  # TODO: infer from language
 
 if MIX_SHAPE_PI:
-    GRASP_PI = "0313_2_n_25_45"
-    GRASP_DIR = "./trained_models_%s/ppo/" % "0313_2_n"  # TODO
-    PLACE_PI = "0313_2_placeco_0316_1"  # 50ms
-    PLACE_PI = "0313_2_placeco_0316_3"  # 50ms
+    GRASP_PI = "0325_graspco_16_n_w0_25_45"
+    GRASP_DIR = "./trained_models_%s/ppo/" % "0325_graspco_16_n_w0"  # TODO
+    # PLACE_PI = "0313_2_placeco_0316_1"  # 50ms
+    PLACE_PI = "0325_graspco_16_n_w0_placeco_0331_2"  # 50ms
     PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 else:
     if IS_BOX:
@@ -180,7 +182,7 @@ else:
     else:
         sentence = "Put the green cylinder on top of the blue cylinder"
 
-GRASP_PI_ENV_NAME = "InmoovHandGraspBulletEnv-v5"
+GRASP_PI_ENV_NAME = "InmoovHandGraspBulletEnv-v6"
 PLACE_PI_ENV_NAME = "InmoovHandPlaceBulletEnv-v9"
 
 USE_VISION_DELAY = True
@@ -308,6 +310,11 @@ def construct_obj_dict_bullet(odicts):
         odict_new["mass"] = np.random.uniform(utils.MASS_MIN, utils.MASS_MAX)
         odict_new["mu"] = OBJ_MU
         odict_new["height"] = np.random.uniform(utils.H_MIN, utils.H_MAX)
+
+        # TODO:tmp
+        if args.scene == 4 and odict["color"] == "red":
+            odict_new["height"] = 0.16
+
         odict_new["half_width"] = np.random.uniform(
             utils.HALF_W_MIN, utils.HALF_W_MAX
         )
@@ -396,7 +403,7 @@ def get_stacking_obs(
         rot = np.array(p.getMatrixFromQuaternion(b_quat))
         b_up = [rot[2], rot[5], rot[8]]
 
-        t_half_height = gt_odicts_internal[top_obj_idx]["height"] / 2.0
+        t_half_height = gt_odicts_internal[top_obj_idx]["height"] / 2.0     # TODO: duplicate
     return t_pos, t_up, b_pos, b_up, t_half_height
 
 
@@ -511,11 +518,12 @@ else:
     p.connect(p.DIRECT)
 
 """Imaginary arm session to get q_reach"""
-sess = ImaginaryArmObjSession()
+# sess = ImaginaryArmObjSession()
+#
+# Qreach = np.array(sess.get_most_comfortable_q_and_refangle(g_tx, g_ty)[0])
 
-Qreach = np.array(sess.get_most_comfortable_q_and_refangle(g_tx, g_ty)[0])
 
-desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + p_tz]
+
 a = InmoovShadowHandPlaceEnvV9(renders=False, grasp_pi_name=GRASP_PI)
 a.seed(args.seed)
 # TODO:tmp, get_n_optimal_init_arm_qs need to do collision checking
@@ -525,6 +533,12 @@ table_id = p.loadURDF(
     useFixedBase=1,
 )
 
+desired_obj_pos = [g_tx, g_ty, g_tz]
+Qreach = utils.get_n_optimal_init_arm_qs(a.robot, utils.PALM_POS_OF_INIT,
+                                         p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
+                                         desired_obj_pos, table_id, wrist_gain=3.0)[0]  # TODO
+
+desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + p_tz]
 p_pos_of_ave, p_quat_of_ave = p.invertTransform(
     a.o_pos_pf_ave, a.o_quat_pf_ave
 )
@@ -590,7 +604,7 @@ planning(Traj_reach, recurrent_hidden_states, masks)
 # print(f"Pose after reset")
 # pprint.pprint(pose_saver.poses[-1])
 
-g_obs = env_core.get_robot_contact_txty_halfh_obs_nodup(g_tx, g_ty, g_half_h)
+g_obs = env_core.get_robot_contact_txtytz_halfh_shape_obs_no_dup(g_tx, g_ty, g_tz, g_half_h, IS_BOX)
 g_obs = wrap_over_grasp_obs(g_obs)
 
 """Grasp"""
@@ -602,9 +616,7 @@ for i in range(GRASP_END_STEP):
         )
 
     env_core.step(unwrap_action(action))
-    g_obs = env_core.get_robot_contact_txty_halfh_obs_nodup(
-        g_tx, g_ty, g_half_h
-    )
+    g_obs = env_core.get_robot_contact_txtytz_halfh_shape_obs_no_dup(g_tx, g_ty, g_tz, g_half_h, IS_BOX)
     g_obs = wrap_over_grasp_obs(g_obs)
 
     # print(g_obs)
@@ -619,7 +631,7 @@ for i in range(GRASP_END_STEP):
 # pprint.pprint(pose_saver.poses[-1])
 
 final_g_obs = copy.copy(g_obs)
-del g_obs, g_tx, g_ty, g_actor_critic, g_ob_rms, g_half_h
+del g_obs, g_tx, g_ty, g_tz, g_actor_critic, g_ob_rms, g_half_h
 
 state = get_relative_state_for_reset(top_oid)
 print("after grasping", state)

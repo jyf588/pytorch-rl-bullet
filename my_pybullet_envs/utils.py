@@ -6,6 +6,9 @@ from typing import *
 
 PLACE_START_CLEARANCE = 0.14
 
+PALM_POS_OF_INIT = [-0.18, 0.095, 0.11]
+PALM_EULER_OF_INIT = [1.8, -1.57, 0]
+
 SHAPE_IND_MAP = {-1: p.GEOM_SPHERE, 0: p.GEOM_CYLINDER, 1: p.GEOM_BOX}
 SHAPE_NAME_MAP = {
     "sphere": p.GEOM_SPHERE,
@@ -36,7 +39,7 @@ H_MIN = 0.13
 H_MAX = 0.18
 
 TX_MIN = -0.1
-TX_MAX = 0.3
+TX_MAX = 0.25
 TY_MIN = -0.1
 TY_MAX = 0.5
 
@@ -291,3 +294,22 @@ def save_pickle(path: str, data: Any):
 
 
 # TODO: there are two tables in demo...
+
+# shape,color,init_position
+# bullet_id
+# radius, height, pos, quat
+
+# multiple dicts
+# michelle uses a dict of dicts with oids as key
+# there is also prediction dicts from vision output (position, up_vector, height) * 2 for stacking;
+# (shape,color,init_position) for init planning
+# GT scene description/language has shape,color,init_position that is passed to Bullet to create scene
+# GT scene other info
+
+# Eventually, lang need to take in vision predicted shape,color,init_position
+# list, without oid as keys.
+
+# should split GT info dict & prediction dict
+
+# are we predicting (shape,color) for stacking still?
+

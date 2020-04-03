@@ -89,8 +89,8 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         # shadow hand is 22-5=17dof
         self.action_scale = np.array([0.009 / self.control_skip] * 7 + [0.024 / self.control_skip] * 17)
 
-        self.p_pos_of_init = [-0.18, 0.095, 0.11]
-        self.p_quat_of_init = p.getQuaternionFromEuler([1.8, -1.57, 0])
+        self.p_pos_of_init = utils.PALM_POS_OF_INIT
+        self.p_quat_of_init = p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT)
 
         self.tx = -1    # dummy
         self.ty = -1    # dummy
@@ -210,18 +210,15 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         bottom_id = self.table_id if self.grasp_floor else self.btm_obj['id']
 
         if self.has_test_phase:
-            if self.warm_start:
-                if self.timer == self.test_start * self.control_skip:
-                    self.force_global = [self.np_random.uniform(-100, 100),
-                                         self.np_random.uniform(-100, 100),
-                                         -200.]
-            else:
-                self.force_global = [0., 0, 0]
+            if self.timer == self.test_start * self.control_skip:
+                self.force_global = [self.np_random.uniform(-100, 100),
+                                     self.np_random.uniform(-100, 100),
+                                     -200.]
 
             if self.timer > self.test_start * self.control_skip:
                 p.setCollisionFilterPair(self.top_obj['id'], bottom_id, -1, -1, enableCollision=0)
                 # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
-                #     p.setCollisionFilterPair(self.floorId, self.robot.arm_id, -1, i, enableCollision=0)
+                #     p.setCollisionFilterPair(bottom_id, self.robot.arm_id, -1, i, enableCollision=0)
                 _, quat = p.getBasePositionAndOrientation(self.top_obj['id'])
                 _, quat_inv = p.invertTransform([0, 0, 0], quat)
                 force_local, _ = p.multiplyTransforms([0, 0, 0], quat_inv, self.force_global, [0, 0, 0, 1])
@@ -242,27 +239,24 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
         reward = 0.0
 
-        diff_norm = self.robot.get_norm_diff_tar_arm() * 10
-        reward += np.maximum(2. - diff_norm, 0)
-        # print(reward)
+        # diff_norm = self.robot.get_norm_diff_tar_arm() * 10
+        # reward += np.maximum(2. - diff_norm, 0)
+        # # print(reward)
 
         # rewards is height of target object
         top_pos, _ = p.getBasePositionAndOrientation(self.top_obj['id'])
 
-        palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
-        dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(top_pos)), 0.5)
-        reward += -dist * 2.0       # TODO: is this necessary?
-
-        # top_xyz_ideal = np.array([self.tx_act, self.ty_act, self.tz_act + self.top_obj['height'] / 2.0 + 0.05])
-        # reward += -np.minimum(np.linalg.norm(top_xyz_ideal - np.array(top_pos)), 0.4) * 6.0    # TODO
         top_xy_ideal = np.array([self.tx_act, self.ty_act])
-        reward += -np.minimum(np.linalg.norm(top_xy_ideal - np.array(top_pos[:2])), 0.4) * 6.0    # TODO
+        reward += -np.minimum(np.linalg.norm(top_xy_ideal - np.array(top_pos[:2])), 0.4) * 10.0    # TODO
 
         for i in self.robot.fin_tips[:4]:
             tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
             reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(top_pos)), 0.5)  # 4 finger tips
         tip_pos = p.getLinkState(self.robot.arm_id, self.robot.fin_tips[4])[0]      # thumb tip
         reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(top_pos)), 0.5) * 5.0
+        palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
+        dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(top_pos)), 0.5)
+        reward += -dist * 2.0
 
         if self.warm_start:
             # not used when grasp from floor
@@ -271,13 +265,13 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
             btm_vels = p.getBaseVelocity(bottom_id)
             btm_linv = np.array(btm_vels[0])
             btm_angv = np.array(btm_vels[1])
-            reward += np.maximum(-np.linalg.norm(btm_linv) - np.linalg.norm(btm_angv) / 2.0, -10.0) * 1.0
+            reward += np.maximum(-np.linalg.norm(btm_linv) * 2.0 - np.linalg.norm(btm_angv), -5.0)
 
             z_axis, _ = p.multiplyTransforms(
                 [0, 0, 0], btm_quat, [0, 0, 1], [0, 0, 0, 1]
             )  # R_cl * unitz[0,0,1]
             rot_metric = np.array(z_axis).dot(np.array([0, 0, 1]))
-            reward += np.maximum(rot_metric * 20 - 15, 0.0) * 3
+            reward += np.maximum(rot_metric * 20 - 15, 0.0)
 
         cps = p.getContactPoints(self.top_obj['id'], self.robot.arm_id, -1, self.robot.ee_id)    # palm
         if len(cps) > 0:
@@ -296,10 +290,10 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
             if con and ind_f == 4:
                 reward += 20.0        # reward thumb even more
 
-        reward -= self.robot.get_4_finger_deviation() * 0.5
+        reward -= self.robot.get_4_finger_deviation() * 1.5
 
         # object dropped during testing
-        if top_pos[2] < self.tz_act and self.timer > self.test_start * self.control_skip:
+        if top_pos[2] < (self.tz_act + 0.04) and self.timer > self.test_start * self.control_skip:
             reward += -15.
         # if self.timer == 64 * self.control_skip:
         #     print(self.robot.get_q_dq(range(29, 34))[0])
