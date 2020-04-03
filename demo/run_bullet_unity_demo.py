@@ -23,8 +23,10 @@ import time
 from typing import *
 
 import bullet2unity.states
+import demo.base_scenes
 from demo.env import DemoEnvironment
 from demo.options import OPTIONS
+from demo.scene import SceneGenerator
 
 global args
 
@@ -51,8 +53,13 @@ async def send_to_client(websocket, path):
         websocket: The websocket protocol instance.
         path: The URI path.
     """
+    scene = SceneGenerator(
+        base_scene=demo.base_scenes.SCENE, seed=OPTIONS.seed, mu=OPTIONS.obj_mu
+    ).generate()
+
     env = DemoEnvironment(
         opt=OPTIONS,
+        scene=scene,
         observation_mode="vision",
         renderer="unity",
         visualize_bullet=False,
@@ -62,23 +69,23 @@ async def send_to_client(websocket, path):
     # Send states one by one.
     i = 0
     while 1:
-        if i >= 430:
-            (
-                state_id,
-                object_tags,
-                bullet_state,
-                look_at_oids,
-            ) = env.get_current_state()
+        # Only run unity for placing.
+        if 430 <= i < 480:
+            bullet_state = env.get_state()
+            state_id = f"{env.timestep:06}"
+            look_at_oids = [2]
 
             message = encode(state_id, bullet_state, look_at_oids)
 
             # Send the message to client.
-            print(f"Sending to unity: state {state_id}")
+            print(f"Sending to unity: state {state_id}\tTime: {time.time()}")
             await websocket.send(message)
 
             # Wait util we receive message from client.
             reply = await websocket.recv()
-            print(f"Received from client: {len(reply)} characters")
+            print(
+                f"Received from client: {len(reply)} characters\tTime: {time.time()}"
+            )
 
             received_state_id, data = decode(reply, look_at_oids)
 
