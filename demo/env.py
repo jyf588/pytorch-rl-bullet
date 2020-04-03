@@ -32,6 +32,7 @@ class DemoEnvironment:
     def __init__(
         self,
         opt: argparse.Namespace,
+        scene: List[Dict],
         observation_mode: str,
         visualize_bullet: bool,
         visualize_unity: bool,
@@ -41,6 +42,19 @@ class DemoEnvironment:
         """
         Args:
             opt: Various demo configurations/options.
+            scene: A list of object dictionaries defining the starting
+                configuration of tabletop objects in the scene, in the format:
+                [
+                    {
+                        "shape": <shape>,
+                        "color": <color>,
+                        "position": <position>,
+                        "orientation": <orientation>,
+                        "radius": <radius>,
+                        "height": <height>,
+                    },
+                    ...
+                ]
             observation_mode: Source of observation, which can either be from
                 ground truth (`gt`) or vision (`vision`).
             visualize_bullet: Whether to visualize the demo in pybullet in 
@@ -58,8 +72,9 @@ class DemoEnvironment:
         self.visualize_unity = visualize_unity
         self.renderer = renderer
 
-        # Get the initial state.
-        self.init_odicts = self.get_initial_objects()
+        # Set the initial scene.
+        self.scene = scene
+
         # self.state = copy.deepcopy(self.init_state)
         self.src_idx = 1
         self.dst_idx = 2
@@ -77,7 +92,7 @@ class DemoEnvironment:
             self.robot_env,
             self.oids,
             self.table_id,
-        ) = self.initialize_bullet_world(odicts=self.init_odicts)
+        ) = self.initialize_bullet_world(odicts=self.scene)
         self.src_oid = self.oids[self.src_idx]
         self.dst_oid = self.oids[self.dst_idx]
         self.state = self.construct_state()
@@ -99,72 +114,6 @@ class DemoEnvironment:
             + self.opt.n_place_steps
             + self.opt.n_release_steps
         )
-
-    def get_initial_objects(self) -> List:
-        """Loads the demo objects in their initial configuration.
-        
-        Returns:
-            odicts: Object dictionaries, with the format: 
-            [
-                {
-                    "shape": shape,
-                    "color": color,
-                    "radius": radius,
-                    "height": height,
-                    "position": [x, y, z],
-                    "orientation": [x, y, z, w],
-                },
-                ...
-            ]
-        """
-        odicts = [
-            {
-                "shape": "box",
-                "color": "yellow",
-                "position": [0.15, 0.7, 0.09],
-                "orientation": [0.0, 0.0, 0.0, 1.0],
-                "radius": 0.03,
-                "height": 0.18,
-            },
-            {
-                "shape": "box",
-                "color": "green",
-                "position": [0.2, 0.4, 0.09],
-                "orientation": [0.0, 0.0, 0.0, 1.0],
-                "radius": 0.03,
-                "height": 0.18,
-            },
-            {
-                "shape": "cylinder",
-                "color": "blue",
-                "position": [0.1, -0.05, 0.09],
-                "orientation": [0.0, 0.0, 0.0, 1.0],
-                "radius": 0.03,
-                "height": 0.18,
-            },
-            {
-                "shape": "box",
-                "color": "yellow",
-                "position": [0.0, 0.1, 0.09],
-                "orientation": [0.0, 0.0, 0.0, 1.0],
-                "radius": 0.03,
-                "height": 0.18,
-            },
-        ]
-
-        # Fill in additional attributes programmatically.
-        for idx, odict in enumerate(odicts):
-            odict["mass"] = np.random.uniform(utils.MASS_MIN, utils.MASS_MAX)
-            odict["mu"] = self.opt.obj_mu
-            odict["height"] = np.random.uniform(utils.H_MIN, utils.H_MAX)
-            odict["radius"] = np.random.uniform(
-                utils.HALF_W_MIN, utils.HALF_W_MAX
-            )
-            if odict["shape"] == "box":
-                odict["radius"] *= 0.8
-            odict["position"][2] = odict["height"] / 2
-            odicts[idx] = odict
-        return odicts
 
     def construct_state(self):
         """Constructs the state dictionary of the bullet environment.
@@ -191,7 +140,7 @@ class DemoEnvironment:
         state = {"objects": {}, "robot": self.get_robot_state()}
         for idx in range(len(self.oids)):
             oid = self.oids[idx]
-            odict = self.init_odicts[idx]
+            odict = self.scene[idx]
             state["objects"][oid] = odict
         return state
 
@@ -337,8 +286,8 @@ class DemoEnvironment:
         return table_id
 
     def compute_qs(self):
-        src_x, src_y, _ = self.init_odicts[self.src_idx]["position"]
-        dst_x, dst_y, dst_z = self.init_odicts[self.dst_idx]["position"]
+        src_x, src_y, _ = self.scene[self.src_idx]["position"]
+        dst_x, dst_y, dst_z = self.scene[self.dst_idx]["position"]
         dst_position = [dst_x, dst_y, dst_z + utils.PLACE_START_CLEARANCE]
 
         sess = ImaginaryArmObjSession()
@@ -564,7 +513,7 @@ class DemoEnvironment:
         return obs
 
     def get_placing_observation(self):
-        # Update the state only every `vision_delay` steps.
+        # Update the observation only every `vision_delay` steps.
         if self.timestep % self.opt.vision_delay == 0:
             self.obs = self.get_observation(
                 observation_mode=self.observation_mode, renderer=self.renderer
@@ -573,7 +522,7 @@ class DemoEnvironment:
         # Compute the observation vector from object poses and placing position.
         tdict = self.obs["objects"][self.src_oid]
         bdict = self.obs["objects"][self.dst_oid]
-        t_init_dict = self.init_odicts[self.src_idx]
+        t_init_dict = self.scene[self.src_idx]
         x, y, z = t_init_dict["position"]
         is_box = t_init_dict["shape"] == "box"
         p_obs = self.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
@@ -611,6 +560,7 @@ class DemoEnvironment:
         Returns:
             observation:
         """
+        self.update_state()
         obs = copy.deepcopy(self.state)
         if self.observation_mode == "gt":
             pass
