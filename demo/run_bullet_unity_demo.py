@@ -75,9 +75,8 @@ async def send_to_client(websocket, path):
         if stage == "place":
             bullet_state = env.get_state()
             state_id = f"{env.timestep:06}"
-            look_at_oids = [2]
 
-            message = encode(state_id, bullet_state, look_at_oids)
+            message = encode(state_id, bullet_state, env.look_at_oids)
 
             # Send the message to client.
             print(f"Sending to unity: state {state_id}\tTime: {time.time()}")
@@ -89,7 +88,7 @@ async def send_to_client(websocket, path):
                 f"Received from client: {len(reply)} characters\tTime: {time.time()}"
             )
 
-            received_state_id, data = decode(reply, look_at_oids)
+            received_state_id, data = decode(reply, env.look_at_oids)
 
             # Verify that the sent ID and received ID are equivalent.
             assert received_state_id == state_id

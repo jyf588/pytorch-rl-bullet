@@ -91,6 +91,10 @@ class DemoEnvironment:
         if self.observation_mode == "vision":
             self.vision_module = VisionModule()
 
+            # Specify a list of objects that the robot should look at and predict
+            # poses for.
+            self.look_at_oids = [self.src_oid, self.dst_oid]
+
         self.timestep = 0
         self.n_total_steps = (
             self.opt.n_plan_steps  # reach
@@ -376,7 +380,7 @@ class DemoEnvironment:
         return p_obs
 
     def get_observation(self, observation_mode: str, renderer: str):
-        """Gets the observation for the current timestep.
+        """Gets an observation from the current state.
         
         Args:
             observation_mode:
@@ -385,39 +389,75 @@ class DemoEnvironment:
         Returns:
             observation:
         """
-        obs = self.world.get_state()
         if self.observation_mode == "gt":
-            pass
+            # The ground truth observation is simply the same as the true
+            # state of the world.
+            obs = self.world.get_state()
         elif self.observation_mode == "vision":
-            y_dict = self.get_observation_from_vision(renderer=renderer)
-            src_odict = obs["objects"][self.src_oid]
-            src_odict["position"] = y_dict["position"]
-            src_odict["up_vector"] = y_dict["up_vector"]
-            obs["objects"][self.src_oid] = src_odict
+            obs = self.get_vision_observation(renderer=renderer)
         else:
             raise ValueError(
                 "Unsupported observation mode: {self.observation_mode}"
             )
         return obs
 
-    def get_observation_from_vision(self, renderer: str):
-        oid = 2
-        rgb, seg_img = self.get_images(oid=oid, renderer=renderer)
-        start = time.time()
-        pred = self.vision_module.predict(oid=oid, rgb=rgb, seg_img=seg_img)
-        print(f"Vision inference time: {time.time() - start}")
+    def get_vision_observation(self, renderer: str):
+        """Computes the observation of the bullet world using the vision 
+        module.
 
-        # Convert vectorized predictions to dictionary form using camera
-        # information.
-        y_dict = dash_object.y_vec_to_dict(
-            y=list(pred[0]),
-            coordinate_frame="camera",
-            cam_position=self.unity_data[oid]["camera_position"],
-            cam_orientation=self.unity_data[oid]["camera_orientation"],
-        )
+        Args:
+            renderer: The renderer of the input images to the vision module.
+        
+        Returns:
+            obs: The observation, in the format: 
+                {
+                    "objects": {
+                        "<oid>": {
+                            "shape": shape,
+                            "color": color,
+                            "radius": radius,
+                            "height": height,
+                            "position": [x, y, z],
+                            "orientation": [x, y, z, w],
+                        },
+                        ...
+                    },
+                    "robot": {
+                        "<joint_name>": <joint_angle>,
+                        ...
+                    }
+                }.
+        """
+        # The final visual observation, for now, is the same as the ground
+        # truth state with the source object's pose predicted. So, we
+        # initialize the observation with the true state as a starting point.
+        obs = self.world.get_state()
 
-        print(f"Vision predictions: {y_dict}")
-        return y_dict
+        # Predict the object pose for the objects that we've "looked" at.
+        for oid in self.look_at_oids:
+            rgb, seg_img = self.get_images(oid=oid, renderer=renderer)
+            start = time.time()
+            pred = self.vision_module.predict(
+                oid=oid, rgb=rgb, seg_img=seg_img
+            )
+            print(f"Vision inference time: {time.time() - start}")
+
+            # Convert vectorized predictions to dictionary form using camera
+            # information.
+            y_dict = dash_object.y_vec_to_dict(
+                y=list(pred[0]),
+                coordinate_frame="camera",
+                cam_position=self.unity_data[oid]["camera_position"],
+                cam_orientation=self.unity_data[oid]["camera_orientation"],
+            )
+
+            print(f"Vision predictions: {y_dict}")
+
+            src_odict = obs["objects"][oid]
+            src_odict["position"] = y_dict["position"]
+            src_odict["up_vector"] = y_dict["up_vector"]
+            obs["objects"][oid] = src_odict
+        return obs
 
     def get_images(self, oid: int, renderer: str):
         """Retrieves the images that are input to the vision module.
@@ -438,6 +478,8 @@ class DemoEnvironment:
             # Unity should have already called set_unity_data before this.
             rgb = self.unity_data[oid]["rgb"]
             seg_rgb = self.unity_data[oid]["seg_img"]
+
+            # Optionally we can visualize unity images using OpenCV.
             if self.visualize_unity:
                 bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
                 seg_bgr = cv2.cvtColor(seg_rgb, cv2.COLOR_RGB2BGR)
