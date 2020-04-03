@@ -101,8 +101,10 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         self.last_t_pos, self.last_t_orn = None, None
         self.t_pos, self.t_orn = None, None
 
-        # TODO: hardcoded here
-        if grasp_pi_name is None:
+        # specify from command line, otherwise use default
+        if grasp_pi_name:
+            self.grasp_pi_name = grasp_pi_name
+        else:
             if not self.random_top_shape:
                 if det_top_shape_ind:
                     self.grasp_pi_name = "0311_box_2_n_20_50"
@@ -110,9 +112,8 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                     self.grasp_pi_name = "0311_cyl_2_n_20_50"
             else:
                 # self.grasp_pi_name = "0313_2_n_25_45"
-                self.grasp_pi_name = "0325_graspco_16_n_w0_25_45"
-        else:
-            self.grasp_pi_name = grasp_pi_name
+                # self.grasp_pi_name = "0325_graspco_16_n_w0_25_45"
+                self.grasp_pi_name = "0331_co_2_w_25_45"
 
         self.start_clearance = utils.PLACE_START_CLEARANCE
 
@@ -293,12 +294,33 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                     self.np_random, self.up, self.place_floor, 0.0, 0.0
                 )
 
-            desired_obj_pos = [
-                self.tx,
-                self.ty,
-                self.start_clearance + self.tz,
-            ]  # used for planning
-            # obj frame (o_pos) in the COM of obj.
+            # TODO: this will affect demo env
+            # desired_obj_pos = [
+            #     self.tx,
+            #     self.ty,
+            #     self.start_clearance + self.tz,
+            # ]  # used for planning
+
+            if self.place_floor:
+                desired_obj_pos = [
+                    self.tx,
+                    self.ty,
+                    utils.perturb_scalar(
+                        self.np_random,
+                        self.start_clearance + 0.0,
+                        0.01
+                    ),
+                ]  # used for planning
+            else:
+                desired_obj_pos = [
+                    self.tx,
+                    self.ty,
+                    utils.perturb_scalar(
+                        self.np_random,
+                        self.start_clearance + utils.H_MAX,
+                        0.01
+                    ),     # always start from higher
+                ]  # used for planning
 
             p_pos_of_ave, p_quat_of_ave = p.invertTransform(
                 self.o_pos_pf_ave, self.o_quat_pf_ave
@@ -428,8 +450,10 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
             / 0.15
         )
         lin_v_r = np.linalg.norm(top_lin_v)
+        # print("lin_v", lin_v_r)
         ang_v_r = np.linalg.norm(top_ang_v)
-        vel_metric = 1 - np.minimum(lin_v_r * 2.0 + ang_v_r, 2.5) / 2.5
+        # print("ang_v", ang_v_r)
+        vel_metric = 1 - np.minimum(lin_v_r * 4.0 + ang_v_r, 5.0) / 5.0
 
         reward += np.maximum(rot_metric * 20 - 15, 0.0)
         # print(np.maximum(rot_metric * 20 - 15, 0.))
@@ -437,6 +461,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         # print(xyz_metric * 5)
         reward += vel_metric * 5
         # print(vel_metric * 5)
+        # print("upright", reward)
 
         # total_nf = 0
         # cps_floor = p.getContactPoints(self.top_obj["id"], bottom_id, -1, -1)
@@ -461,9 +486,9 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         #     )
         # )
 
-        diff_norm = self.robot.get_norm_diff_tar()
-        reward += 10.0 / (diff_norm + 1.0)
-        # print(15. / (diff_norm + 1.))
+        diff_norm = self.robot.get_norm_diff_tar()      # TODO: necessary?
+        reward += np.maximum(7.0 - diff_norm, 0.)
+        # # print(10. / (diff_norm + 1.))
 
         # any_hand_contact = False
         # hand_r = 0
@@ -492,12 +517,12 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
             else:
                 hand_r += 0.5
         reward += hand_r - 7
-        # print(hand_r - 7.0)
+        # print("no contact", hand_r - 7.0)
 
         #
         # if self.timer == 99 * self.control_skip:
-        #     print(rot_metric, xyz_metric, vel_metric, meaningful_c)
-        #     print(any_hand_contact)
+        #     print(rot_metric, xyz_metric, vel_metric, any_hand_contact)
+        #     # print(any_hand_contact)
 
         if (
             rot_metric > 0.9
@@ -566,6 +591,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
             self.observation.extend([self.tx_act, self.ty_act, self.tz_act])
 
         # note, per-frame noise here
+        # info of bottom height already included in tz
         if self.obs_noise:
             half_height_est = utils.perturb_scalar(
                 self.np_random, self.top_obj["height"] / 2.0, 0.01

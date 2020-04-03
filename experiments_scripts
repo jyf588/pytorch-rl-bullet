@@ -1722,6 +1722,32 @@ python enjoy.py --env-name InmoovHandGraspBulletEnv-v6 --load-dir trained_models
 python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 300 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0331_co_2_w_co_0331_0  --seed 8310 --random_top_shape 1 --cotrain_stack_place 1 --obs_noise 0 --exclude_hard 0 --n_best_cand 2 --grasp_pi_name "0331_co_2_w_25_45"
 # 0401.sh
 
+
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 300 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0331_co_2_w_co_0331_0  --seed 8310 --random_top_shape 1 --cotrain_stack_place 1 --obs_noise 0 --exclude_hard 0 --n_best_cand 2
+# 79%
+# TODO: need to make grasp_pi_name option to work
+
+4/2 23:58
+# run the whole crack again
+# add a sparse reward to grasping as well
+# remove action regularize reward for placing
+# 0402.sh
+
+grasp_dir="trained_models_0331_co_3"
+python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 7000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir ${grasp_dir} --seed 10106 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2
+grasp_dir_w="${grasp_dir}_w"
+python main.py --env-name "InmoovHandGraspBulletEnv-v6" --algo ppo --use-gae --log-interval 10 --num-steps 325 --num-processes 16  --lr 2e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 5000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir ${grasp_dir_w} --seed 10107 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2 \
+--warm_start_phase 1 --warm-start "./${grasp_dir}/ppo/InmoovHandGraspBulletEnv-v6.pt"
+python enjoy.py --env-name InmoovHandGraspBulletEnv-v6 --load-dir "${grasp_dir_w}/ppo/" --non-det 0 --seed=18990 --renders 0 --random_top_shape 1 --cotrain_onstack_grasp 1 --obs_noise 1 --n_best_cand 2 --warm_start_phase 1 --has_test_phase 0 --save_final_states 1 --r_thres 2000 --save_final_s 25 --save_final_e 45
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 300 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 14000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir ${grasp_dir_w}_co_0331_0  --seed 8310 --random_top_shape 1 --cotrain_stack_place 1 --obs_noise 0 --exclude_hard 0 --n_best_cand 2 --grasp_pi_name "0331_co_2_w_25_45"
+
+4/3 12:37
+# fix bug
+# add back action regularize
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 300 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 14000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0331_co_3_w_co_0331_1  --seed 8311 --random_top_shape 1 --cotrain_stack_place 1 --obs_noise 0 --exclude_hard 0 --n_best_cand 2 --grasp_pi_name "0331_co_3_w_25_45"
+
+
+
 # whole system issues:
 # TODO: large obj collide during transporting --> make a large BB, move up & move down
 # TODO: collide with other objs during grasping. --> increase dev pen, or make drop condition harsh

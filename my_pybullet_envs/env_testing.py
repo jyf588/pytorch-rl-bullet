@@ -58,8 +58,8 @@ def main():
   # parser.add_argument('--env', help='environment ID', default='AllegroHandPickBulletEnv-v0')
 
   # parser.add_argument('--env', help='environment ID', default='InmoovHandGraspPlaceBulletEnv-v1')
-  parser.add_argument('--env', help='environment ID', default='InmoovHandGraspBulletEnv-v6')
-  # parser.add_argument('--env', help='environment ID', default='InmoovHandPlaceBulletEnv-v9')
+  # parser.add_argument('--env', help='environment ID', default='InmoovHandGraspBulletEnv-v6')
+  parser.add_argument('--env', help='environment ID', default='InmoovHandPlaceBulletEnv-v9')
   # parser.add_argument('--env', help='environment ID', default='InmoovHandPlaceBulletEnvDet-v4')
 
   # parser.add_argument('--env', help='environment ID', default='AntBulletEnv-v0')

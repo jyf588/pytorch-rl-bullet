@@ -12,8 +12,6 @@ import inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 
 
-# TODO: txyz will be given by vision module. tz is zero/btm height for grasping, obj frame at bottom.
-
 class InmoovShadowHandGraspEnvV6(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
@@ -55,8 +53,6 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
         self.n_best_cand = int(n_best_cand)
 
-        # self.vary_angle_range = 0.6
-        # self.obj_mass = -1  # dummy, 2b overwritten
         # dummy, to be overwritten
         self.top_obj = {'id': None,
                         'mass': -1,
@@ -217,15 +213,13 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
             if self.timer > self.test_start * self.control_skip:
                 p.setCollisionFilterPair(self.top_obj['id'], bottom_id, -1, -1, enableCollision=0)
-                # for i in range(-1, p.getNumJoints(self.robot.arm_id)):
-                #     p.setCollisionFilterPair(bottom_id, self.robot.arm_id, -1, i, enableCollision=0)
                 _, quat = p.getBasePositionAndOrientation(self.top_obj['id'])
                 _, quat_inv = p.invertTransform([0, 0, 0], quat)
                 force_local, _ = p.multiplyTransforms([0, 0, 0], quat_inv, self.force_global, [0, 0, 0, 1])
                 p.applyExternalForce(self.top_obj['id'], -1, force_local, [0, 0, 0], flags=p.LINK_FRAME)
 
         for _ in range(self.control_skip):
-            # action is in -1,1
+            # action is in not -1,1
             if action is not None:
                 # action = np.clip(np.array(action), -1, 1)   # TODO
                 self.act = action
@@ -247,7 +241,8 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         top_pos, _ = p.getBasePositionAndOrientation(self.top_obj['id'])
 
         top_xy_ideal = np.array([self.tx_act, self.ty_act])
-        reward += -np.minimum(np.linalg.norm(top_xy_ideal - np.array(top_pos[:2])), 0.4) * 10.0    # TODO
+        xy_dist = np.linalg.norm(top_xy_ideal - np.array(top_pos[:2]))
+        reward += -np.minimum(xy_dist, 0.4) * 10.0
 
         for i in self.robot.fin_tips[:4]:
             tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
@@ -258,6 +253,7 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(top_pos)), 0.5)
         reward += -dist * 2.0
 
+        rot_metric = None
         if self.warm_start:
             # not used when grasp from floor
             _, btm_quat = p.getBasePositionAndOrientation(bottom_id)
@@ -294,8 +290,17 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
         # object dropped during testing
         if top_pos[2] < (self.tz_act + 0.04) and self.timer > self.test_start * self.control_skip:
-            reward += -15.
-        # if self.timer == 64 * self.control_skip:
+            reward += -20.
+
+        # add a final sparse reward
+        if self.timer == 65 * self.control_skip:        # TODO: hardcoded horizon
+            if xy_dist < 0.05:
+                # print("top good")
+                reward += 100
+            if self.warm_start and rot_metric > 0.9:
+                # print("btm good")
+                reward += 200
+
         #     print(self.robot.get_q_dq(range(29, 34))[0])
 
         return self.getExtendedObservation(), reward, False, {}
@@ -360,14 +365,6 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
             return
         else:
             fin_q, _ = self.robot.get_q_dq(self.robot.all_findofs)
-            # if self.shape_ind == 1:
-            #     shape = p.GEOM_BOX
-            # elif self.shape_ind == 0:
-            #     shape = p.GEOM_CYLINDER
-            # elif self.shape_ind == -1:
-            #     shape = p.GEOM_SPHERE
-            # else:
-            #     shape = None
             shape = self.top_obj['shape']
             dim = utils.to_bullet_dimension(shape, self.top_obj['half_width'], self.top_obj['height'])
 

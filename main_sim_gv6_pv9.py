@@ -154,10 +154,11 @@ if HIDE_SURROUNDING_OBJECTS:
 IS_BOX = gt_odicts[top_obj_idx]["shape"] == "box"  # TODO: infer from language
 
 if MIX_SHAPE_PI:
-    GRASP_PI = "0325_graspco_16_n_w0_25_45"
-    GRASP_DIR = "./trained_models_%s/ppo/" % "0325_graspco_16_n_w0"  # TODO
-    # PLACE_PI = "0313_2_placeco_0316_1"  # 50ms
-    PLACE_PI = "0325_graspco_16_n_w0_placeco_0331_2"  # 50ms
+    GRASP_PI = "0331_co_2_w_25_45"
+    GRASP_DIR = "./trained_models_%s/ppo/" % "0331_co_2_w"  # TODO
+
+    # PLACE_PI = "0325_graspco_16_n_w0_placeco_0331_2"  # 50ms
+    PLACE_PI = "0331_co_2_w_co_0331_0"
     PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 else:
     if IS_BOX:

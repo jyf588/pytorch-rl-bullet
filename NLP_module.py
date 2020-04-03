@@ -418,6 +418,10 @@ if __name__ == "__main__":
 
     sentence = "For the red block to the right of the blue ball, put it behind the yellow box"
 
+    sentence = "Put the red box on the right on top of the yellow box"
+
+    sentence = "Pick the red box on the right, and put it on top of the yellow box"
+
     # # sentence = "Put the red box right to the blue ball that is behind the yellow box"   # same as above
     # # sentence = "Put the red box that is right to the blue ball behind the yellow box"       # wrong(?) behavior
     # # for the above, the parsing is not expected already
