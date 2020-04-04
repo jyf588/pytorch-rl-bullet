@@ -53,51 +53,55 @@ async def send_to_client(websocket, path):
         websocket: The websocket protocol instance.
         path: The URI path.
     """
-    scene = SceneGenerator(
-        base_scene=demo.base_scenes.SCENE, seed=OPTIONS.seed, mu=OPTIONS.obj_mu
-    ).generate()
+    for _ in range(5):
+        generator = SceneGenerator(
+            base_scene=demo.base_scenes.SCENE,
+            seed=OPTIONS.seed,
+            mu=OPTIONS.obj_mu,
+        )
 
-    env = DemoEnvironment(
-        opt=OPTIONS,
-        scene=scene,
-        command="Put the green box on top of the blue cylinder",
-        observation_mode="vision",
-        renderer="unity",
-        visualize_bullet=False,
-        visualize_unity=False,
-    )
+        env = DemoEnvironment(
+            opt=OPTIONS,
+            scene=generator.generate(),
+            command="Put the green box on top of the blue cylinder",
+            observation_mode="vision",
+            renderer="unity",
+            visualize_bullet=False,
+            visualize_unity=False,
+        )
 
-    # Send states one by one.
-    is_done = False
-    while 1:
-        stage, _ = env.get_current_stage()
+        # Send states one by one.
+        while 1:
+            stage, _ = env.get_current_stage()
 
-        # Only have lucas look at / send images back when planning or placing.
-        if stage in ["plan", "place"]:
-            look_at_oids = env.world.oids
-        else:
-            look_at_oids = []
+            # Only have lucas look at / send images back when planning or placing.
+            if stage in ["plan", "place"]:
+                look_at_oids = env.world.oids
+            else:
+                look_at_oids = []
 
-        # if stage in ["plan", "place"]:
-        state_id = f"{env.timestep:06}"
-        message = encode(state_id, env.get_state(), look_at_oids)
+            if stage in ["plan", "place"]:
+                state_id = f"{env.timestep:06}"
+                message = encode(state_id, env.get_state(), look_at_oids)
 
-        # Send and get reply.
-        await websocket.send(message)
-        reply = await websocket.recv()
+                # Send and get reply.
+                await websocket.send(message)
+                reply = await websocket.recv()
 
-        received_state_id, data = decode(reply, look_at_oids)
+                received_state_id, data = decode(reply, look_at_oids)
 
-        # Verify that the sent ID and received ID are equivalent.
-        assert received_state_id == state_id
+                # Verify that the sent ID and received ID are equivalent.
+                assert received_state_id == state_id
 
-        # Hand the data to the env for processing.
-        env.set_unity_data(data)
+                # Hand the data to the env for processing.
+                env.set_unity_data(data)
 
-        # If we've reached the end of the sequence, we are done.
-        is_done = env.step()
-        if is_done:
-            sys.exit(0)
+            # If we've reached the end of the sequence, we are done.
+            is_done = env.step()
+            if is_done:
+                break
+        del env
+    sys.exit(0)
 
 
 def encode(state_id: str, bullet_state: List[Any], look_at_oids) -> str:

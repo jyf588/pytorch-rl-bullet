@@ -6,25 +6,24 @@ from demo.scene import SceneGenerator
 
 
 def main():
-    scene = SceneGenerator(
+    generator = SceneGenerator(
         base_scene=demo.base_scenes.SCENE, seed=11, mu=OPTIONS.obj_mu
-    ).generate()
-
-    env = DemoEnvironment(
-        opt=OPTIONS,
-        scene=scene,
-        command="Put the green box on top of the blue cylinder",
-        observation_mode="gt",
-        visualize_bullet=True,
-        visualize_unity=False,
     )
+    for _ in range(5):
+        env = DemoEnvironment(
+            opt=OPTIONS,
+            scene=generator.generate(),
+            command="Put the green box on top of the blue cylinder",
+            observation_mode="gt",
+            visualize_bullet=True,
+            visualize_unity=False,
+        )
 
-    while 1:
-        done = env.step()
-
-        # We are done.
-        if done:
-            break
+        while 1:
+            done = env.step()
+            if done:
+                break
+        del env
 
 
 if __name__ == "__main__":

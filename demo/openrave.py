@@ -35,7 +35,8 @@ def compute_trajectory(
         stage: The stage we are computing the trajectory for.
         
     Returns:
-        traj: The trajectory computed by OpenRAVE of shape (200, 7).
+        traj: The trajectory computed by OpenRAVE of shape (200, 7). Returns
+            None if OpenRAVE failed to give us a result.
     """
     name = STAGE2NAME[stage]
 
@@ -89,7 +90,8 @@ def get_traj_from_openrave_container(
         load_path: The path to load OpenRAVE's output trajectory from.
     
     Returns:
-        traj: The trajectory computed by OpenRAVE of shape (200, 7).
+        traj: The trajectory computed by OpenRAVE of shape (200, 7). Returns
+            None if OpenRAVE failed to give us a result.
     """
     print("Printing inputs to computing trajectory")
     print(f"object_positions: {object_positions}")
@@ -104,8 +106,16 @@ def get_traj_from_openrave_container(
     # Wait for command from OpenRave
 
     assert not os.path.exists(load_path)
+
+    # Check for OpenRAVE's output file.
+    start = time.time()
     while not os.path.exists(load_path):
         time.sleep(0.2)
+        time_elapsed = time.time() - start
+
+        # If longer than 5 seconds, return failure code.
+        if time_elapsed > 5:
+            return None
     if os.path.isfile(load_path):
         traj = np.load(load_path)
         print("loaded")

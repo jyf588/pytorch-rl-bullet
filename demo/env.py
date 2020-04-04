@@ -210,10 +210,10 @@ class DemoEnvironment:
         """
         stage, stage_ts = self.get_current_stage()
 
-        print(f"Step info:")
-        print(f"\tTimestep: {self.timestep}")
-        print(f"\tStage: {stage}")
-        print(f"\tStage timestep: {stage_ts}")
+        # print(f"Step info:")
+        # print(f"\tTimestep: {self.timestep}")
+        # print(f"\tStage: {stage}")
+        # print(f"\tStage timestep: {stage_ts}")
 
         if stage == "plan":
             self.plan()
@@ -223,7 +223,9 @@ class DemoEnvironment:
             elif stage == "grasp":
                 self.grasp(stage_ts=stage_ts)
             elif stage == "transport":
-                self.transport(stage_ts=stage_ts)
+                success = self.transport(stage_ts=stage_ts)
+                if not success:
+                    return True  # Let user know we're done.
             elif stage == "place":
                 self.place(stage_ts=stage_ts)
             elif stage == "release":
@@ -303,6 +305,80 @@ class DemoEnvironment:
         
         Returns:
             trajectory: The reaching trajectory of shape (200, 7).
+
+        Vision input:
+            object_positions: [[ 0.20730351  0.39945856  0.          0.        ]
+                [ 0.11214702 -0.06985024  0.          0.        ]]
+            q_start: None
+            q_end: [-0.15365159 -0.50185157 -0.02217072 -1.48444567 -0.15545888 -0.41534081
+                0.        ]
+            object_positions: [[ 0.20730351  0.39945856  0.          0.        ]
+                [ 0.11360673 -0.07798449  0.          0.        ]
+                [-0.01266057  0.11019371  0.          0.        ]]
+            q_start: [-0.15783011 -1.06514825  0.88929165 -0.9382602  -0.66303376 -0.6086176
+                -0.65333982]
+            q_end: [-1.2406110168162194, -0.3081875742466146, -0.630957998641116, -1.145658779172018, -0.6684807223498881, -0.5182690168629324, -0.13594495023924133]
+
+        
+        GT input (4 objects):
+            object_positions: [[ 0.2   0.4   0.    0.  ]
+                [ 0.15  0.7   0.    0.  ]
+                [ 0.1  -0.05  0.    0.  ]
+                [ 0.    0.1   0.    0.  ]]
+            q_start: None
+            q_end: [-0.15365159 -0.50185157 -0.02217072 -1.48444567 -0.15545888 -0.41534081
+                0.        ]
+            trajectories (first 5):
+                [[ 0.00000000e+00  0.00000000e+00  0.00000000e+00  0.00000000e+00
+                0.00000000e+00  0.00000000e+00  0.00000000e+00]
+                [-1.99004696e-04 -6.49982355e-04 -2.87148218e-05 -1.92260729e-03
+                -2.01345443e-04 -5.37936337e-04  0.00000000e+00]
+                [-3.98009392e-04 -1.29996471e-03 -5.74296435e-05 -3.84521459e-03
+                -4.02690887e-04 -1.07587267e-03  0.00000000e+00]
+                [-5.97014089e-04 -1.94994706e-03 -8.61444653e-05 -5.76782188e-03
+                -6.04036330e-04 -1.61380901e-03  0.00000000e+00]
+                [-7.96018785e-04 -2.59992942e-03 -1.14859287e-04 -7.69042917e-03
+                -8.05381774e-04 -2.15174535e-03  0.00000000e+00]]
+            trajectories (last 5):
+                [[-0.16326611 -0.50382429 -0.02956165 -1.48224766 -0.16329572 -0.41453275
+                0.00605788]
+                [-0.16086248 -0.50333111 -0.02771392 -1.48279716 -0.16133651 -0.41473476
+                0.00454341]
+                [-0.15845885 -0.50283793 -0.02586619 -1.48334666 -0.1593773  -0.41493678
+                0.00302894]
+                [-0.15605522 -0.50234475 -0.02401845 -1.48389617 -0.15741809 -0.41513879
+                0.00151447]
+                [-0.15365159 -0.50185157 -0.02217072 -1.48444567 -0.15545888 -0.41534081
+                0.        ]]
+        
+        GT input (2 objects):
+            object_positions: [[ 0.2   0.4   0.    0.  ]
+                [ 0.1  -0.05  0.    0.  ]]
+            q_start: None
+            q_end: [-0.15365159 -0.50185157 -0.02217072 -1.48444567 -0.15545888 -0.41534081
+                0.        ]
+            trajectories (first 5):
+                [[ 0.          0.          0.          0.          0.          0.
+                0.        ]
+                [ 0.00198177  0.00106869 -0.00158268 -0.00057203  0.00162862  0.00140415
+                -0.00011614]
+                [ 0.00396353  0.00213738 -0.00316537 -0.00114406  0.00325724  0.0028083
+                -0.00023228]
+                [ 0.0059453   0.00320607 -0.00474805 -0.00171609  0.00488586  0.00421245
+                -0.00034842]
+                [ 0.00792706  0.00427476 -0.00633074 -0.00228812  0.00651448  0.0056166
+                -0.00046457]]
+            trajectories (last 5):
+                [[-1.60346544e-01 -4.98437998e-01 -3.12129875e-02 -1.48881469e+00
+                -1.61395155e-01 -4.19566399e-01  1.47671953e-02]
+                [-1.57659794e-01 -5.00024413e-01 -2.75020668e-02 -1.48676763e+00
+                -1.59002763e-01 -4.17769626e-01  8.61846517e-03]
+                [-1.54973045e-01 -5.01610827e-01 -2.37911461e-02 -1.48472056e+00
+                -1.56610371e-01 -4.15972853e-01  2.46973506e-03]
+                [-1.53999572e-01 -5.01891784e-01 -2.25407352e-02 -1.48440019e+00
+                -1.55755132e-01 -4.15437553e-01  4.96828589e-04]
+                [-1.53651585e-01 -5.01851570e-01 -2.21707225e-02 -1.48444567e+00
+                -1.55458877e-01 -4.15340806e-01  0.00000000e+00]]
         """
         src_x, src_y, _ = self.scene[self.src_idx]["position"]
         q_reach_dst = np.array(
@@ -343,7 +419,7 @@ class DemoEnvironment:
     def reach(self, stage_ts: int):
         if stage_ts == 0:
             self.reach_trajectory = self.compute_reach_trajectory()
-        self.execute_plan(trajectory=self.reach_trajectory, idx=self.timestep)
+        self.execute_plan(trajectory=self.reach_trajectory, idx=stage_ts)
 
     def grasp(self, stage_ts: int):
         # Load the grasping actor critic model.
@@ -370,7 +446,10 @@ class DemoEnvironment:
     def transport(self, stage_ts: int):
         if stage_ts == 0:
             self.transport_trajectory = self.compute_transport_trajectory()
+            if len(self.transport_trajectory) == 0:
+                return False
         self.execute_plan(trajectory=self.transport_trajectory, idx=stage_ts)
+        return True
 
     def place(self, stage_ts: int):
         if stage_ts == 0:
