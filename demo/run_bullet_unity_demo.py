@@ -71,16 +71,20 @@ async def send_to_client(websocket, path):
         )
 
         # Send states one by one.
+        i = 0
         while 1:
             stage, _ = env.get_current_stage()
 
             # Only have lucas look at / send images back when planning or placing.
             if stage in ["plan", "place"]:
+                send_to_unity = True
                 look_at_oids = env.world.oids
             else:
+                render_frequency = 3
+                send_to_unity = i % render_frequency == 0
                 look_at_oids = []
 
-            if stage in ["plan", "place"]:
+            if send_to_unity:
                 state_id = f"{env.timestep:06}"
                 message = encode(state_id, env.get_state(), look_at_oids)
 
@@ -100,6 +104,7 @@ async def send_to_client(websocket, path):
             is_done = env.step()
             if is_done:
                 break
+            i += 1
         del env
     sys.exit(0)
 

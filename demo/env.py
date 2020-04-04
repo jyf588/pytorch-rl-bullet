@@ -219,7 +219,9 @@ class DemoEnvironment:
             self.plan()
         else:
             if stage == "reach":
-                self.reach(stage_ts=stage_ts)
+                success = self.reach(stage_ts=stage_ts)
+                if not success:
+                    return True
             elif stage == "grasp":
                 self.grasp(stage_ts=stage_ts)
             elif stage == "transport":
@@ -419,7 +421,10 @@ class DemoEnvironment:
     def reach(self, stage_ts: int):
         if stage_ts == 0:
             self.reach_trajectory = self.compute_reach_trajectory()
+            if len(self.reach_trajectory) == 0:
+                return False
         self.execute_plan(trajectory=self.reach_trajectory, idx=stage_ts)
+        return True
 
     def grasp(self, stage_ts: int):
         # Load the grasping actor critic model.
