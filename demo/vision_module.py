@@ -42,7 +42,7 @@ class VisionModule:
         """
         seg = gen_dataset.seg_img_to_map(seg_img)
         data = dash_object.compute_X(
-            oid=oid, img=rgb, seg=seg, keep_occluded=False
+            oid=oid, img=rgb, seg=seg, keep_occluded=True
         )
         data_transforms = transforms.Compose(
             [

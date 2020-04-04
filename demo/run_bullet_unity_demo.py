@@ -78,6 +78,7 @@ async def send_to_client(websocket, path):
         else:
             look_at_oids = []
 
+        # if stage in ["plan", "place"]:
         state_id = f"{env.timestep:06}"
         message = encode(state_id, env.get_state(), look_at_oids)
 
@@ -158,10 +159,10 @@ def decode(reply: str, look_at_oids: List[int]):
         state_id: The state ID received in the reply.
         data: A dictionary containing the data in the message, in the format
             {
-                "image": <image>,
                 <otag>:{
                     "camera_position": <camera_position>,
                     "camera_orientation": <camera_orientation>,
+                    "image": <image>,
                 },
                 ...
             }

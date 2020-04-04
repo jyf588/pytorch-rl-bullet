@@ -72,17 +72,19 @@ class DemoEnvironment:
 
         # Whether we've finished planning.
         self.planning_complete = False
+        self.initial_obs = None
 
         # Initialize the vision module if we are using vision for our
         # observations.
         if self.observation_mode == "vision":
             self.vision_module = VisionModule()
 
-        # Initialize the pybullet world with the initial state.
+        # Initialize the pybullet world with the initial state. We do this
+        # during initialization because unity will be querying the state at
+        # the beginning in order to render the first frame.
         self.world = BulletWorld(
             opt=self.opt, scene=self.scene, visualize=False
         )
-        self.initial_state = self.world.get_state()
 
         self.timestep = 0
         self.n_total_steps = (
@@ -94,60 +96,75 @@ class DemoEnvironment:
         )
 
     def plan(self):
+        # First, get the current observation which we will store as the initial
+        # observation for planning reach/transport and for grasping.
+        self.initial_obs = self.get_observation(
+            observation_mode=self.observation_mode, renderer=self.renderer
+        )
+        print("Observation:")
+        pprint.pprint(self.initial_obs["objects"])
+
+        # Temporarily use ground truth state for the source object.
+        # state = self.world.get_state()
+        # self.initial_obs["objects"][2] = state["objects"][2]
+        # self.initial_obs["objects"][3] = state["objects"][3]
+        # self.initial_obs["objects"][4] = state["objects"][4]
+        # self.initial_obs["objects"][5] = state["objects"][5]
+
         # Use language module to determine the source / target objects and
         # positions.
         self.src_idx, self.dst_idx, self.dst_xyz = self.parse_command(
-            command=self.command, scene=self.scene
+            command=self.command, observation=self.initial_obs
         )
+        print(f"src_idx: {self.src_idx}")
+        print(f"dst_idx: {self.dst_idx}")
+
+        # Disconnect from the world client because we are creating temporary
+        # clients for planning. Then, we recreate the world client.
         self.world.bc.disconnect()
-        # p.connect(p.GUI)
-        # p.resetSimulation()
-
         self.q_reach_dst, self.q_transport_dst = self.compute_qs()
-
+        self.world = BulletWorld(
+            opt=self.opt, scene=self.scene, visualize=self.visualize_bullet,
+        )
         self.src_oid = self.world.oids[self.src_idx]
         self.dst_oid = self.world.oids[self.dst_idx]
 
-        self.world = BulletWorld(
-            opt=self.opt,
-            # p=p,
-            scene=self.scene,
-            visualize=self.visualize_bullet,
-        )
-        self.initial_state = self.world.get_state()
+        # Flag planning as complete.
         self.planning_complete = True
 
-    def parse_command(self, command: str, scene: List[Dict]):
-        """Parses a language command in the context of a visual scene and
-        computes the source and target objects and location for a 
+    def parse_command(self, command: str, observation: Dict):
+        """Parses a language command in the context of an observation of a
+        scene and computes the source and target objects and location for a 
         pick-and-place task.
 
         Args:
             command: The command to execute.
             scene: A list of object dictionaries defining the tabletop objects 
             in a scene, in the format:
-                [
-                    {
-                        "shape": <shape>,
-                        "color": <color>,
-                        "position": <position>,
-                        "orientation": <orientation>,
-                        "radius": <radius>,
-                        "height": <height>,
+                {
+                    "objects": {
+                        "<oid>": {
+                            "shape": shape,
+                            "color": color,
+                            "radius": radius,
+                            "height": height,
+                            "position": [x, y, z],
+                            "orientation": [x, y, z, w],
+                        },
+                        ...
                     },
                     ...
-                ]
+                }
         """
         # Zero-pad the scene's position with fourth dimension because that's
         # what the language module expects.
-        scene = copy.deepcopy(scene)
-        for idx in range(len(scene)):
-            odict = scene[idx]
+        odicts = copy.deepcopy(list(observation["objects"].values()))
+        for idx, odict in enumerate(odicts):
             odict["position"] = odict["position"] + [0.0]
-            scene[idx] = odict
+            odicts[idx] = odict
 
         src_idx, dst_xy, dst_idx = NLPmod(
-            sentence=command, vision_output=scene
+            sentence=command, vision_output=odicts
         )
 
         # Compute the destination z based on whether there is a destination
@@ -155,7 +172,7 @@ class DemoEnvironment:
         if dst_idx is None:
             dst_z = 0.0
         else:
-            dst_z = scene[dst_idx]["height"]
+            dst_z = odicts[dst_idx]["height"]
         dst_xyz = [dst_xy[0], dst_xy[1], dst_z]
         return src_idx, dst_idx, dst_xyz
 
@@ -180,7 +197,7 @@ class DemoEnvironment:
                         "<joint_name>": <joint_angle>,
                         ...
                     }
-                }.
+                }
         """
         state = self.world.get_state()
         return state
@@ -295,7 +312,7 @@ class DemoEnvironment:
         )
 
         trajectory = openrave.compute_trajectory(
-            state=self.initial_state,
+            state=self.initial_obs,
             dst_oid=self.src_oid,
             q_start=None,
             q_end=q_reach_dst,
@@ -315,7 +332,7 @@ class DemoEnvironment:
         q_dst = self.q_transport_dst
 
         trajectory = openrave.compute_trajectory(
-            state=self.initial_state,
+            state=self.initial_obs,
             dst_oid=self.src_oid,
             q_start=q_src,
             q_end=q_dst,
@@ -391,7 +408,7 @@ class DemoEnvironment:
         self.world.step()
 
     def get_grasping_observation(self) -> torch.Tensor:
-        odict = self.initial_state["objects"][self.src_oid]
+        odict = self.initial_obs["objects"][self.src_oid]
         position = odict["position"]
         half_height = odict["height"] / 2
         x, y = position[0], position[1]
