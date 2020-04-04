@@ -155,7 +155,7 @@ class DemoEnvironment:
         if dst_idx is None:
             dst_z = 0.0
         else:
-            dst_z = scene[dst_idx]["position"][2]
+            dst_z = scene[dst_idx]["height"]
         dst_xyz = [dst_xy[0], dst_xy[1], dst_z]
         return src_idx, dst_idx, dst_xyz
 
@@ -279,8 +279,7 @@ class DemoEnvironment:
         q_transport_dst = utils.get_n_optimal_init_arm_qs(
             a.robot, p_pos_of_ave, p_quat_of_ave, dst_position, table_id
         )[0]
-        q_transport_dst = None
-        return None, None
+        return None, q_transport_dst
 
     def compute_reach_trajectory(self) -> np.ndarray:
         """Computes the reaching trajectory.
@@ -353,16 +352,16 @@ class DemoEnvironment:
         #     -0.91808677,
         #     -0.58151554,
         # ]
-        q_dst = [
-            -1.2203942305396256,
-            -0.28347340556272493,
-            -0.6584654379872827,
-            -1.2869851602338127,
-            -0.6849580878601577,
-            -0.6234920041770489,
-            -0.18889481363039415,
-        ]
-        # q_dst = self.q_transport_dst
+        # q_dst = [
+        #     -1.2203942305396256,
+        #     -0.28347340556272493,
+        #     -0.6584654379872827,
+        #     -1.2869851602338127,
+        #     -0.6849580878601577,
+        #     -0.6234920041770489,
+        #     -0.18889481363039415,
+        # ]
+        q_dst = self.q_transport_dst
 
         trajectory = openrave.compute_trajectory(
             state=self.initial_state,
