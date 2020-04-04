@@ -60,6 +60,7 @@ async def send_to_client(websocket, path):
     env = DemoEnvironment(
         opt=OPTIONS,
         scene=scene,
+        command="Put the green box on top of the blue cylinder",
         observation_mode="vision",
         renderer="unity",
         visualize_bullet=False,
@@ -69,7 +70,7 @@ async def send_to_client(websocket, path):
     # Send states one by one.
     i = 0
     while 1:
-        stage = env.get_current_stage()
+        stage, _ = env.get_current_stage()
 
         # Only run unity for placing.
         if stage == "place":

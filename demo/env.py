@@ -11,7 +11,6 @@ from typing import *
 
 from demo import openrave
 from demo.bullet_world import BulletWorld
-from demo.language_module import LanguageModule
 import demo.policy
 from demo.vision_module import VisionModule
 from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import (
@@ -183,22 +182,23 @@ class DemoEnvironment:
         Returns:
             is_done: Whether we are done with the demo.
         """
-        stage = self.get_current_stage()
+        stage, stage_ts = self.get_current_stage()
 
         print(f"Step info:")
         print(f"\tTimestep: {self.timestep}")
         print(f"\tStage: {stage}")
+        print(f"\tStage timestep: {stage_ts}")
 
         if stage == "reach":
-            self.reach()
+            self.reach(stage_ts=stage_ts)
         elif stage == "grasp":
-            self.grasp()
+            self.grasp(stage_ts=stage_ts)
         elif stage == "transport":
-            self.transport()
+            self.transport(stage_ts=stage_ts)
         elif stage == "place":
-            self.place()
+            self.place(stage_ts=stage_ts)
         elif stage == "release":
-            self.release()
+            self.release(stage_ts=stage_ts)
         else:
             raise ValueError(f"Invalid stage: {stage}")
 
@@ -206,11 +206,12 @@ class DemoEnvironment:
         done = self.is_done()
         return done
 
-    def get_current_stage(self) -> str:
+    def get_current_stage(self) -> Tuple[str, int]:
         """Retrieves the current stage of the demo.
 
         Returns:
             stage: The stage of the demo.
+            stage_s: The timestep of the current stage. 
         """
         reach_start = 0
         reach_end = reach_start + self.opt.n_plan_steps
@@ -223,19 +224,26 @@ class DemoEnvironment:
         release_start = place_end
         release_end = release_start + self.opt.n_release_steps
 
-        if reach_start <= self.timestep < reach_end:
-            stage = "reach"
-        elif grasp_start <= self.timestep < grasp_end:
-            stage = "grasp"
-        elif transport_start <= self.timestep < transport_end:
-            stage = "transport"
-        elif place_start <= self.timestep < place_end:
-            stage = "place"
-        elif release_start <= self.timestep < release_end:
-            stage = "release"
-        else:
-            raise ValueError(f"Invalid timestep: {self.timestep}")
-        return stage
+        stage2ts_bounds = {
+            "reach": (reach_start, reach_end),
+            "grasp": (grasp_start, grasp_end),
+            "transport": (transport_start, transport_end),
+            "place": (place_start, place_end),
+            "release": (release_start, release_end),
+        }
+        current_stage = None
+        for stage, ts_bounds in stage2ts_bounds.items():
+            start, end = ts_bounds
+            if start <= self.timestep < end:
+                stage_ts = self.timestep - start
+                current_stage = stage
+                break
+
+        if current_stage is None:
+            raise ValueError(
+                f"No stage found for current timestep: {self.timestep}"
+            )
+        return current_stage, stage_ts
 
     def compute_qs(self):
         src_x, src_y, _ = self.scene[self.src_idx]["position"]
@@ -320,14 +328,14 @@ class DemoEnvironment:
         )
         return trajectory
 
-    def reach(self):
-        if self.reach_trajectory is None:
+    def reach(self, stage_ts: int):
+        if stage_ts == 0:
             self.reach_trajectory = self.compute_reach_trajectory()
         self.execute_plan(trajectory=self.reach_trajectory, idx=self.timestep)
 
-    def grasp(self):
+    def grasp(self, stage_ts: int):
         # Load the grasping actor critic model.
-        if self.timestep - self.opt.n_plan_steps == 0:
+        if stage_ts == 0:
             self.policy, _, self.hidden_states, self.masks = demo.policy.load(
                 policy_dir=self.opt.grasp_dir,
                 env_name=self.opt.grasp_env_name,
@@ -347,17 +355,13 @@ class DemoEnvironment:
         )
         self.world.step_robot(action=action)
 
-    def transport(self):
-        idx = self.timestep - self.opt.n_plan_steps - self.opt.n_grasp_steps
-        if idx == 0:
+    def transport(self, stage_ts: int):
+        if stage_ts == 0:
             self.transport_trajectory = self.compute_transport_trajectory()
-        self.execute_plan(trajectory=self.transport_trajectory, idx=idx)
+        self.execute_plan(trajectory=self.transport_trajectory, idx=stage_ts)
 
-    def place(self):
-        idx = (
-            self.timestep - self.opt.n_plan_steps * 2 - self.opt.n_grasp_steps
-        )
-        if idx == 0:
+    def place(self, stage_ts: int):
+        if stage_ts == 0:
             self.world.robot_env.change_control_skip_scaling(
                 c_skip=self.opt.placing_control_skip
             )
@@ -383,7 +387,7 @@ class DemoEnvironment:
         )
         self.world.step_robot(action=action)
 
-    def release(self):
+    def release(self, stage_ts: int):
         self.world.step()
 
     def execute_plan(self, trajectory: np.ndarray, idx: int):
@@ -484,11 +488,9 @@ class DemoEnvironment:
         # Predict the object pose for the objects that we've "looked" at.
         for oid in self.look_at_oids:
             rgb, seg_img = self.get_images(oid=oid, renderer=renderer)
-            start = time.time()
             pred = self.vision_module.predict(
                 oid=oid, rgb=rgb, seg_img=seg_img
             )
-            print(f"Vision inference time: {time.time() - start}")
 
             # Convert vectorized predictions to dictionary form using camera
             # information.
@@ -499,12 +501,9 @@ class DemoEnvironment:
                 cam_orientation=self.unity_data[oid]["camera_orientation"],
             )
 
-            print(f"Vision predictions: {y_dict}")
-
-            src_odict = obs["objects"][oid]
-            src_odict["position"] = y_dict["position"]
-            src_odict["up_vector"] = y_dict["up_vector"]
-            obs["objects"][oid] = src_odict
+            # Update the position and up vector with predicted values.
+            obs["objects"][oid]["position"] = y_dict["position"]
+            obs["objects"][oid]["up_vector"] = y_dict["up_vector"]
         return obs
 
     def get_images(self, oid: int, renderer: str):
