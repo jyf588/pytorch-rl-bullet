@@ -329,7 +329,7 @@ def NLPmod(sentence, vision_output):
     # finally, get coordinates
 
     def obtain_target_loc_coordinates(
-        reference_ID, Vision_output, relation
+        reference_ID, Vision_output, relations
     ) -> np.ndarray:
         """
         Args:
@@ -342,27 +342,27 @@ def NLPmod(sentence, vision_output):
         """
         offset = 0.2
         # for i in range(len(relations)):
-        if relation[0] == "right":
+        if relations[0] == "right":
             target_xyz = np.asarray(
                 Vision_output[reference_ID[0][0]]["position"]
             ) + np.array([0, -offset, 0, 0])
-        if relation[0] == "left":
+        if relations[0] == "left":
             target_xyz = np.asarray(
                 Vision_output[reference_ID[0][0]]["position"]
             ) + np.array([0, offset, 0, 0])
-        if relation[0] == "front":
+        if relations[0] == "front":
             target_xyz = np.asarray(
                 Vision_output[reference_ID[0][0]]["position"]
             ) + np.array([-offset, 0, 0, 0])
-        if relation[0] == "behind":
+        if relations[0] == "behind":
             target_xyz = np.asarray(
                 Vision_output[reference_ID[0][0]]["position"]
             ) + np.array([offset, 0, 0, 0])
-        if relation[0] == "top":
+        if relations[0] == "top":
             target_xyz = np.asarray(
                 Vision_output[reference_ID[0][0]]["position"]
             ) + np.array([0, 0, offset, 0])
-        if relation[0] == "between":
+        if relations[0] == "between":
             target_xyz = 0.5 * (
                 np.asarray(Vision_output[reference_ID[0][0]]["position"])
                 + np.asarray(Vision_output[reference_ID[0][1]]["position"])
@@ -373,15 +373,23 @@ def NLPmod(sentence, vision_output):
         reference_ID, vision_output, relations
     )
     print("--------")
-    print(target_xyz)
-    # Build structured OBJECTS list in which first entry is the target object
-    OBJECT_coord = np.array([vision_output[target_ID[0]]["position"]])
-    for i in range(len(vision_output)):
-        if i != target_ID[0]:
-            OBJECT_coord = np.concatenate(
-                (OBJECT_coord, np.array([vision_output[i]["position"]]))
-            )
-    return OBJECT_coord, target_xyz
+
+    # print(target_xyz)
+    # # Build structured OBJECTS list in which first entry is the target object
+    # OBJECT_coord = np.array([vision_output[target_ID[0]]["position"]])
+    # for i in range(len(vision_output)):
+    #     if i != target_ID[0]:
+    #         OBJECT_coord = np.concatenate(
+    #             (OBJECT_coord, np.array([vision_output[i]["position"]]))
+    #         )
+    # return OBJECT_coord, target_xyz
+
+    if relations[0] == "top":
+        stack_idx = reference_ID[0][0]
+    else:
+        stack_idx = None
+
+    return target_ID[0], target_xyz[:2], stack_idx
 
 
 if __name__ == "__main__":
@@ -457,6 +465,6 @@ if __name__ == "__main__":
         "position": np.array([0.8, 0.4, 0, 0]),
     }
     Vision_output = [obj1, obj2, obj3, obj4, obj5]
-    [OBJECTS, dest] = NLPmod(sentence=sentence, vision_output=Vision_output)
+    pick_idx, dest_xy, stack_idx = NLPmod(sentence=sentence, vision_output=Vision_output)
 
 

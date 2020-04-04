@@ -86,19 +86,17 @@ gt_odicts = demo_scenes_rand_size.SCENES[args.scene]
 
 # TODO: merge some config with utils
 
-PLACE_FLOOR = False  # TODO: language
 g_tz = 0.0
 # TODO:tmp
 if args.scene == 4:
     g_tz = 0.16
 
-MIX_SHAPE_PI = True
 
 SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
 USE_VISION_MODULE = args.use_vision and (not no_vision)
 RENDER = True  # If true, uses OpenGL. Else, uses TinyRenderer.
 
-GRASP_END_STEP = 30
+GRASP_END_STEP = 26
 PLACE_END_STEP = 50
 
 STATE_NORM = False
@@ -129,59 +127,31 @@ HIDE_SURROUNDING_OBJECTS = False  # If true, hides the surrounding objects.
 
 
 top_obj_idx = 1  # TODO: in fact, moved obj, infer from language
-btm_obj_idx = 2
-# TODO: in fact, reference obj (place between not considered), infer from language
-
 # Override the shape and size of the top object if provided as arguments. TODO: Language
 if args.shape is not None:
     gt_odicts[top_obj_idx]["shape"] = args.shape
-
-# # should not have size attr
-# if args.size is not None:
-#     gt_odicts[top_obj_idx]["size"] = args.size
-
-if HIDE_SURROUNDING_OBJECTS:
-    gt_odicts = [gt_odicts[top_obj_idx], gt_odicts[btm_obj_idx]]
-    top_obj_idx = 0
-    btm_obj_idx = 1
-
-# top_size = gt_odicts[top_obj_idx]["size"]
-# btm_size = gt_odicts[btm_obj_idx]["size"]
-# P_TZ = SIZE2HALF_H[btm_size] * 2
-# T_HALF_HEIGHT = SIZE2HALF_H[top_size]
+IS_BOX = (args.shape == "box")
 
 
-IS_BOX = gt_odicts[top_obj_idx]["shape"] == "box"  # TODO: infer from language
+GRASP_PI = "0331_co_2_w_25_45"
+GRASP_DIR = "./trained_models_%s/ppo/" % "0331_co_2_w"  # TODO
 
-if MIX_SHAPE_PI:
-    GRASP_PI = "0331_co_2_w_25_45"
-    GRASP_DIR = "./trained_models_%s/ppo/" % "0331_co_2_w"  # TODO
-
-    # PLACE_PI = "0325_graspco_16_n_w0_placeco_0331_2"  # 50ms
-    PLACE_PI = "0331_co_2_w_co_0331_0"
-    PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
-else:
-    if IS_BOX:
-        GRASP_PI = "0311_box_2_n_20_50"
-        GRASP_DIR = "./trained_models_%s/ppo/" % "0311_box_2_n"  # TODO
-        PLACE_PI = "0311_box_2_placeco_0316_0"  # 50ms
-        PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
-    else:
-        GRASP_PI = "0311_cyl_2_n_20_50"
-        GRASP_DIR = "./trained_models_%s/ppo/" % "0311_cyl_2_n"  # TODO
-        PLACE_PI = "0311_cyl_2_placeco_0316_0"  # 50ms
-        PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
+# PLACE_PI = "0325_graspco_16_n_w0_placeco_0331_2"  # 50ms
+PLACE_PI = "0331_co_2_w_co_0331_0"
+PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
 if IS_BOX:
-    if PLACE_FLOOR:
-        sentence = "Put the green box in front of the blue cylinder"
-    else:
-        sentence = "Put the green box on top of the blue cylinder"
+    sentence = "Put the green box on top of the blue cylinder"
+    # if np.random.randint(2) > 0:    # TODO
+    #     sentence = "Put the green box in front of the blue cylinder"
+    # else:
+    #     sentence = "Put the green box on top of the blue cylinder"
 else:
-    if PLACE_FLOOR:
-        sentence = "Put the green cylinder in front of the blue cylinder"
-    else:
-        sentence = "Put the green cylinder on top of the blue cylinder"
+    sentence = "Put the green cylinder on top of the blue cylinder"
+    # if np.random.randint(2) > 0:
+    #     sentence = "Put the green cylinder in front of the blue cylinder"
+    # else:
+    #     sentence = "Put the green cylinder on top of the blue cylinder"
 
 GRASP_PI_ENV_NAME = "InmoovHandGraspBulletEnv-v6"
 PLACE_PI_ENV_NAME = "InmoovHandPlaceBulletEnv-v9"
@@ -382,6 +352,7 @@ def get_stacking_obs(
         t_half_height: Half of the height of the top object.
     """
     if use_vision:
+        # TODO: if btm_oid is None, i.e. place floor
         top_odict, btm_odict = stacking_vision_module.predict(
             client_oids=[top_oid, btm_oid]
         )
@@ -397,12 +368,16 @@ def get_stacking_obs(
             pprint.pprint(btm_odict)
     else:
         t_pos, t_quat = p.getBasePositionAndOrientation(top_oid)
-        b_pos, b_quat = p.getBasePositionAndOrientation(btm_oid)
-
         rot = np.array(p.getMatrixFromQuaternion(t_quat))
         t_up = [rot[2], rot[5], rot[8]]
-        rot = np.array(p.getMatrixFromQuaternion(b_quat))
-        b_up = [rot[2], rot[5], rot[8]]
+
+        if btm_oid:
+            b_pos, b_quat = p.getBasePositionAndOrientation(btm_oid)
+            rot = np.array(p.getMatrixFromQuaternion(b_quat))
+            b_up = [rot[2], rot[5], rot[8]]
+        else:
+            b_pos = [0., 0, 0]
+            b_up = [0., 0, 1]
 
         t_half_height = gt_odicts_internal[top_obj_idx]["height"] / 2.0     # TODO: duplicate
     return t_pos, t_up, b_pos, b_up, t_half_height
@@ -483,8 +458,28 @@ else:
     initial_vision_module = None
     # stacking_vision_module = None
 
-[OBJECTS, placing_xyz] = NLPmod(sentence, language_input_objs)
-print("placing xyz from language", placing_xyz)
+# [OBJECTS, placing_xyz] = NLPmod(sentence, language_input_objs)
+top_obj_idx, dest_xy, btm_obj_idx = NLPmod(sentence, language_input_objs)
+
+PLACE_FLOOR = (btm_obj_idx is None)
+p_tx, p_ty = dest_xy[0], dest_xy[1]
+if not PLACE_FLOOR:
+    if USE_VISION_MODULE:
+        p_tz = pred_odicts[btm_obj_idx]["height"]
+    else:
+        p_tz = gt_odicts_internal[btm_obj_idx]["height"]
+else:
+    p_tz = 0
+
+# Build structured OBJECTS list in which first entry is the target object
+OBJECTS = np.array([language_input_objs[top_obj_idx]["position"]])
+for i in range(len(language_input_objs)):
+    if i != top_obj_idx:
+        OBJECTS = np.concatenate(
+            (OBJECTS, np.array([language_input_objs[i]["position"]]))
+        )
+
+# print("placing xy from language", dest_xy)
 
 # Define the grasp position.
 if USE_VISION_MODULE:
@@ -497,19 +492,19 @@ else:
 g_tx, g_ty = top_pos[0], top_pos[1]
 print(f"Grasp position: ({g_tx}, {g_ty})\theight: {g_half_h}")
 
-if PLACE_FLOOR:
-    p_tx, p_ty, p_tz = placing_xyz[0], placing_xyz[1], placing_xyz[2]
-else:
-    # Define the target xyz position to perform placing.
-    p_tx, p_ty = placing_xyz[0], placing_xyz[1]
-    if USE_VISION_MODULE:
-        # Temp: replace with GT
-        # p_tx = gt_odicts[btm_obj_idx]["position"][0]
-        # p_ty = gt_odicts[btm_obj_idx]["position"][1]
-        # p_tz = P_TZ
-        p_tz = pred_odicts[btm_obj_idx]["height"]
-    else:
-        p_tz = gt_odicts_internal[btm_obj_idx]["height"]
+# if PLACE_FLOOR:
+#     p_tx, p_ty, p_tz = placing_xyz[0], placing_xyz[1], placing_xyz[2]
+# else:
+#     # Define the target xyz position to perform placing.
+#     p_tx, p_ty = placing_xyz[0], placing_xyz[1]
+#     if USE_VISION_MODULE:
+#         # Temp: replace with GT
+#         # p_tx = gt_odicts[btm_obj_idx]["position"][0]
+#         # p_ty = gt_odicts[btm_obj_idx]["position"][1]
+#         # p_tz = P_TZ
+#         p_tz = pred_odicts[btm_obj_idx]["height"]
+#     else:
+#         p_tz = gt_odicts_internal[btm_obj_idx]["height"]
 print(f"Placing position: ({p_tx}, {p_ty}, {p_tz})")
 
 """Start Bullet session."""
@@ -577,7 +572,11 @@ env_core.robot.reset_with_certain_arm_q([0.0] * 7)
 construct_bullet_scene(gt_odicts, gt_odicts_internal)
 
 top_oid = gt_odicts_internal[top_obj_idx]["id"]
-btm_oid = gt_odicts_internal[btm_obj_idx]["id"]
+
+if btm_obj_idx:
+    btm_oid = gt_odicts_internal[btm_obj_idx]["id"]
+else:
+    btm_oid = None
 
 # # Initialize a PoseSaver to save poses throughout robot execution.
 # pose_saver = PoseSaver(
@@ -709,21 +708,13 @@ l_t_pos, l_t_up, l_b_pos, l_b_up, l_t_half_height = (
 
 # TODO: an unly hack to force Bullet compute forward kinematics
 
-# TODO: deprecate IS_BOX.
-if MIX_SHAPE_PI:
-    p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
-        p_tx, p_ty, p_tz, t_half_height, IS_BOX, t_pos, t_up, b_pos, b_up
-    )
-    p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
-        p_tx, p_ty, p_tz, t_half_height, IS_BOX, t_pos, t_up, b_pos, b_up
-    )
-else:
-    p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
-        p_tx, p_ty, p_tz, t_half_height, t_pos, t_up, b_pos, b_up
-    )
-    p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
-        p_tx, p_ty, p_tz, t_half_height, t_pos, t_up, b_pos, b_up
-    )
+
+p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
+    p_tx, p_ty, p_tz, t_half_height, IS_BOX, t_pos, t_up, b_pos, b_up
+)
+p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
+    p_tx, p_ty, p_tz, t_half_height, IS_BOX, t_pos, t_up, b_pos, b_up
+)
 
 p_obs = wrap_over_grasp_obs(p_obs)
 print("pobs", p_obs)
@@ -754,29 +745,19 @@ for i in tqdm(range(PLACE_END_STEP)):
                 use_vision=USE_VISION_MODULE,
                 vision_module=stacking_vision_module,
             )
-        if MIX_SHAPE_PI:
-            p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
-                p_tx,
-                p_ty,
-                p_tz,
-                l_t_half_height,
-                IS_BOX,
-                l_t_pos,
-                l_t_up,
-                l_b_pos,
-                l_b_up,
-            )
-        else:
-            p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
-                p_tx,
-                p_ty,
-                p_tz,
-                l_t_half_height,
-                l_t_pos,
-                l_t_up,
-                l_b_pos,
-                l_b_up,
-            )
+
+        p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
+            p_tx,
+            p_ty,
+            p_tz,
+            l_t_half_height,
+            IS_BOX,
+            l_t_pos,
+            l_t_up,
+            l_b_pos,
+            l_b_up,
+        )
+
     else:
         t_pos, t_quat, b_pos, b_quat, t_half_height = get_stacking_obs(
             top_oid=top_oid,
@@ -785,22 +766,17 @@ for i in tqdm(range(PLACE_END_STEP)):
             vision_module=stacking_vision_module,
         )
 
-        if MIX_SHAPE_PI:
-            p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
-                p_tx,
-                p_ty,
-                p_tz,
-                t_half_height,
-                IS_BOX,
-                t_pos,
-                t_up,
-                b_pos,
-                b_up,
-            )
-        else:
-            p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
-                p_tx, p_ty, p_tz, t_half_height, t_pos, t_up, b_pos, b_up
-            )
+        p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
+            p_tx,
+            p_ty,
+            p_tz,
+            t_half_height,
+            IS_BOX,
+            t_pos,
+            t_up,
+            b_pos,
+            b_up,
+        )
 
     p_obs = wrap_over_grasp_obs(p_obs)
 
