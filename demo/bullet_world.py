@@ -2,9 +2,13 @@
 and tabletop objects."""
 import argparse
 import copy
+import numpy as np
 import os
+import time
+import torch
 from typing import *
 
+import demo.policy
 from my_pybullet_envs.inmoov_shadow_demo_env_v4 import (
     InmoovShadowHandDemoEnvV4,
 )
@@ -275,3 +279,10 @@ class BulletWorld:
 
     def act(self):
         pass
+
+    def step(self):
+        self.bc.stepSimulation()
+        time.sleep(self.opt.ts)
+
+    def step_robot(self, action: np.ndarray):
+        self.robot_env.step(action=action)

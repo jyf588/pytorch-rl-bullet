@@ -1,5 +1,6 @@
-"""Co"""
+"""Policy-related functions."""
 
+import numpy as np
 import os
 import torch
 from typing import *
@@ -40,3 +41,16 @@ def load(
         recurrent_hidden_states,
         masks,
     )
+
+
+def wrap_obs(obs: np.ndarray, is_cuda: bool) -> torch.Tensor:
+    obs = torch.Tensor([obs])
+    if is_cuda:
+        obs = obs.cuda()
+    return obs
+
+
+def unwrap_action(action: torch.Tensor, is_cuda: bool) -> np.ndarray:
+    action = action.squeeze()
+    action = action.cpu() if is_cuda else action
+    return action.numpy()
