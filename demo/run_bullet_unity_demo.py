@@ -72,25 +72,29 @@ async def send_to_client(websocket, path):
     while 1:
         stage, _ = env.get_current_stage()
 
-        # Only run unity for placing.
+        # Only have lucas look at / send images back when planning or placing.
         if stage in ["plan", "place"]:
-            state_id = f"{env.timestep:06}"
-            message = encode(state_id, env.get_state(), env.world.oids)
+            look_at_oids = env.world.oids
+        else:
+            look_at_oids = []
 
-            await websocket.send(message)
-            reply = await websocket.recv()
+        state_id = f"{env.timestep:06}"
+        message = encode(state_id, env.get_state(), look_at_oids)
 
-            received_state_id, data = decode(reply, env.world.oids)
+        # Send and get reply.
+        await websocket.send(message)
+        reply = await websocket.recv()
 
-            # Verify that the sent ID and received ID are equivalent.
-            assert received_state_id == state_id
+        received_state_id, data = decode(reply, look_at_oids)
 
-            # Hand the data to the env for processing.
-            env.set_unity_data(data)
+        # Verify that the sent ID and received ID are equivalent.
+        assert received_state_id == state_id
 
-        is_done = env.step()
+        # Hand the data to the env for processing.
+        env.set_unity_data(data)
 
         # If we've reached the end of the sequence, we are done.
+        is_done = env.step()
         if is_done:
             sys.exit(0)
 
