@@ -4,6 +4,7 @@ import argparse
 import copy
 import numpy as np
 import os
+import pybullet
 import time
 import torch
 from typing import *
@@ -19,7 +20,11 @@ import ns_vqa_dart.bullet.util
 
 class BulletWorld:
     def __init__(
-        self, opt: argparse.Namespace, scene: List[Dict], visualize: bool
+        self,
+        opt: argparse.Namespace,
+        scene: List[Dict],
+        visualize: bool,
+        p: Optional = None,
     ):
         """
         Args:
@@ -44,7 +49,10 @@ class BulletWorld:
         self.scene = scene
         self.visualize = visualize
 
-        self.bc = self.create_bullet_client()
+        if p is None:
+            self.bc = self.create_bullet_client()
+        else:
+            self.bc = p
         self.set_parameters()
 
         # Load the robot, table, and objects into the scene.
@@ -99,8 +107,8 @@ class BulletWorld:
                 input scene.
         """
         robot_env = self.load_robot()
-        oids = self.load_tabletop_objects(scene=scene)
         self.load_table()
+        oids = self.load_tabletop_objects(scene=scene)
         return robot_env, oids
 
     def load_robot(self):

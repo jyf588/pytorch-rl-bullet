@@ -63,41 +63,26 @@ class DemoEnvironment:
                 `observation_mode` is `vision`.
         """
         self.opt = opt
+        self.scene = scene
+        self.command = command
         self.observation_mode = observation_mode
         self.visualize_bullet = visualize_bullet
         self.visualize_unity = visualize_unity
         self.renderer = renderer
 
-        # Set the initial scene.
-        self.scene = scene
+        # Whether we've finished planning.
+        self.planning_complete = False
 
-        # Use language module to determine the source / target objects and
-        # positions.
-        self.src_idx, self.dst_idx, self.dst_xyz = self.parse_command(
-            command=command, scene=scene
-        )
-
-        # We need to do this at the beginning before the actual bullet world is
-        # setup because it involves an imaginary session. Another option is to
-        # do this in a separate session using direct rendering.
-        self.q_reach_dst, self.q_transport_dst = self.compute_qs()
-        self.reach_trajectory = None
-
-        # Initialize the pybullet world with the initial state.
-        self.world = BulletWorld(
-            opt=opt, scene=scene, visualize=visualize_bullet
-        )
-        self.initial_state = self.world.get_state()
-        self.src_oid = self.world.oids[self.src_idx]
-        self.dst_oid = self.world.oids[self.dst_idx]
-
-        # Initialize the vision module if we are using vision.
+        # Initialize the vision module if we are using vision for our
+        # observations.
         if self.observation_mode == "vision":
             self.vision_module = VisionModule()
 
-            # Specify a list of objects that the robot should look at and predict
-            # poses for.
-            self.look_at_oids = [self.src_oid, self.dst_oid]
+        # Initialize the pybullet world with the initial state.
+        self.world = BulletWorld(
+            opt=self.opt, scene=self.scene, visualize=False
+        )
+        self.initial_state = self.world.get_state()
 
         self.timestep = 0
         self.n_total_steps = (
@@ -107,6 +92,30 @@ class DemoEnvironment:
             + self.opt.n_place_steps  # place
             + self.opt.n_release_steps  # release
         )
+
+    def plan(self):
+        # Use language module to determine the source / target objects and
+        # positions.
+        self.src_idx, self.dst_idx, self.dst_xyz = self.parse_command(
+            command=self.command, scene=self.scene
+        )
+        self.world.bc.disconnect()
+        # p.connect(p.GUI)
+        # p.resetSimulation()
+
+        self.q_reach_dst, self.q_transport_dst = self.compute_qs()
+
+        self.src_oid = self.world.oids[self.src_idx]
+        self.dst_oid = self.world.oids[self.dst_idx]
+
+        self.world = BulletWorld(
+            opt=self.opt,
+            # p=p,
+            scene=self.scene,
+            visualize=self.visualize_bullet,
+        )
+        self.initial_state = self.world.get_state()
+        self.planning_complete = True
 
     def parse_command(self, command: str, scene: List[Dict]):
         """Parses a language command in the context of a visual scene and
@@ -189,20 +198,24 @@ class DemoEnvironment:
         print(f"\tStage: {stage}")
         print(f"\tStage timestep: {stage_ts}")
 
-        if stage == "reach":
-            self.reach(stage_ts=stage_ts)
-        elif stage == "grasp":
-            self.grasp(stage_ts=stage_ts)
-        elif stage == "transport":
-            self.transport(stage_ts=stage_ts)
-        elif stage == "place":
-            self.place(stage_ts=stage_ts)
-        elif stage == "release":
-            self.release(stage_ts=stage_ts)
+        if stage == "plan":
+            self.plan()
         else:
-            raise ValueError(f"Invalid stage: {stage}")
+            if stage == "reach":
+                self.reach(stage_ts=stage_ts)
+            elif stage == "grasp":
+                self.grasp(stage_ts=stage_ts)
+            elif stage == "transport":
+                self.transport(stage_ts=stage_ts)
+            elif stage == "place":
+                self.place(stage_ts=stage_ts)
+            elif stage == "release":
+                self.release()
+            else:
+                raise ValueError(f"Invalid stage: {stage}")
+            self.timestep += 1
 
-        self.timestep += 1
+        # Compute whether we have finished the entire sequence.
         done = self.is_done()
         return done
 
@@ -213,6 +226,9 @@ class DemoEnvironment:
             stage: The stage of the demo.
             stage_s: The timestep of the current stage. 
         """
+        if not self.planning_complete:
+            return "plan", 0
+
         reach_start = 0
         reach_end = reach_start + self.opt.n_plan_steps
         grasp_start = reach_end
@@ -246,17 +262,8 @@ class DemoEnvironment:
         return current_stage, stage_ts
 
     def compute_qs(self):
-        src_x, src_y, _ = self.scene[self.src_idx]["position"]
-        # dst_x, dst_y, dst_z = self.scene[self.dst_idx]["position"]
         dst_x, dst_y, dst_z = self.dst_xyz
         dst_position = [dst_x, dst_y, dst_z + utils.PLACE_START_CLEARANCE]
-
-        sess = ImaginaryArmObjSession()
-
-        q_reach_dst = np.array(
-            sess.get_most_comfortable_q_and_refangle(src_x, src_y)[0]
-        )
-
         a = InmoovShadowHandPlaceEnvV9(
             renders=False, grasp_pi_name=self.opt.grasp_pi
         )
@@ -272,7 +279,8 @@ class DemoEnvironment:
         q_transport_dst = utils.get_n_optimal_init_arm_qs(
             a.robot, p_pos_of_ave, p_quat_of_ave, dst_position, table_id
         )[0]
-        return q_reach_dst, q_transport_dst
+        q_transport_dst = None
+        return None, None
 
     def compute_reach_trajectory(self) -> np.ndarray:
         """Computes the reaching trajectory.
@@ -280,11 +288,31 @@ class DemoEnvironment:
         Returns:
             trajectory: The reaching trajectory of shape (200, 7).
         """
+        src_x, src_y, _ = self.scene[self.src_idx]["position"]
+        q_reach_dst = np.array(
+            ImaginaryArmObjSession().get_most_comfortable_q_and_refangle(
+                src_x, src_y
+            )[0]
+        )
+        print(f"Qreach from new demo script: {q_reach_dst}")
+
+        q_reach_dst = [
+            -0.15365159,
+            -0.50185157,
+            -0.02217072,
+            -1.48444567,
+            -0.15545888,
+            -0.41534081,
+            0.0,
+        ]
+
+        print(f"Qreach from old demo script: {q_reach_dst}")
+
         trajectory = openrave.compute_trajectory(
             state=self.initial_state,
             dst_oid=self.src_oid,
             q_start=None,
-            q_end=self.q_reach_dst,
+            q_end=q_reach_dst,
             stage="reach",
         )
         return trajectory
@@ -294,20 +322,37 @@ class DemoEnvironment:
         
         Returns:
             trajectory: The transport trajectory of shape (200, 7).
+
+        Old demo values:
+            object_positions: [[ 0.2   0.4   0.    0.  ]
+            [ 0.15  0.7   0.    0.  ]
+            [ 0.1  -0.05  0.    0.  ]
+            [ 0.    0.1   0.    0.  ]]
+            q_start: [-0.1950513  -0.79553958  0.55946438 -1.34713527 -0.50737202 -0.91808677
+            -0.58151554]
+            q_end: [-1.2201176329388919, -0.28377829994700193, -0.6589526662552676, -1.2869079923911737, -0.684179333717034, -0.6237652426659688, -0.1884841489777046]
+        
+        New demo values:
+            object_positions: [[ 0.2   0.4   0.    0.  ]
+            [ 0.15  0.7   0.    0.  ]
+            [ 0.1  -0.05  0.    0.  ]
+            [ 0.    0.1   0.    0.  ]]
+            q_start: [-0.1950513, -0.7955395, 0.55946438, -1.34713527, -0.50737202, -0.91808677, -0.58151554]
+            q_end: [-1.2203942305396256, -0.28347340556272493, -0.6584654379872827, -1.2869851602338127, -0.6849580878601577, -0.6234920041770489, -0.18889481363039415]
         """
         q_src = self.world.robot_env.robot.get_q_dq(
             self.world.robot_env.robot.arm_dofs
         )[0]
 
-        q_src = [
-            -0.1950513,
-            -0.79553950,
-            0.55946438,
-            -1.34713527,
-            -0.50737202,
-            -0.91808677,
-            -0.58151554,
-        ]
+        # q_src = [
+        #     -0.1950513,
+        #     -0.79553950,
+        #     0.55946438,
+        #     -1.34713527,
+        #     -0.50737202,
+        #     -0.91808677,
+        #     -0.58151554,
+        # ]
         q_dst = [
             -1.2203942305396256,
             -0.28347340556272493,
@@ -387,7 +432,7 @@ class DemoEnvironment:
         )
         self.world.step_robot(action=action)
 
-    def release(self, stage_ts: int):
+    def release(self):
         self.world.step()
 
     def execute_plan(self, trajectory: np.ndarray, idx: int):
@@ -486,7 +531,7 @@ class DemoEnvironment:
         obs = self.world.get_state()
 
         # Predict the object pose for the objects that we've "looked" at.
-        for oid in self.look_at_oids:
+        for oid in self.world.oids:
             rgb, seg_img = self.get_images(oid=oid, renderer=renderer)
             pred = self.vision_module.predict(
                 oid=oid, rgb=rgb, seg_img=seg_img

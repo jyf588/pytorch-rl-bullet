@@ -68,36 +68,27 @@ async def send_to_client(websocket, path):
     )
 
     # Send states one by one.
-    i = 0
+    is_done = False
     while 1:
         stage, _ = env.get_current_stage()
 
         # Only run unity for placing.
-        if stage == "place":
-            bullet_state = env.get_state()
+        if stage in ["plan", "place"]:
             state_id = f"{env.timestep:06}"
+            message = encode(state_id, env.get_state(), env.world.oids)
 
-            message = encode(state_id, bullet_state, env.look_at_oids)
-
-            # Send the message to client.
-            print(f"Sending to unity: state {state_id}\tTime: {time.time()}")
             await websocket.send(message)
-
-            # Wait util we receive message from client.
             reply = await websocket.recv()
-            print(
-                f"Received from client: {len(reply)} characters\tTime: {time.time()}"
-            )
 
-            received_state_id, data = decode(reply, env.look_at_oids)
+            received_state_id, data = decode(reply, env.world.oids)
 
             # Verify that the sent ID and received ID are equivalent.
             assert received_state_id == state_id
 
             # Hand the data to the env for processing.
             env.set_unity_data(data)
+
         is_done = env.step()
-        i += 1
 
         # If we've reached the end of the sequence, we are done.
         if is_done:
@@ -139,6 +130,7 @@ def encode(state_id: str, bullet_state: List[Any], look_at_oids) -> str:
     # Combine the id and state, and stringify into a msg.
     message = [state_id] + unity_state
     message = str(message)
+    print(f"Sending to unity: state {state_id}\tTime: {time.time()}")
     return message
 
 
@@ -170,6 +162,9 @@ def decode(reply: str, look_at_oids: List[int]):
                 ...
             }
     """
+    print(
+        f"Received from client: {len(reply)} characters\tTime: {time.time()}"
+    )
     # Split components by comma.
     reply = reply.split(",")
     print(f"Number of reply components: {len(reply)}")
