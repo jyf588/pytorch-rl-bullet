@@ -11,17 +11,17 @@ from typing import *
 
 from demo import openrave
 from demo.bullet_world import BulletWorld
+from demo.language_module import LanguageModule
 import demo.policy
 from demo.vision_module import VisionModule
-
 from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import (
     ImaginaryArmObjSession,
 )
 from my_pybullet_envs.inmoov_shadow_place_env_v9 import (
     InmoovShadowHandPlaceEnvV9,
 )
-
 import my_pybullet_envs.utils as utils
+from NLP_module import NLPmod
 from ns_vqa_dart.bullet import dash_object, util
 
 
@@ -30,6 +30,7 @@ class DemoEnvironment:
         self,
         opt: argparse.Namespace,
         scene: List[Dict],
+        command: str,
         observation_mode: str,
         visualize_bullet: bool,
         visualize_unity: bool,
@@ -52,6 +53,7 @@ class DemoEnvironment:
                     },
                     ...
                 ]
+            command: The command that the robot should execute.
             observation_mode: Source of observation, which can either be from
                 ground truth (`gt`) or vision (`vision`).
             visualize_bullet: Whether to visualize the demo in pybullet in 
@@ -70,8 +72,11 @@ class DemoEnvironment:
         # Set the initial scene.
         self.scene = scene
 
-        self.src_idx = 1
-        self.dst_idx = 2
+        # Use language module to determine the source / target objects and
+        # positions.
+        self.src_idx, self.dst_idx, self.dst_xyz = self.parse_command(
+            command=command, scene=scene
+        )
 
         # We need to do this at the beginning before the actual bullet world is
         # setup because it involves an imaginary session. Another option is to
@@ -103,6 +108,48 @@ class DemoEnvironment:
             + self.opt.n_place_steps  # place
             + self.opt.n_release_steps  # release
         )
+
+    def parse_command(self, command: str, scene: List[Dict]):
+        """Parses a language command in the context of a visual scene and
+        computes the source and target objects and location for a 
+        pick-and-place task.
+
+        Args:
+            command: The command to execute.
+            scene: A list of object dictionaries defining the tabletop objects 
+            in a scene, in the format:
+                [
+                    {
+                        "shape": <shape>,
+                        "color": <color>,
+                        "position": <position>,
+                        "orientation": <orientation>,
+                        "radius": <radius>,
+                        "height": <height>,
+                    },
+                    ...
+                ]
+        """
+        # Zero-pad the scene's position with fourth dimension because that's
+        # what the language module expects.
+        scene = copy.deepcopy(scene)
+        for idx in range(len(scene)):
+            odict = scene[idx]
+            odict["position"] = odict["position"] + [0.0]
+            scene[idx] = odict
+
+        src_idx, dst_xy, dst_idx = NLPmod(
+            sentence=command, vision_output=scene
+        )
+
+        # Compute the destination z based on whether there is a destination
+        # object that we are placing on top of (stacking).
+        if dst_idx is None:
+            dst_z = 0.0
+        else:
+            dst_z = scene[dst_idx]["position"][2]
+        dst_xyz = [dst_xy[0], dst_xy[1], dst_z]
+        return src_idx, dst_idx, dst_xyz
 
     def get_state(self):
         """Retrieves the current state of the bullet world.
@@ -192,7 +239,8 @@ class DemoEnvironment:
 
     def compute_qs(self):
         src_x, src_y, _ = self.scene[self.src_idx]["position"]
-        dst_x, dst_y, dst_z = self.scene[self.dst_idx]["position"]
+        # dst_x, dst_y, dst_z = self.scene[self.dst_idx]["position"]
+        dst_x, dst_y, dst_z = self.dst_xyz
         dst_position = [dst_x, dst_y, dst_z + utils.PLACE_START_CLEARANCE]
 
         sess = ImaginaryArmObjSession()

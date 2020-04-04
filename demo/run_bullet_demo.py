@@ -13,6 +13,7 @@ def main():
     env = DemoEnvironment(
         opt=OPTIONS,
         scene=scene,
+        command="Put the green box on top of the blue cylinder",
         observation_mode="gt",
         visualize_bullet=True,
         visualize_unity=False,
