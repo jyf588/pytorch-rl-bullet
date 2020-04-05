@@ -9,7 +9,9 @@ class SceneGenerator:
     def __init__(
         self, base_scene: List[Dict], seed: int, mu: Optional[float] = None
     ):
-        """
+        """Given a base scene, "fill in" sampled attributes that are missing
+        from the base scene objects.
+
         Args:
             base_scene: The scene to base generated scenes off of, in the 
                 format below. Note that only shape, color, and position are
@@ -43,19 +45,17 @@ class SceneGenerator:
             if "height" not in odict:
                 odict["height"] = np.random.uniform(utils.H_MIN, utils.H_MAX)
             if "radius" not in odict:
-                odict["radius"] = np.random.uniform(
-                    utils.HALF_W_MIN, utils.HALF_W_MAX
-                )
+                radius = np.random.uniform(utils.HALF_W_MIN, utils.HALF_W_MAX)
+                # Downsize radius for boxes.
+                if odict["shape"] == "box":
+                    radius *= 0.8
+                odict["radius"] = radius
             if "mass" not in odict:
                 odict["mass"] = np.random.uniform(
                     utils.MASS_MIN, utils.MASS_MAX
                 )
             if "mu" not in odict:
                 odict["mu"] = self.mu
-
-            # Downsize radius for boxes.
-            if odict["shape"] == "box":
-                odict["radius"] *= 0.8
 
             # Set the z position to be half of the object's height.
             odict["position"][2] = odict["height"] / 2

@@ -7,9 +7,11 @@ from demo.scene import SceneGenerator
 
 def main():
     generator = SceneGenerator(
-        base_scene=demo.base_scenes.SCENE, seed=11, mu=OPTIONS.obj_mu
+        base_scene=demo.base_scenes.SCENE1,
+        seed=OPTIONS.seed,
+        mu=OPTIONS.obj_mu,
     )
-    for _ in range(5):
+    for _ in range(1):
         env = DemoEnvironment(
             opt=OPTIONS,
             scene=generator.generate(),
