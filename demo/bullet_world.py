@@ -254,7 +254,7 @@ class BulletWorld:
         """
         oid2dict = {}
         for oid, odict in self.state["objects"].items():
-            position = odict["position"]
+            old_position = odict["position"]
             position, orientation = self.bc.getBasePositionAndOrientation(oid)
             odict["position"] = list(position)
             odict["orientation"] = list(orientation)
@@ -262,6 +262,14 @@ class BulletWorld:
                 orientation=orientation
             )
             oid2dict[oid] = odict
+            # new_position = np.array(odict["position"])
+            # old_position = np.array(old_position)
+            # if not np.allclose(new_position, old_position, atol=1e-02):
+            #     print(f"position: {new_position}")
+            #     print(f"old_position: {old_position}")
+            #     print(f"difference: {np.abs(new_position - old_position)}")
+            #     debug = 5 / 0
+            # assert odict["position"] == old_position
         return oid2dict
 
     def get_robot_state(self):
@@ -284,6 +292,22 @@ class BulletWorld:
             )[0]
             robot_state[joint_name] = joint_angle
         return robot_state
+
+    def get_robot_arm_q(self):
+        """Retrieves the arm joint angles.
+
+        Returns:
+            arm_q: Arm joint angles in the following joint order:
+                r_shoulder_out_joint
+                r_shoulder_lift_joint
+                r_upper_arm_roll_joint
+                r_elbow_flex_joint
+                r_elbow_roll_joint
+                rh_WRJ2
+                rh_WRJ1
+        """
+        arm_q = self.robot_env.robot.get_q_dq(self.robot_env.robot.arm_dofs)[0]
+        return arm_q
 
     def act(self):
         pass

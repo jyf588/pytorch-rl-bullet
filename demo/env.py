@@ -80,8 +80,12 @@ class DemoEnvironment:
         if self.observation_mode == "vision":
             self.vision_module = VisionModule()
 
-        p.connect(p.GUI)
+        if visualize_bullet:
+            p.connect(p.GUI)
+        else:
+            p.connect(p.DIRECT)
 
+        self.imaginary_sess = ImaginaryArmObjSession()
         self.a = InmoovShadowHandPlaceEnvV9(
             renders=False, grasp_pi_name=self.opt.grasp_pi
         )
@@ -215,7 +219,13 @@ class DemoEnvironment:
                     }
                 }
         """
-        state = self.world.get_state()
+        if self.world is None:
+            idx2odict = {
+                idx + 2: odict for idx, odict in enumerate(self.scene)
+            }
+            state = {"objects": idx2odict}
+        else:
+            state = self.world.get_state()
         return state
 
     def step(self):
@@ -239,6 +249,7 @@ class DemoEnvironment:
                 if not success:
                     return True
             elif stage == "grasp":
+                print(f"{self.timestep}: {self.world.get_robot_arm_q()}")
                 self.grasp(stage_ts=stage_ts)
             elif stage == "transport":
                 success = self.transport(stage_ts=stage_ts)
@@ -308,7 +319,7 @@ class DemoEnvironment:
         self.dst_xyz = [dst_x, dst_y, dst_z]
         src_x, src_y, _ = self.scene[self.src_idx]["position"]
         q_reach_dst = np.array(
-            ImaginaryArmObjSession().get_most_comfortable_q_and_refangle(
+            self.imaginary_sess.get_most_comfortable_q_and_refangle(
                 src_x, src_y
             )[0]
         )
@@ -346,6 +357,7 @@ class DemoEnvironment:
             q_end=self.q_reach_dst,
             stage="reach",
         )
+        print(f"end of reach trajectory: {trajectory[-1, :]}")
         return trajectory
 
     def compute_transport_trajectory(self) -> np.ndarray:
@@ -354,9 +366,7 @@ class DemoEnvironment:
         Returns:
             trajectory: The transport trajectory of shape (200, 7).
         """
-        q_src = self.world.robot_env.robot.get_q_dq(
-            self.world.robot_env.robot.arm_dofs
-        )[0]
+        q_src = self.world.get_robot_arm_q()
         q_dst = self.q_transport_dst
 
         trajectory = openrave.compute_trajectory(
@@ -384,8 +394,9 @@ class DemoEnvironment:
                 env_name=self.opt.grasp_env_name,
                 is_cuda=self.opt.is_cuda,
             )
-        obs = self.get_grasping_observation()
-        obs = demo.policy.wrap_obs(obs, is_cuda=self.opt.is_cuda)
+        obs = demo.policy.wrap_obs(
+            self.get_grasping_observation(), is_cuda=self.opt.is_cuda
+        )
         with torch.no_grad():
             _, action, _, self.hidden_states = self.policy.act(
                 obs,
@@ -393,10 +404,12 @@ class DemoEnvironment:
                 self.masks,
                 deterministic=self.opt.det,
             )
-        action = demo.policy.unwrap_action(
-            action=action, is_cuda=self.opt.is_cuda
+        self.world.step_robot(
+            action=demo.policy.unwrap_action(
+                action=action, is_cuda=self.opt.is_cuda
+            )
         )
-        self.world.step_robot(action=action)
+        self.masks.fill_(1.0)
 
     def transport(self, stage_ts: int):
         if stage_ts == 0:
@@ -437,7 +450,11 @@ class DemoEnvironment:
         self.world.step()
 
     def execute_plan(self, trajectory: np.ndarray, idx: int):
-        self.world.robot_env.robot.tar_arm_q = trajectory[idx]
+        if idx > len(trajectory) - 1:
+            tar_arm_q = trajectory[-1]
+        else:
+            tar_arm_q = trajectory[idx]
+        self.world.robot_env.robot.tar_arm_q = tar_arm_q
         self.world.robot_env.robot.apply_action([0.0] * 24)
         self.world.step()
 
@@ -490,13 +507,7 @@ class DemoEnvironment:
         if self.observation_mode == "gt":
             # The ground truth observation is simply the same as the true
             # state of the world.
-            if self.world is None:
-                idx2odict = {
-                    idx: odict for idx, odict in enumerate(self.scene)
-                }
-                obs = {"objects": idx2odict}
-            else:
-                obs = self.world.get_state()
+            obs = self.get_state()
         elif self.observation_mode == "vision":
             obs = self.get_vision_observation(renderer=renderer)
         else:
@@ -535,10 +546,16 @@ class DemoEnvironment:
         # The final visual observation, for now, is the same as the ground
         # truth state with the source object's pose predicted. So, we
         # initialize the observation with the true state as a starting point.
-        obs = self.world.get_state()
+        obs = copy.deepcopy(self.get_state())
 
+        print(f"unity keys:")
+        print(f"{self.unity_data.keys()}")
+
+        print(f"obs keys:")
+        keys = obs["objects"].keys()
+        print(keys)
         # Predict the object pose for the objects that we've "looked" at.
-        for oid in self.world.oids:
+        for oid in obs["objects"].keys():
             rgb, seg_img = self.get_images(oid=oid, renderer=renderer)
             pred = self.vision_module.predict(
                 oid=oid, rgb=rgb, seg_img=seg_img

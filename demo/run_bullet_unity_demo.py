@@ -55,7 +55,7 @@ async def send_to_client(websocket, path):
     """
     for _ in range(5):
         generator = SceneGenerator(
-            base_scene=demo.base_scenes.SCENE,
+            base_scene=demo.base_scenes.SCENE1,
             seed=OPTIONS.seed,
             mu=OPTIONS.obj_mu,
         )
@@ -74,11 +74,12 @@ async def send_to_client(websocket, path):
         i = 0
         while 1:
             stage, _ = env.get_current_stage()
+            state = env.get_state()
 
             # Only have lucas look at / send images back when planning or placing.
             if stage in ["plan", "place"]:
                 send_to_unity = True
-                look_at_oids = env.world.oids
+                look_at_oids = list(state["objects"].keys())
             else:
                 render_frequency = 3
                 send_to_unity = i % render_frequency == 0
@@ -86,7 +87,7 @@ async def send_to_client(websocket, path):
 
             if send_to_unity:
                 state_id = f"{env.timestep:06}"
-                message = encode(state_id, env.get_state(), look_at_oids)
+                message = encode(state_id, state, look_at_oids)
 
                 # Send and get reply.
                 await websocket.send(message)
