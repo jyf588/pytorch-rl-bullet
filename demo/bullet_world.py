@@ -157,7 +157,7 @@ class BulletWorld:
         """
         renderer = BulletRenderer(p=self.bc)
         oids = renderer.load_objects_from_state(
-            ostates=scene, position_mode="com"
+            odicts=scene, position_mode="com"
         )
         return oids
 

@@ -70,6 +70,8 @@ class DemoEnvironment:
         self.visualize_unity = visualize_unity
         self.renderer = renderer
 
+        print("**********DEMO ENVIRONMENT**********")
+
         # Whether we've finished planning.
         self.planning_complete = False
         self.initial_obs = None
@@ -230,6 +232,7 @@ class DemoEnvironment:
             if stage == "reach":
                 success = self.reach(stage_ts=stage_ts)
                 if not success:
+                    print(f"Reaching failed. Terminating early.")
                     return True
             elif stage == "grasp":
                 self.grasp(stage_ts=stage_ts)

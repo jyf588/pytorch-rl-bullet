@@ -1,4 +1,6 @@
 """Runs the demo in bullet."""
+import pprint
+
 import demo.base_scenes
 from demo.env import DemoEnvironment
 from demo.options import OPTIONS
@@ -24,10 +26,16 @@ def main():
         x_bounds=(utils.TX_MIN, utils.TX_MAX),
         y_bounds=(utils.TY_MIN, utils.TY_MAX),
         z_bounds=(0.0, 0.0),
+        mass_bounds=(utils.MASS_MIN, utils.MASS_MAX),
+        mu_bounds=(OPTIONS.obj_mu, OPTIONS.obj_mu),
         position_mode="com",
     )
-    for _ in range(1):
-        scene = generator.generate_tabletop_objects()
+
+    scenes = [generator.generate_tabletop_objects() for _ in range(50)]
+    pprint.pprint(scenes)
+    for idx in range(50):
+        print(f"scene: {idx}")
+        scene = scenes[idx]
         scene[0]["color"] = "green"
         scene[1]["color"] = "blue"
         env = DemoEnvironment(
@@ -35,7 +43,7 @@ def main():
             scene=scene,
             command=f"Put the green box on top of the blue box.",
             observation_mode="gt",
-            visualize_bullet=False,
+            visualize_bullet=True,
             visualize_unity=False,
         )
 
