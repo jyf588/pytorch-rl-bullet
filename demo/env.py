@@ -105,49 +105,28 @@ class DemoEnvironment:
         self.initial_obs = self.get_observation(
             observation_mode=self.observation_mode, renderer=self.renderer
         )
-        print("Observation:")
-        pprint.pprint(self.initial_obs["objects"])
-
-        # Temporarily use ground truth state for the source object.
-        # state = self.world.get_state()
-        # self.initial_obs["objects"][2] = state["objects"][2]
-        # self.initial_obs["objects"][3] = state["objects"][3]
-        # self.initial_obs["objects"][4] = state["objects"][4]
-        # self.initial_obs["objects"][5] = state["objects"][5]
 
         # Use language module to determine the source / target objects and
         # positions.
-        self.src_idx, self.dst_idx, self.dst_xyz = self.parse_command(
+        self.src_idx, self.dst_idx, dst_xyz = self.parse_command(
             command=self.command, observation=self.initial_obs
         )
-        print(f"src_idx: {self.src_idx}")
-        print(f"dst_idx: {self.dst_idx}")
 
-        # Disconnect from the world client because we are creating temporary
-        # clients for planning. Then, we recreate the world client.
-        # self.world.bc.disconnect()
-        self.q_reach_dst, self.q_transport_dst = self.compute_qs()
+        # Compute the goal arm poses for reaching and transport.
+        self.q_reach_dst, self.q_transport_dst = self.compute_qs(
+            src_xy=self.initial_obs[self.src_idx]["position"][:2],
+            dst_xyz=dst_xyz,
+        )
         p.resetSimulation()
-        # p.disconnect()
+
+        # Create the bullet world now that we've finished our imaginary
+        # sessions.
         self.world = BulletWorld(
             opt=self.opt,
             p=p,
             scene=self.scene,
             visualize=self.visualize_bullet,
         )
-        # Call again because oids changed.
-        self.initial_obs = self.get_observation(
-            observation_mode=self.observation_mode, renderer=self.renderer
-        )
-
-        # print(f"world state:")
-        # pprint.pprint(self.world.get_state())
-        # print(f"self.world.bc._client: {self.world.bc._client}")
-        # print(f"self.world.oids: {self.world.oids}")
-        # print(f"self.world.state:")
-        # pprint.pprint(self.world.get_state())
-        self.src_oid = self.world.oids[self.src_idx]
-        self.dst_oid = self.world.oids[self.dst_idx]
 
         # Flag planning as complete.
         self.planning_complete = True
@@ -159,41 +138,43 @@ class DemoEnvironment:
 
         Args:
             command: The command to execute.
-            scene: A list of object dictionaries defining the tabletop objects 
-            in a scene, in the format:
-                {
-                    "objects": {
-                        "<oid>": {
-                            "shape": shape,
-                            "color": color,
-                            "radius": radius,
-                            "height": height,
-                            "position": [x, y, z],
-                            "orientation": [x, y, z, w],
-                        },
-                        ...
+            observation: A list of object dictionaries defining the tabletop 
+                objects in a scene, in the format:
+                [
+                    {
+                        "shape": shape,
+                        "color": color,
+                        "radius": radius,
+                        "height": height,
+                        "position": [x, y, z],
+                        "orientation": [x, y, z, w],
                     },
                     ...
-                }
+                ]
+        
+        Returns:
+            src_idx: The index of the source object.
+            dst_idx: The index of the destination object.
+            dst_xyz: The (x, y, z) location to end transport at / start placing.
         """
         # Zero-pad the scene's position with fourth dimension because that's
         # what the language module expects.
-        odicts = copy.deepcopy(list(observation["objects"].values()))
-        for idx, odict in enumerate(odicts):
-            odict["position"] = odict["position"] + [0.0]
-            odicts[idx] = odict
+        language_input = copy.deepcopy(observation)
+        for idx, odict in enumerate(language_input):
+            language_input[idx]["position"] = odict["position"] + [0.0]
 
-        src_idx, dst_xy, dst_idx = NLPmod(
-            sentence=command, vision_output=odicts
+        # Feed through the language module.
+        src_idx, (dst_x, dst_y), dst_idx = NLPmod(
+            sentence=command, vision_output=language_input
         )
 
         # Compute the destination z based on whether there is a destination
         # object that we are placing on top of (stacking).
         if dst_idx is None:
-            dst_z = 0.0
+            z = 0.0
         else:
-            dst_z = odicts[dst_idx]["height"]
-        dst_xyz = [dst_xy[0], dst_xy[1], dst_z]
+            z = observation[dst_idx]["height"]
+        dst_xyz = [dst_x, dst_y, z + utils.PLACE_START_CLEARANCE]
         return src_idx, dst_idx, dst_xyz
 
     def get_state(self):
@@ -218,12 +199,14 @@ class DemoEnvironment:
                         ...
                     }
                 }
+            Note that if no bullet world is created yet, oid is simply assigned
+            using zero-indexed assignment.
         """
+        # If there is no bullet world, we simply return the input scene.
         if self.world is None:
-            idx2odict = {
-                idx + 2: odict for idx, odict in enumerate(self.scene)
+            state = {
+                "objects": {idx: odict for idx, odict in enumerate(self.scene)}
             }
-            state = {"objects": idx2odict}
         else:
             state = self.world.get_state()
         return state
@@ -249,7 +232,6 @@ class DemoEnvironment:
                 if not success:
                     return True
             elif stage == "grasp":
-                print(f"{self.timestep}: {self.world.get_robot_arm_q()}")
                 self.grasp(stage_ts=stage_ts)
             elif stage == "transport":
                 success = self.transport(stage_ts=stage_ts)
@@ -265,8 +247,8 @@ class DemoEnvironment:
 
         # Compute whether we have finished the entire sequence.
         done = self.is_done()
-        if done:
-            self.world.bc.disconnect()
+        # if done:
+        #     p.disconnect()
         return done
 
     def get_current_stage(self) -> Tuple[str, int]:
@@ -311,21 +293,30 @@ class DemoEnvironment:
             )
         return current_stage, stage_ts
 
-    def compute_qs(self):
-        self.src_idx = 1
-        self.dst_idx = 2
-        dst_x, dst_y, _ = self.scene[self.dst_idx]["position"]
-        dst_z = self.scene[self.dst_idx]["height"]
-        self.dst_xyz = [dst_x, dst_y, dst_z]
-        src_x, src_y, _ = self.scene[self.src_idx]["position"]
+    def compute_qs(self, src_xy: List[float], dst_xyz: List[float]) -> Tuple:
+        """Computes the arm joint angles that will be used to determine the
+        arm poses for:
+            (1) After reaching / before grasping, and
+            (2) After transport / before placing
+        
+        Args:
+            src_xy: The (x, y) position that the robot should reach to.
+            dst_xyz: The (x, y, z) position that the robot should finish
+                transporting to.
+        
+        Returns:
+            q_reach_dst: The arm joint angles that reaching should end at.
+            q_transport_dst: The arm joint angles that transport should end at.
+        """
+        # Compute the destination arm pose for reaching.
+        src_x, src_y = src_xy
         q_reach_dst = np.array(
             self.imaginary_sess.get_most_comfortable_q_and_refangle(
                 src_x, src_y
             )[0]
         )
 
-        dst_x, dst_y, dst_z = self.dst_xyz
-        dst_position = [dst_x, dst_y, dst_z + utils.PLACE_START_CLEARANCE]
+        # Compute the destination arm pose for transport.
         self.a.seed(self.opt.seed)
         table_id = p.loadURDF(
             os.path.join("my_pybullet_envs/assets/tabletop.urdf"),
@@ -336,12 +327,8 @@ class DemoEnvironment:
             self.a.o_pos_pf_ave, self.a.o_quat_pf_ave
         )
         q_transport_dst = utils.get_n_optimal_init_arm_qs(
-            self.a.robot, p_pos_of_ave, p_quat_of_ave, dst_position, table_id
+            self.a.robot, p_pos_of_ave, p_quat_of_ave, dst_xyz, table_id
         )[0]
-
-        print(f"compute qs:")
-        print(f"q_reach_dst: {q_reach_dst}")
-        print(f"q_transport_dst: {q_transport_dst}")
         return q_reach_dst, q_transport_dst
 
     def compute_reach_trajectory(self) -> np.ndarray:
@@ -351,13 +338,12 @@ class DemoEnvironment:
             trajectory: The reaching trajectory of shape (200, 7).
         """
         trajectory = openrave.compute_trajectory(
-            state=self.initial_obs,
-            dst_oid=self.src_oid,
+            odicts=self.initial_obs,
+            target_idx=self.src_idx,
             q_start=None,
             q_end=self.q_reach_dst,
             stage="reach",
         )
-        print(f"end of reach trajectory: {trajectory[-1, :]}")
         return trajectory
 
     def compute_transport_trajectory(self) -> np.ndarray:
@@ -370,8 +356,8 @@ class DemoEnvironment:
         q_dst = self.q_transport_dst
 
         trajectory = openrave.compute_trajectory(
-            state=self.initial_obs,
-            dst_oid=self.src_oid,
+            odicts=self.initial_obs,
+            target_idx=self.src_idx,
             q_start=q_src,
             q_end=q_dst,
             stage="transport",
@@ -431,8 +417,9 @@ class DemoEnvironment:
             )
 
         # Get the current observation.
-        obs = self.get_placing_observation()
-        obs = demo.policy.wrap_obs(obs, is_cuda=self.opt.is_cuda)
+        obs = demo.policy.wrap_obs(
+            self.get_placing_observation(), is_cuda=self.opt.is_cuda
+        )
         with torch.no_grad():
             _, action, _, self.hidden_states = self.policy.act(
                 obs,
@@ -441,10 +428,11 @@ class DemoEnvironment:
                 deterministic=self.opt.det,
             )
 
-        action = demo.policy.unwrap_action(
-            action=action, is_cuda=self.opt.is_cuda
+        self.world.step_robot(
+            action=demo.policy.unwrap_action(
+                action=action, is_cuda=self.opt.is_cuda
+            )
         )
-        self.world.step_robot(action=action)
 
     def release(self):
         self.world.step()
@@ -459,7 +447,7 @@ class DemoEnvironment:
         self.world.step()
 
     def get_grasping_observation(self) -> torch.Tensor:
-        odict = self.initial_obs["objects"][self.src_oid]
+        odict = self.initial_obs[self.src_idx]
         position = odict["position"]
         half_height = odict["height"] / 2
         x, y = position[0], position[1]
@@ -476,8 +464,8 @@ class DemoEnvironment:
             )
 
         # Compute the observation vector from object poses and placing position.
-        tdict = self.obs["objects"][self.src_oid]
-        bdict = self.obs["objects"][self.dst_oid]
+        tdict = self.obs[self.src_idx]
+        bdict = self.obs[self.dst_idx]
         t_init_dict = self.scene[self.src_idx]
         x, y, z = t_init_dict["position"]
         is_box = t_init_dict["shape"] == "box"
@@ -498,16 +486,31 @@ class DemoEnvironment:
         """Gets an observation from the current state.
         
         Args:
-            observation_mode:
-            renderer: 
+            observation_mode: The mode of observation, e.g. using ground truth 
+                or vision.
+            renderer: If we are using vision as our observation model, this
+                specifies the renderer we are using to render images that are
+                input to vision.
 
         Returns:
-            observation:
+            observation: A list of dictionaries storing object observations 
+                for the current world state, in the format: 
+                [
+                    {
+                        "shape": shape,
+                        "color": color,
+                        "radius": radius,
+                        "height": height,
+                        "position": [x, y, z],
+                        "orientation": [x, y, z, w],
+                    },
+                    ...
+                ]
         """
         if self.observation_mode == "gt":
             # The ground truth observation is simply the same as the true
             # state of the world.
-            obs = self.get_state()
+            obs = list(self.get_state()["objects"].values())
         elif self.observation_mode == "vision":
             obs = self.get_vision_observation(renderer=renderer)
         else:

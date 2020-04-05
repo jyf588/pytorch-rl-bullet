@@ -15,22 +15,23 @@ STAGE2NAME = {
 
 
 def compute_trajectory(
-    state: Dict,
-    dst_oid: int,
+    odicts: Dict,
+    target_idx: int,
     q_start: np.ndarray,
     q_end: np.ndarray,
     stage: str,
 ) -> np.ndarray:
     """Computes a trajectory using OpenRAVE.
     Args:
-        state: A state dictionary, with the format:
-            {
-                "objects": {
-                    <oid>: {
-                        "position": <position>
-                    }
+        odicts: A list of object dictionaries, with the format:
+            [
+                {
+                    "position": <position>,
+                    ...
                 }
-            }
+            ]
+        target_idx: The object index to come first in the ordering of object 
+            positions sent to OpenRAVE.
         q_start: The source / starting q of shape (7,).
         q_end: The destination q of shape (7,).
         stage: The stage we are computing the trajectory for.
@@ -43,22 +44,27 @@ def compute_trajectory(
 
     # Extract object positions from the state. Destination object needs to come
     # first.
-    state = copy.deepcopy(state)
+    odicts = copy.deepcopy(odicts)  # We make a copy because we are modifying.
+
+    ordered_idxs = [target_idx]
+    for idx in range(len(odicts)):
+        if idx != target_idx:
+            ordered_idxs.append(idx)
+
+    # Append object positions one by one.
     object_positions = []
-    oids = list(state["objects"].keys())
-    ordered_oids = [dst_oid]
-    for oid in oids:
-        if oid != dst_oid:
-            ordered_oids.append(oid)
-    for oid in ordered_oids:
-        position = state["objects"][oid]["position"]
+    for idx in ordered_idxs:
+        # Extract the position.
+        position = odicts[idx]["position"]
 
         # Set object z to zero because that's what OR expects.
         position[2] = 0.0
-        object_positions.append(position)
-    # object_positions = [o["position"] for o in state["objects"].values()]
 
-    # Pad a fourth dimension with zero because open rave expects it.
+        # Store the object position.
+        object_positions.append(position)
+
+    # Zero-pad each position with a fourth dimension because OpenRAVE expects
+    # it.
     object_positions = np.array([p + [0.0] for p in object_positions])
 
     # Compute the trajectory using OpenRAVE.
