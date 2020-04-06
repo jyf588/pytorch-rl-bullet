@@ -27,6 +27,8 @@ import demo.base_scenes
 from demo.env import DemoEnvironment
 from demo.options import OPTIONS
 from demo.scene import SceneGenerator
+import my_pybullet_envs.utils as utils
+from ns_vqa_dart.bullet.random_objects import RandomObjectsGenerator
 
 global args
 
@@ -53,17 +55,36 @@ async def send_to_client(websocket, path):
         websocket: The websocket protocol instance.
         path: The URI path.
     """
-    for _ in range(5):
-        generator = SceneGenerator(
-            base_scene=demo.base_scenes.SCENE1,
-            seed=OPTIONS.seed,
-            mu=OPTIONS.obj_mu,
-        )
+    generator = RandomObjectsGenerator(
+        seed=OPTIONS.seed,
+        n_objs_bounds=(2, 2),
+        obj_dist_thresh=0.2,
+        max_retries=50,
+        shapes=["box"],
+        radius_bounds=(utils.HALF_W_MIN, utils.HALF_W_MAX),
+        height_bounds=(utils.H_MIN, utils.H_MAX),
+        x_bounds=(utils.TX_MIN, utils.TX_MAX),
+        y_bounds=(utils.TY_MIN, utils.TY_MAX),
+        z_bounds=(0.0, 0.0),
+        mass_bounds=(utils.MASS_MIN, utils.MASS_MAX),
+        mu_bounds=(OPTIONS.obj_mu, OPTIONS.obj_mu),
+        position_mode="com",
+    )
+    scenes = [generator.generate_tabletop_objects() for _ in range(100)]
 
+    for scene_idx in range(100):
+        # generator = SceneGenerator(
+        #     base_scene=demo.base_scenes.SCENE1,
+        #     seed=OPTIONS.seed,
+        #     mu=OPTIONS.obj_mu,
+        # )
+        scene = scenes[scene_idx]
+        scene[0]["color"] = "green"
+        scene[1]["color"] = "blue"
         env = DemoEnvironment(
             opt=OPTIONS,
-            scene=generator.generate(),
-            command="Put the green box on top of the blue cylinder",
+            scene=scene,
+            command="Put the green box on top of the blue box",
             observation_mode="vision",
             renderer="unity",
             visualize_bullet=False,
@@ -78,22 +99,29 @@ async def send_to_client(websocket, path):
 
             # Only have lucas look at / send images back when planning or placing.
             if stage in ["plan", "place"]:
-                send_to_unity = True
-                look_at_oids = list(state["objects"].keys())
-            else:
-                render_frequency = 3
+                render_frequency = 2
                 send_to_unity = i % render_frequency == 0
-                look_at_oids = []
+                look_at_idxs = range(len(state["objects"]))
+            else:
+                render_frequency = 16
+                send_to_unity = i % render_frequency == 0
+                look_at_idxs = []
 
             if send_to_unity:
                 state_id = f"{env.timestep:06}"
-                message = encode(state_id, state, look_at_oids)
+                message = encode(
+                    state_id=state_id,
+                    bullet_state=state,
+                    look_at_idxs=look_at_idxs,
+                )
 
                 # Send and get reply.
                 await websocket.send(message)
                 reply = await websocket.recv()
 
-                received_state_id, data = decode(reply, look_at_oids)
+                received_state_id, data = decode(
+                    reply, look_at_idxs=look_at_idxs
+                )
 
                 # Verify that the sent ID and received ID are equivalent.
                 assert received_state_id == state_id
@@ -105,12 +133,14 @@ async def send_to_client(websocket, path):
             is_done = env.step()
             if is_done:
                 break
-            i += 1
+
+            if stage != "plan":
+                i += 1
         del env
     sys.exit(0)
 
 
-def encode(state_id: str, bullet_state: List[Any], look_at_oids) -> str:
+def encode(state_id: str, bullet_state: List[Any], look_at_idxs) -> str:
     """Converts the provided bullet state into a Unity state, and encodes the
     message for sending to Unity.
 
@@ -134,12 +164,13 @@ def encode(state_id: str, bullet_state: List[Any], look_at_oids) -> str:
             }
         }. Note that if "robot" key is not provided, the default robot pose 
         will be used.
-    
+        look_at_idxs: Object idxs to look at.
+
     Returns:
         message: The message to send to unity.
     """
     unity_state = bullet2unity.states.bullet2unity_state(
-        bullet_state=bullet_state, look_at_oids=look_at_oids
+        bullet_state=bullet_state, look_at_idxs=look_at_idxs
     )
 
     # Combine the id and state, and stringify into a msg.
@@ -149,7 +180,7 @@ def encode(state_id: str, bullet_state: List[Any], look_at_oids) -> str:
     return message
 
 
-def decode(reply: str, look_at_oids: List[int]):
+def decode(reply: str, look_at_idxs: List[int]):
     """Decodes messages received from Unity.
 
     Args:
@@ -183,13 +214,13 @@ def decode(reply: str, look_at_oids: List[int]):
     # Split components by comma.
     reply = reply.split(",")
     print(f"Number of reply components: {len(reply)}")
-
+    print(f"Attempting to parse unity data for {len(look_at_idxs)} objects...")
     # Extract the state ID.
     state_id = reply[0]
 
     idx = 1
     data = {}
-    for _ in range(len(look_at_oids)):
+    for _ in range(len(look_at_idxs)):
         unity_otag = reply[idx]
         idx += 1
 

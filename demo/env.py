@@ -162,7 +162,10 @@ class DemoEnvironment:
         # Zero-pad the scene's position with fourth dimension because that's
         # what the language module expects.
         language_input = copy.deepcopy(observation)
+        print(f"observation")
+        pprint.pprint(observation)
         for idx, odict in enumerate(language_input):
+            print(f'odict position: {odict["position"]}')
             language_input[idx]["position"] = odict["position"] + [0.0]
 
         # Feed through the language module.
@@ -510,11 +513,11 @@ class DemoEnvironment:
                     ...
                 ]
         """
-        if self.observation_mode == "gt":
+        if observation_mode == "gt":
             # The ground truth observation is simply the same as the true
             # state of the world.
             obs = list(self.get_state()["objects"].values())
-        elif self.observation_mode == "vision":
+        elif observation_mode == "vision":
             obs = self.get_vision_observation(renderer=renderer)
         else:
             raise ValueError(
@@ -552,19 +555,21 @@ class DemoEnvironment:
         # The final visual observation, for now, is the same as the ground
         # truth state with the source object's pose predicted. So, we
         # initialize the observation with the true state as a starting point.
-        obs = copy.deepcopy(self.get_state())
+        obs = copy.deepcopy(
+            self.get_observation(observation_mode="gt", renderer=self.renderer)
+        )
 
-        print(f"unity keys:")
-        print(f"{self.unity_data.keys()}")
+        # print(f"unity keys:")
+        # print(f"{self.unity_data.keys()}")
 
-        print(f"obs keys:")
-        keys = obs["objects"].keys()
-        print(keys)
+        # print(f"obs keys:")
+        # keys = obs["objects"].keys()
+        # print(keys)
         # Predict the object pose for the objects that we've "looked" at.
-        for oid in obs["objects"].keys():
-            rgb, seg_img = self.get_images(oid=oid, renderer=renderer)
+        for idx in range(len(obs)):
+            rgb, seg_img = self.get_images(oid=idx, renderer=renderer)
             pred = self.vision_module.predict(
-                oid=oid, rgb=rgb, seg_img=seg_img
+                oid=idx, rgb=rgb, seg_img=seg_img
             )
 
             # Convert vectorized predictions to dictionary form using camera
@@ -572,13 +577,13 @@ class DemoEnvironment:
             y_dict = dash_object.y_vec_to_dict(
                 y=list(pred[0]),
                 coordinate_frame="camera",
-                cam_position=self.unity_data[oid]["camera_position"],
-                cam_orientation=self.unity_data[oid]["camera_orientation"],
+                cam_position=self.unity_data[idx]["camera_position"],
+                cam_orientation=self.unity_data[idx]["camera_orientation"],
             )
 
             # Update the position and up vector with predicted values.
-            obs["objects"][oid]["position"] = y_dict["position"]
-            obs["objects"][oid]["up_vector"] = y_dict["up_vector"]
+            obs[idx]["position"] = y_dict["position"]
+            obs[idx]["up_vector"] = y_dict["up_vector"]
         return obs
 
     def get_images(self, oid: int, renderer: str):

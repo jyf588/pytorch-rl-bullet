@@ -13,7 +13,7 @@ from typing import *
 import bullet2unity.const as const
 
 
-def bullet2unity_state(bullet_state: Dict, look_at_oids):
+def bullet2unity_state(bullet_state: Dict, look_at_idxs):
     """Converts a bullet state to a unity state.
 
     Args:
@@ -61,7 +61,7 @@ def bullet2unity_state(bullet_state: Dict, look_at_oids):
     unity_object_states = bullet2unity_objects(
         bullet_state=bullet_state["objects"],
         bullet_shoulder_pos=const.ROBOT_SHOULDER_POS,
-        look_at_oids=look_at_oids,
+        look_at_idxs=look_at_idxs,
     )
 
     # Combine the robot and object states.
@@ -93,7 +93,7 @@ def bullet2unity_robot(bullet_state: Dict[str, float]) -> List[float]:
 def bullet2unity_objects(
     bullet_state: Dict[int, Dict],
     bullet_shoulder_pos: List[float],
-    look_at_oids,
+    look_at_idxs,
 ):
     """Convert object states from bullet to unity.
     
@@ -132,7 +132,7 @@ def bullet2unity_objects(
     """
     n_objects = len(bullet_state)
     unity_state = [n_objects]
-    for oid, odict in bullet_state.items():
+    for idx, odict in enumerate(bullet_state.values()):
         shape = odict["shape"]
         color = odict["color"]
         radius = odict["radius"]
@@ -156,8 +156,8 @@ def bullet2unity_objects(
         unity_rotation = bullet_to_unity_rot(bullet_orn=bullet_orientation)
 
         # Create the state for the current object.
-        otag = f"{oid:02}"
-        look_at_flag = int(oid in look_at_oids)
+        otag = f"{idx:02}"
+        look_at_flag = int(idx in look_at_idxs)
         ostate = (
             [otag, look_at_flag, shape, color]
             + list(unity_size)
