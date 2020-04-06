@@ -5,6 +5,7 @@ them to Unity, and processes received data from Unity.
 import asyncio
 import argparse
 import base64
+import copy
 import cv2
 import functools
 import imageio
@@ -60,7 +61,7 @@ async def send_to_client(websocket, path):
         n_objs_bounds=(2, 2),
         obj_dist_thresh=0.2,
         max_retries=50,
-        shapes=["box"],
+        shapes=["box", "cylinder"],
         radius_bounds=(utils.HALF_W_MIN, utils.HALF_W_MAX),
         height_bounds=(utils.H_MIN, utils.H_MAX),
         x_bounds=(utils.TX_MIN, utils.TX_MAX),
@@ -73,70 +74,79 @@ async def send_to_client(websocket, path):
     scenes = [generator.generate_tabletop_objects() for _ in range(100)]
 
     for scene_idx in range(100):
-        # generator = SceneGenerator(
-        #     base_scene=demo.base_scenes.SCENE1,
-        #     seed=OPTIONS.seed,
-        #     mu=OPTIONS.obj_mu,
-        # )
         scene = scenes[scene_idx]
         scene[0]["color"] = "green"
         scene[1]["color"] = "blue"
-        env = DemoEnvironment(
-            opt=OPTIONS,
-            scene=scene,
-            command="Put the green box on top of the blue box",
-            observation_mode="vision",
-            renderer="unity",
-            visualize_bullet=False,
-            visualize_unity=False,
-        )
+        src_shape = scene[0]["shape"]
+        dst_shape = scene[1]["shape"]
 
-        # Send states one by one.
-        i = 0
-        while 1:
-            stage, _ = env.get_current_stage()
-            state = env.get_state()
+        for obs_mode in ["gt", "vision"]:
+            print(f"scene_idx: {scene_idx}")
+            print(f"obs mode: {obs_mode}")
 
-            # Only have lucas look at / send images back when planning or placing.
-            if stage in ["plan", "place"]:
-                render_frequency = 2
-                send_to_unity = i % render_frequency == 0
-                look_at_idxs = range(len(state["objects"]))
-            else:
-                render_frequency = 16
-                send_to_unity = i % render_frequency == 0
-                look_at_idxs = []
+            env = DemoEnvironment(
+                opt=OPTIONS,
+                scene=copy.deepcopy(scene),
+                command=f"Put the green {src_shape} on top of the blue {dst_shape}",
+                observation_mode=obs_mode,
+                renderer="unity",
+                visualize_bullet=False,
+                visualize_unity=False,
+            )
 
-            if send_to_unity:
-                state_id = f"{env.timestep:06}"
-                message = encode(
-                    state_id=state_id,
-                    bullet_state=state,
-                    look_at_idxs=look_at_idxs,
-                )
+            # Send states one by one.
+            i = 0
+            while 1:
+                stage, _ = env.get_current_stage()
+                state = env.get_state()
 
-                # Send and get reply.
-                await websocket.send(message)
-                reply = await websocket.recv()
+                # Only have lucas look at / send images back when planning or placing.
+                if obs_mode == "vision" and stage in ["plan", "place"]:
+                    render_frequency = 2
+                    send_to_unity = i % render_frequency == 0
+                    look_at_idxs = range(len(state["objects"]))
+                else:
+                    render_frequency = 16
+                    send_to_unity = i % render_frequency == 0
+                    look_at_idxs = []
 
-                received_state_id, data = decode(
-                    reply, look_at_idxs=look_at_idxs
-                )
+                if send_to_unity:
+                    # Add predicted objects.
+                    if obs_mode == "vision":
+                        if env.obs is not None:
+                            for obs_i, odict in enumerate(env.obs):
+                                odict["color"] = "red"
+                                state["objects"][f"obs_{obs_i}"] = odict
 
-                # Verify that the sent ID and received ID are equivalent.
-                assert received_state_id == state_id
+                    state_id = f"{env.timestep:06}"
+                    message = encode(
+                        state_id=state_id,
+                        bullet_state=state,
+                        look_at_idxs=look_at_idxs,
+                    )
 
-                # Hand the data to the env for processing.
-                env.set_unity_data(data)
+                    # Send and get reply.
+                    await websocket.send(message)
+                    reply = await websocket.recv()
 
-            # If we've reached the end of the sequence, we are done.
-            is_done = env.step()
-            if is_done:
-                break
+                    received_state_id, data = decode(
+                        reply, look_at_idxs=look_at_idxs
+                    )
 
-            if stage != "plan":
-                i += 1
-        del env
+                    # Verify that the sent ID and received ID are equivalent.
+                    assert received_state_id == state_id
+
+                    # Hand the data to the env for processing.
+                    env.set_unity_data(data)
+
+                # If we've reached the end of the sequence, we are done.
+                is_done = env.step()
+                if is_done:
+                    break
+
+                if stage != "plan":
+                    i += 1
+            del env
     sys.exit(0)
 
 

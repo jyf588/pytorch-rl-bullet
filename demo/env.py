@@ -75,6 +75,7 @@ class DemoEnvironment:
         # Whether we've finished planning.
         self.planning_complete = False
         self.initial_obs = None
+        self.obs = None
         self.world = None
 
         # Initialize the vision module if we are using vision for our
@@ -107,6 +108,7 @@ class DemoEnvironment:
         self.initial_obs = self.get_observation(
             observation_mode=self.observation_mode, renderer=self.renderer
         )
+        self.obs = copy.deepcopy(self.initial_obs)
 
         # Use language module to determine the source / target objects and
         # positions.
@@ -253,8 +255,8 @@ class DemoEnvironment:
 
         # Compute whether we have finished the entire sequence.
         done = self.is_done()
-        # if done:
-        #     p.disconnect()
+        if done:
+            p.disconnect()
         return done
 
     def get_current_stage(self) -> Tuple[str, int]:
