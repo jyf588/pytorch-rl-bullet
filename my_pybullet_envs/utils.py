@@ -4,12 +4,17 @@ import os
 import pickle
 from typing import *
 
+import os
+import inspect
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+
 PLACE_START_CLEARANCE = 0.14
 
 PALM_POS_OF_INIT = [-0.18, 0.095, 0.11]
 PALM_EULER_OF_INIT = [1.8, -1.57, 0]
 
 SHAPE_IND_MAP = {-1: p.GEOM_SPHERE, 0: p.GEOM_CYLINDER, 1: p.GEOM_BOX}
+SHAPE_IND_TO_NAME_MAP = {-1: "sphere", 0: "cylinder", 1: "box"}
 SHAPE_NAME_MAP = {
     "sphere": p.GEOM_SPHERE,
     "cylinder": p.GEOM_CYLINDER,
@@ -63,6 +68,8 @@ INIT_PALM_CANDIDATE_QUATS = [
     for cand_angle in INIT_PALM_CANDIDATE_ANGLES
 ]
 
+TS = 1./240
+GRAVITY = 10        # scalar
 
 def perturb(np_rand_gen, arr, r=0.02):
     r = np.abs(r)
@@ -183,6 +190,46 @@ def create_sym_prim_shape_helper(
     return sid
 
 
+def create_sym_prim_shape_helper_new(odict):
+    # note, this function uses the new dict format
+    # where shape and color are their names, and half_width replaced with radius
+    shape = SHAPE_NAME_MAP[odict["shape"]]
+    dim = to_bullet_dimension(shape, odict["radius"], odict["height"])
+    if "color" in odict:
+        sid = create_prim_shape(
+            odict["mass"],
+            shape,
+            dim,
+            odict["mu"],
+            odict["position"],
+            odict["orientation"],
+            COLOR2RGBA[odict["color"]],
+        )
+    else:
+        sid = create_prim_shape(
+            odict["mass"],
+            shape,
+            dim,
+            odict["mu"],
+            odict["position"],
+            odict["orientation"],
+            (0.9, 0.9, 0.9, 1),
+        )
+        # give some default white color.
+    return sid
+
+
+def create_table(mu):
+    table_id = p.loadURDF(
+        os.path.join(currentdir, "assets/tabletop.urdf"),
+        TABLE_OFFSET,
+        useFixedBase=1,
+    )
+    p.changeVisualShape(table_id, -1, rgbaColor=COLOR2RGBA["grey"])
+    p.changeDynamics(table_id, -1, lateralFriction=mu)
+    return table_id
+
+
 def to_bullet_dimension(shape, half_width, height):
     # convert half-width and height for our symmetrical primitives to bullet dimension def
     # NOTE: half_width ignored for spheres. if shape is sphere, must pass in None as half_width
@@ -265,6 +312,28 @@ def save_pickle(path: str, data: Any):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "wb") as f:
         pickle.dump(data, f)
+
+
+def read_grasp_final_states_from_pickle(grasp_pi_name: str):
+    with open(
+            os.path.join(
+                currentdir,
+                "assets/place_init_dist/final_states_"
+                + grasp_pi_name
+                + ".pickle",
+            ),
+            "rb",
+    ) as handle:
+        saved_file = pickle.load(handle)
+    assert saved_file is not None
+
+    o_pos_pf_ave = saved_file["ave_obj_pos_in_palm"]
+    o_quat_pf_ave = saved_file["ave_obj_quat_in_palm"]
+    o_quat_pf_ave /= np.linalg.norm(
+        o_quat_pf_ave
+    )  # in case not normalized
+    init_states = saved_file["init_states"]  # a list of dicts
+    return o_pos_pf_ave, o_quat_pf_ave, init_states
 
 
 # def get_pos_upv_height_from_obj(use_vision, odict):
