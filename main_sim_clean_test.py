@@ -51,16 +51,17 @@ parser = argparse.ArgumentParser(description="RL")
 parser.add_argument("--seed", type=int, default=101)    # only keep np.random
 parser.add_argument("--non-det", type=int, default=0)
 args = parser.parse_args()
+np.random.seed(args.seed)
 args.det = not args.non_det
 
 """Configurations."""
 
 USE_GV5 = True  # TODO: is false, use gv6
 
-NUM_TRIALS = 10
+NUM_TRIALS = 20
 
-GRASP_END_STEP = 30
-PLACE_END_STEP = 50
+GRASP_END_STEP = 40
+PLACE_END_STEP = 90
 
 INIT_NOISE = True
 DET_CONTACT = 0  # 0 false, 1 true
@@ -231,7 +232,7 @@ def sample_obj_dict(is_thicker=False):
 
     if obj_dict["shape"] == "box":
         obj_dict["radius"] *= 0.8
-    obj_dict["position"][2] = obj_dict["height"] / 2.0
+    obj_dict["position"][2] = obj_dict["height"] / 2.0 + 0.001  # TODO
 
     return obj_dict
 
@@ -265,6 +266,8 @@ def get_stacking_obs(
     return t_pos, t_up, b_pos, b_up, t_half_height
 
 
+success_count = 0
+
 """Pre-calculation & Loading"""
 # latter 2 returns dummy
 g_actor_critic, _, _, _ = policy.load(
@@ -285,7 +288,7 @@ p_pos_of_ave, p_quat_of_ave = p.invertTransform(
 
 p.connect(p.GUI)
 
-for _ in range(NUM_TRIALS):
+for trial in range(NUM_TRIALS):
     """Sample two objects"""
 
     while True:
@@ -296,6 +299,14 @@ for _ in range(NUM_TRIALS):
         g_tx, g_ty = top_dict["position"][0], top_dict["position"][1]
         p_tx, p_ty, p_tz = btm_dict["position"][0], btm_dict["position"][1], btm_dict["height"]
         t_half_height = top_dict["height"]/2
+
+        g_tx += np.random.uniform(low=-0.01, high=0.01)
+        g_ty += np.random.uniform(low=-0.01, high=0.01)
+        t_half_height += np.random.uniform(low=-0.01, high=0.01)
+        p_tx += np.random.uniform(low=-0.01, high=0.01)
+        p_ty += np.random.uniform(low=-0.01, high=0.01)
+        p_tz += np.random.uniform(low=-0.01, high=0.01)
+
         # required by OpenRave
         OBJECTS = np.array([top_dict["position"][:2]+[0., 0.], btm_dict["position"][:2]+[0., 0.]])
         is_box = (top_dict["shape"] == "box")
@@ -335,6 +346,8 @@ for _ in range(NUM_TRIALS):
     p.setTimeStep(utils.TS)
     p.setGravity(0, 0, -utils.GRAVITY)
 
+    # top_id = utils.create_sym_prim_shape_helper_new(top_dict)
+
     table_id = utils.create_table(FLOOR_MU)
 
     env_core = InmoovShadowHandDemoEnvV4(
@@ -369,6 +382,9 @@ for _ in range(NUM_TRIALS):
     env_core.robot.reset_with_certain_arm_q(Qreach)
     # input("press enter 2")
 
+    # p.stepSimulation()
+
+    # g_obs = env_core.get_robot_contact_txty_halfh_obs_nodup(g_tx, g_ty, t_half_height)
     g_obs = env_core.get_robot_contact_txty_halfh_obs_nodup(g_tx, g_ty, t_half_height)
     g_obs = policy.wrap_obs(g_obs, IS_CUDA)
 
@@ -503,6 +519,14 @@ for _ in range(NUM_TRIALS):
     # if SAVE_POSES:
     #     pose_saver.save()
 
+    t_pos, t_quat = p.getBasePositionAndOrientation(top_id)
+    if t_pos[2] > 0.15 and (t_pos[0] - p_tx)**2 + (t_pos[1] - p_ty)**2 < 0.1**2:
+        # a very rough check
+        success_count += 1
+
     p.resetSimulation()
 
+    print("*******", success_count * 1.0 / (trial+1))
+
 p.disconnect()
+print("*******total", success_count * 1.0 / NUM_TRIALS)
