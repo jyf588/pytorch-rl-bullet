@@ -58,6 +58,7 @@ args.det = not args.non_det
 
 USE_GV5 = False  # is false, use gv6
 DUMMY_SLEEP = False
+WITH_REACHING = True
 
 NUM_TRIALS = 400
 
@@ -105,6 +106,7 @@ GRASPING_CONTROL_SKIP = 6
 
 
 def planning(trajectory):
+    # env_core.robot.maxForce = 1000
     for idx in range(len(trajectory) + 50):
         if idx > len(trajectory) - 1:
             tar_arm_q = trajectory[-1]
@@ -115,6 +117,7 @@ def planning(trajectory):
         p.stepSimulation()
         if DUMMY_SLEEP:
             time.sleep(utils.TS / 2.0)
+    # env_core.robot.maxForce = 200
 
 
 def get_relative_state_for_reset(oid):
@@ -318,7 +321,11 @@ for trial in range(NUM_TRIALS):
         sleep=DUMMY_SLEEP
     )
     env_core.change_init_fin_q(INIT_FIN_Q)
-    env_core.robot.reset_with_certain_arm_q(Qreach)     # TODO
+
+    if WITH_REACHING:
+        env_core.robot.reset_with_certain_arm_q([0.0]*7)
+    else:
+        env_core.robot.reset_with_certain_arm_q(Qreach)     # TODO
 
     btm_id = utils.create_sym_prim_shape_helper_new(btm_dict)
     top_id = utils.create_sym_prim_shape_helper_new(top_dict)
@@ -327,19 +334,24 @@ for trial in range(NUM_TRIALS):
         top_id: top_dict,
     }
 
-    # env_core.robot.reset_with_certain_arm_q([0.0]*7)
-
     """Prepare for grasping. Reach for the object."""
 
     print(f"Qreach: {Qreach}")
-    # reach_save_path = homedir + "/container_data/PB_REACH.npz"
-    # reach_read_path = homedir + "/container_data/OR_REACH.npy"
-    # Traj_reach = get_traj_from_openrave_container(OBJECTS, None, Qreach, reach_save_path, reach_read_path)
-    #
-    # planning(Traj_reach)
-    # input("press enter")
-    # env_core.robot.reset_with_certain_arm_q(Qreach)
-    # input("press enter 2")
+
+    if WITH_REACHING:
+        reach_save_path = homedir + "/container_data/PB_REACH.npz"
+        reach_read_path = homedir + "/container_data/OR_REACH.npy"
+        Traj_reach = openrave.get_traj_from_openrave_container(OBJECTS, None, Qreach, reach_save_path, reach_read_path)
+
+        if Traj_reach is None or len(Traj_reach) == 0:
+            p.resetSimulation()
+            print("*******", success_count * 1.0 / (trial + 1))
+            continue  # TODO: reaching failed
+        else:
+            planning(Traj_reach)
+
+        print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
+        # input("press enter")
 
     if not USE_GV5:
         p.stepSimulation()
