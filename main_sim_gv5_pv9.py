@@ -8,7 +8,6 @@ import sys
 from tqdm import tqdm
 from typing import *
 from my_pybullet_envs import utils
-import math
 
 import numpy as np
 import torch
@@ -30,8 +29,7 @@ from my_pybullet_envs.inmoov_shadow_demo_env_v4 import (
     InmoovShadowHandDemoEnvV4,
 )
 
-# TODO; deprecate posesaver
-
+import demo_scenes
 
 no_vision = False
 try:
@@ -46,6 +44,20 @@ currentdir = os.path.dirname(
     os.path.abspath(inspect.getfile(inspect.currentframe()))
 )
 homedir = os.path.expanduser("~")
+
+# change obs vec (note diffTar)
+
+# TODOs
+# A modified bullet/const classes
+#   - vary joints the same as send joints it seems, ignore
+#   - mods the send_joints to new urdf: 1. no palm aux 2. metacarpal is fixed (just always send 0?)
+#   - represent everything in shoulder frame.
+#   - fps is problematic, probably want to simulate several steps and send one pose
+#   - simplify the current bullet class: only needs to transform pose. (warp around pose)
+# Where in the code does it handle variable-size objects
+#   - In the C# code
+#   - now it is hard-coded in python & c# that there are 3 in the order of box-box-cyl
+#   - ideally GT bullet can dump a json file that C# can read and call setObj
 
 
 # TODO: main module depends on the following code/model:
@@ -64,7 +76,7 @@ homedir = os.path.expanduser("~")
 """Parse arguments"""
 sys.path.append("a2c_ppo_acktr")
 parser = argparse.ArgumentParser(description="RL")
-parser.add_argument("--seed", type=int, default=101)  # numpy and env seeds
+parser.add_argument("--seed", type=int, default=101)
 parser.add_argument("--non-det", type=int, default=0)
 parser.add_argument("--use_vision", action="store_true")
 parser.add_argument(
@@ -79,17 +91,10 @@ parser.add_argument("--size", type=str, help="Shape of top size.")
 args = parser.parse_args()
 args.det = not args.non_det
 
-# np.random.seed(11)     # turn this off so each scene will have different random shapes
 
 """Configurations."""
 
-import demo_scenes_rand_size
-
-gt_odicts = demo_scenes_rand_size.SCENES[args.scene]
-
-# TODO: merge some config with utils
-
-PLACE_FLOOR = False  # TODO: language
+PLACE_FLOOR = False
 MIX_SHAPE_PI = True
 
 SAVE_POSES = True  # Whether to save object and robot poses to a JSON file.
@@ -107,46 +112,57 @@ DET_CONTACT = 0  # 0 false, 1 true
 OBJ_MU = 1.0
 FLOOR_MU = 1.0
 HAND_MU = 1.0
+BULLET_SOLVER_ITER = 200
 
 IS_CUDA = True  # TODO:tmp odd. seems no need to use cuda
 DEVICE = "cuda" if IS_CUDA else "cpu"
 
 TS = 1.0 / 240
+TABLE_OFFSET = [
+    0.1,
+    0.2,
+    0.0,
+]  # TODO: vision should notice the 0.2->0.1 change
+HALF_OBJ_HEIGHT_L = 0.09
+HALF_OBJ_HEIGHT_S = 0.065
+SIZE2HALF_H = {"small": HALF_OBJ_HEIGHT_S, "large": HALF_OBJ_HEIGHT_L}
+SHAPE2SIZE2RADIUS = {
+    "box": {"small": 0.025, "large": 0.04},
+    "cylinder": {"small": 0.04, "large": 0.05},
+}
+PLACE_CLEARANCE = 0.14  # could be different for diff envs
 
-
-# HALF_OBJ_HEIGHT_L = 0.09
-# HALF_OBJ_HEIGHT_S = 0.065
-# SIZE2HALF_H = {"small": HALF_OBJ_HEIGHT_S, "large": HALF_OBJ_HEIGHT_L}
-# SHAPE2SIZE2RADIUS = {
-#     "box": {"small": 0.025, "large": 0.04},
-#     "cylinder": {"small": 0.04, "large": 0.05},
-# }
+COLORS = {
+    "red": [0.8, 0.0, 0.0, 1.0],
+    "grey": [0.4, 0.4, 0.4, 1.0],
+    "yellow": [0.8, 0.8, 0.0, 1.0],
+    "blue": [0.0, 0.0, 0.8, 1.0],
+    "green": [0.0, 0.8, 0.0, 1.0],
+}
 
 # Ground-truth scene:
 HIDE_SURROUNDING_OBJECTS = False  # If true, hides the surrounding objects.
 
+gt_odicts = demo_scenes.SCENES[args.scene]
+top_obj_idx = 1     # TODO: in fact, moved obj
+btm_obj_idx = 2     # TODO: in fact, reference obj (place between not considered)
 
-top_obj_idx = 1  # TODO: in fact, moved obj, infer from language
-btm_obj_idx = 2
-# TODO: in fact, reference obj (place between not considered), infer from language
-
-# Override the shape and size of the top object if provided as arguments. TODO: Language
+# Override the shape and size of the top object if provided as arguments.
 if args.shape is not None:
     gt_odicts[top_obj_idx]["shape"] = args.shape
 
-# # should not have size attr
-# if args.size is not None:
-#     gt_odicts[top_obj_idx]["size"] = args.size
+if args.size is not None:
+    gt_odicts[top_obj_idx]["size"] = args.size
 
 if HIDE_SURROUNDING_OBJECTS:
     gt_odicts = [gt_odicts[top_obj_idx], gt_odicts[btm_obj_idx]]
     top_obj_idx = 0
     btm_obj_idx = 1
 
-# top_size = gt_odicts[top_obj_idx]["size"]
-# btm_size = gt_odicts[btm_obj_idx]["size"]
-# P_TZ = SIZE2HALF_H[btm_size] * 2
-# T_HALF_HEIGHT = SIZE2HALF_H[top_size]
+top_size = gt_odicts[top_obj_idx]["size"]
+btm_size = gt_odicts[btm_obj_idx]["size"]
+P_TZ = SIZE2HALF_H[btm_size] * 2
+T_HALF_HEIGHT = SIZE2HALF_H[top_size]
 
 
 IS_BOX = gt_odicts[top_obj_idx]["shape"] == "box"  # TODO: infer from language
@@ -155,7 +171,6 @@ if MIX_SHAPE_PI:
     GRASP_PI = "0313_2_n_25_45"
     GRASP_DIR = "./trained_models_%s/ppo/" % "0313_2_n"  # TODO
     PLACE_PI = "0313_2_placeco_0316_1"  # 50ms
-    PLACE_PI = "0313_2_placeco_0316_3"  # 50ms
     PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 else:
     if IS_BOX:
@@ -189,7 +204,7 @@ PLACING_CONTROL_SKIP = 6
 GRASPING_CONTROL_SKIP = 6
 
 
-def planning(Traj, recurrent_hidden_states, masks, pose_saver=None):
+def planning(Traj, recurrent_hidden_states, masks):
     print("end of traj", Traj[-1, 0:7])
     for ind in range(0, len(Traj)):
         tar_armq = Traj[ind, 0:7]
@@ -269,14 +284,12 @@ def unwrap_action(act_tensor):
     return action.numpy()
 
 
-def get_traj_from_openrave_container(
-    objs, q_start, q_end, save_file_path, read_file_path
-):
+def get_traj_from_openrave_container(objs, q_start, q_end, save_file_path, read_file_path):
 
     if q_start is not None:
-        np.savez(save_file_path, objs, q_start, q_end)  # move
+        np.savez(save_file_path, objs, q_start, q_end)      # move
     else:
-        np.savez(save_file_path, objs, q_end)  # reach has q_start 0
+        np.savez(save_file_path, objs, q_end)       # reach has q_start 0
 
     # Wait for command from OpenRave
 
@@ -300,55 +313,40 @@ def get_traj_from_openrave_container(
     return traj
 
 
-def construct_obj_dict_bullet(odicts):
-    odicts_internal = []
-    for odict in odicts:
-        odict_new = {}
-
-        odict_new["mass"] = np.random.uniform(utils.MASS_MIN, utils.MASS_MAX)
-        odict_new["mu"] = OBJ_MU
-        odict_new["height"] = np.random.uniform(utils.H_MIN, utils.H_MAX)
-        odict_new["half_width"] = np.random.uniform(
-            utils.HALF_W_MIN, utils.HALF_W_MAX
-        )
-        odict_new["shape"] = utils.SHAPE_NAME_MAP[odict["shape"]]
-        if odict_new["shape"] == p.GEOM_BOX:
-            odict_new["half_width"] *= 0.8
-        elif odict_new["shape"] == p.GEOM_SPHERE:
-            odict_new["height"] *= 0.75
-        odict_new["color"] = utils.COLOR2RGBA[odict["color"]]
-
-        odicts_internal.append(odict_new)
-
-    return odicts_internal
-
-
-def construct_bullet_scene(odicts, odicts_internal):
+def construct_bullet_scene(odicts):  # TODO: copied from inference code
     # p.resetSimulation()
-    table_id = p.loadURDF(
-        os.path.join(currentdir, "my_pybullet_envs/assets/tabletop.urdf"),
-        utils.TABLE_OFFSET,
-        useFixedBase=1,
-    )
-    p.changeVisualShape(table_id, -1, rgbaColor=utils.COLOR2RGBA["grey"])
-    p.changeDynamics(table_id, -1, lateralFriction=FLOOR_MU)
-
-    for o_ind in range(len(odicts)):
-
-        odict = odicts[o_ind]
-        odict_internal = odicts_internal[o_ind]
-
-        assert len(odict["position"]) == 4
-        # x y and z height, TODO figure out this, z and height seems unnecessary
+    obj_ids = []
+    for odict in odicts:
+        ob_shape = odict["shape"]
+        assert len(odict["position"]) == 4  # x y and z height
 
         real_loc = np.array(odict["position"][0:3])
-        real_loc += [0.0, 0, odict_internal["height"] / 2.0]
-        quat = p.getQuaternionFromEuler(
-            [0.0, 0.0, np.random.uniform(low=0, high=2.0 * math.pi)]
+
+        if odict["size"] == "small":
+            ob_shape += "_small"
+            real_loc += [0, 0, HALF_OBJ_HEIGHT_S + 0.001]
+        else:
+            real_loc += [0, 0, HALF_OBJ_HEIGHT_L + 0.001]
+        urdf_file = (
+            "my_pybullet_envs/assets/" + ob_shape + ".urdf"
+        )  # TODO: hardcoded path
+
+        obj_id = p.loadURDF(
+            os.path.join(currentdir, urdf_file), real_loc, useFixedBase=0
         )
-        odict_internal["id"] = utils.create_sym_prim_shape_helper(
-            odict_internal, real_loc, quat
-        )
+        p.changeVisualShape(obj_id, -1, rgbaColor=COLORS[odict["color"]])
+
+        p.changeDynamics(obj_id, -1, lateralFriction=OBJ_MU)
+        obj_ids.append(obj_id)
+
+    table_id = p.loadURDF(
+        os.path.join(currentdir, "my_pybullet_envs/assets/tabletop.urdf"),
+        TABLE_OFFSET,
+        useFixedBase=1,
+    )  # main sim uses 0.27, 0.1/ constuct table at last
+    p.changeVisualShape(table_id, -1, rgbaColor=COLORS["grey"])
+    p.changeDynamics(table_id, -1, lateralFriction=FLOOR_MU)
+    return obj_ids
 
 
 def get_stacking_obs(
@@ -396,7 +394,7 @@ def get_stacking_obs(
         rot = np.array(p.getMatrixFromQuaternion(b_quat))
         b_up = [rot[2], rot[5], rot[8]]
 
-        t_half_height = gt_odicts_internal[top_obj_idx]["height"] / 2.0
+        t_half_height = T_HALF_HEIGHT
     return t_pos, t_up, b_pos, b_up, t_half_height
 
 
@@ -409,31 +407,27 @@ p_actor_critic, p_ob_rms, recurrent_hidden_states, masks = load_policy_params(
     PLACE_DIR, PLACE_PI_ENV_NAME
 )
 
-gt_odicts_internal = construct_obj_dict_bullet(gt_odicts)
-
 """Vision and language"""
 if USE_VISION_MODULE:
     # Construct the bullet scene using DIRECT rendering, because that's what
     # the vision module was trained on.
     vision_p = util.create_bullet_client(mode="direct")
-    # odicts_new = construct_bullet_scene(odicts=gt_odicts)
+    obj_ids = construct_bullet_scene(odicts=gt_odicts)
 
     # Initialize the vision module for initial planning. We apply camera offset
     # because the default camera position is for y=0, but the table is offset
     # in this case.
     state_saver = StateSaver(p=vision_p)
-    for obj_i in range(len(gt_odicts_internal)):
+    for obj_i in range(len(obj_ids)):
         odict = gt_odicts[obj_i]
         shape = odict["shape"]
-        # size = odict["size"]
+        size = odict["size"]
         state_saver.track_object(
-            oid=gt_odicts_internal[obj_i]["id"],
+            oid=obj_ids[obj_i],
             shape=shape,
             color=odict["color"],
-            radius=gt_odicts_internal[obj_i][
-                "half_width"
-            ],  # TODO: streamlize naming
-            height=gt_odicts_internal[obj_i]["height"],
+            radius=SHAPE2SIZE2RADIUS[shape][size],
+            height=SIZE2HALF_H[size] * 2,
         )
     initial_vision_module = VisionInference(
         state_saver=state_saver,
@@ -443,7 +437,7 @@ if USE_VISION_MODULE:
             0.03197646764976494,
             0.4330631992464512,
         ],
-        camera_offset=[-0.05, utils.TABLE_OFFSET[1], 0.0],
+        camera_offset=[-0.05, TABLE_OFFSET[1], 0.0],
         camera_directed_offset=[0.02, 0.0, 0.0],
         apply_offset_to_preds=True,
         html_dir="/home/michelle/html/vision_inference_initial",
@@ -457,9 +451,7 @@ if USE_VISION_MODULE:
     #     apply_offset_to_preds=False,
     #     html_dir="/home/michelle/html/demo_delay_vision_v003_{top_shape}",
     # )
-    pred_odicts = initial_vision_module.predict(
-        client_oids=[odict_new["id"] for odict_new in gt_odicts_internal]
-    )
+    pred_odicts = initial_vision_module.predict(client_oids=obj_ids)
 
     # Artificially pad with a fourth dimension because language module
     # expects it.
@@ -475,8 +467,18 @@ else:
     initial_vision_module = None
     # stacking_vision_module = None
 
-[OBJECTS, placing_xyz] = NLPmod(sentence, language_input_objs)
-print("placing xyz from language", placing_xyz)
+# [OBJECTS, placing_xyz] = NLPmod(sentence, language_input_objs)
+# print("placing xyz from language", placing_xyz)
+
+top_obj_idx, dest_xy, btm_obj_idx = NLPmod(sentence, language_input_objs)
+# Build structured OBJECTS list in which first entry is the target object
+OBJECTS = np.array([language_input_objs[top_obj_idx]["position"]])
+for i in range(len(language_input_objs)):
+    if i != top_obj_idx:
+        OBJECTS = np.concatenate(
+            (OBJECTS, np.array([language_input_objs[i]["position"]]))
+        )
+placing_xyz = [dest_xy[0], dest_xy[1], 0.0]
 
 # Define the grasp position.
 if USE_VISION_MODULE:
@@ -484,8 +486,7 @@ if USE_VISION_MODULE:
     g_half_h = pred_odicts[top_obj_idx]["height"] / 2
 else:
     top_pos = gt_odicts[top_obj_idx]["position"]
-    # TODO: naming, init position actually
-    g_half_h = gt_odicts_internal[top_obj_idx]["height"] / 2.0
+    g_half_h = T_HALF_HEIGHT
 g_tx, g_ty = top_pos[0], top_pos[1]
 print(f"Grasp position: ({g_tx}, {g_ty})\theight: {g_half_h}")
 
@@ -501,7 +502,7 @@ else:
         # p_tz = P_TZ
         p_tz = pred_odicts[btm_obj_idx]["height"]
     else:
-        p_tz = gt_odicts_internal[btm_obj_idx]["height"]
+        p_tz = P_TZ     # TODO: need to handle place floor
 print(f"Placing position: ({p_tx}, {p_ty}, {p_tz})")
 
 """Start Bullet session."""
@@ -515,16 +516,34 @@ sess = ImaginaryArmObjSession()
 
 Qreach = np.array(sess.get_most_comfortable_q_and_refangle(g_tx, g_ty)[0])
 
-desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + p_tz]
+desired_obj_pos = [p_tx, p_ty, PLACE_CLEARANCE + p_tz]
 a = InmoovShadowHandPlaceEnvV9(renders=False, grasp_pi_name=GRASP_PI)
 a.seed(args.seed)
-# TODO:tmp, get_n_optimal_init_arm_qs need to do collision checking
 table_id = p.loadURDF(
     os.path.join(currentdir, "my_pybullet_envs/assets/tabletop.urdf"),
-    utils.TABLE_OFFSET,
+    TABLE_OFFSET,
     useFixedBase=1,
 )
+# a.floor_id = table_id   # TODO:tmp hack, v9 get_n_optimal_init_arm_qs need to do collision checking
+# Qdestin = a.get_n_optimal_init_arm_qs(desired_obj_pos)[0]   # TODO: [1] is the 2nd candidate
+# print("place arm q", Qdestin)
+# p.resetSimulation()  # Clean up the simulation, since this is only imaginary.
 
+
+# a = InmoovShadowHandPlaceEnvV9(renders=False, grasp_pi_name=GRASP_PI)
+# a.seed(args.seed)
+# # TODO:tmp, get_n_optimal_init_arm_qs need to do collision checking
+# table_id = p.loadURDF(
+#     os.path.join(currentdir, "my_pybullet_envs/assets/tabletop.urdf"),
+#     utils.TABLE_OFFSET,
+#     useFixedBase=1,
+# )
+
+# desired_obj_pos = [g_tx, g_ty, g_tz]
+# Qreach = utils.get_n_optimal_init_arm_qs(a.robot, utils.PALM_POS_OF_INIT,
+#                                          p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
+#                                          desired_obj_pos, table_id, wrist_gain=3.0)[0]  # TODO
+# desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + p_tz]
 p_pos_of_ave, p_quat_of_ave = p.invertTransform(
     a.o_pos_pf_ave, a.o_quat_pf_ave
 )
@@ -532,12 +551,10 @@ p_pos_of_ave, p_quat_of_ave = p.invertTransform(
 Qdestin = utils.get_n_optimal_init_arm_qs(
     a.robot, p_pos_of_ave, p_quat_of_ave, desired_obj_pos, table_id
 )[0]
-
-print("place arm q", Qdestin)
 p.resetSimulation()  # Clean up the simulation, since this is only imaginary.
 
 """Setup Bullet world."""
-p.setPhysicsEngineParameter(numSolverIterations=utils.BULLET_CONTACT_ITER)
+p.setPhysicsEngineParameter(numSolverIterations=BULLET_SOLVER_ITER)
 p.setPhysicsEngineParameter(deterministicOverlappingPairs=DET_CONTACT)
 p.setTimeStep(TS)
 p.setGravity(0, 0, -10)
@@ -557,37 +574,31 @@ env_core = InmoovShadowHandDemoEnvV4(
     control_skip=GRASPING_CONTROL_SKIP,
 )  # TODO: does obj/robot order matter
 
-env_core.robot.reset_with_certain_arm_q([0.0] * 7)
+env_core.robot.reset_with_certain_arm_q([0.0]*7)
 
-construct_bullet_scene(gt_odicts, gt_odicts_internal)
-
-top_oid = gt_odicts_internal[top_obj_idx]["id"]
-btm_oid = gt_odicts_internal[btm_obj_idx]["id"]
+obj_ids = construct_bullet_scene(odicts=gt_odicts)
+top_oid = obj_ids[top_obj_idx]
+btm_oid = obj_ids[btm_obj_idx]
 
 # # Initialize a PoseSaver to save poses throughout robot execution.
 # pose_saver = PoseSaver(
-#     path=args.pose_path,
-#     odicts=gt_odicts_internal,
-#     # oids=[gt_odict_new["id"] for gt_odict_new in gt_odicts_internal],
-#     robot_id=env_core.robot.arm_id,
+#     path=args.pose_path, oids=obj_ids, robot_id=env_core.robot.arm_id
 # )
 
 """Prepare for grasping. Reach for the object."""
 
 print(f"Qreach: {Qreach}")
-reach_save_path = homedir + "/container_data/PB_REACH.npz"
-reach_read_path = homedir + "/container_data/OR_REACH.npy"
-Traj_reach = get_traj_from_openrave_container(
-    OBJECTS, None, Qreach, reach_save_path, reach_read_path
-)
-
-planning(Traj_reach, recurrent_hidden_states, masks)
+# reach_save_path = homedir + "/container_data/PB_REACH.npz"
+# reach_read_path = homedir + "/container_data/OR_REACH.npy"
+# Traj_reach = get_traj_from_openrave_container(OBJECTS, None, Qreach, reach_save_path, reach_read_path)
+#
+# planning(Traj_reach, recurrent_hidden_states, masks)
 # input("press enter")
-# env_core.robot.reset_with_certain_arm_q(Qreach)
+env_core.robot.reset_with_certain_arm_q(Qreach)
 # input("press enter 2")
 
 # pose_saver.get_poses()
-# print(f"Pose after reset")
+print(f"Pose after reset")
 # pprint.pprint(pose_saver.poses[-1])
 
 g_obs = env_core.get_robot_contact_txty_halfh_obs_nodup(g_tx, g_ty, g_half_h)
@@ -615,7 +626,7 @@ for i in range(GRASP_END_STEP):
     masks.fill_(1.0)
     # pose_saver.get_poses()
 
-# print(f"Pose after grasping")
+print(f"Pose after grasping")
 # pprint.pprint(pose_saver.poses[-1])
 
 final_g_obs = copy.copy(g_obs)
@@ -632,9 +643,7 @@ print(f"Qmove_init: {Qmove_init}")
 print(f"Qdestin: {Qdestin}")
 move_save_path = homedir + "/container_data/PB_MOVE.npz"
 move_read_path = homedir + "/container_data/OR_MOVE.npy"
-Traj_move = get_traj_from_openrave_container(
-    OBJECTS, Qmove_init, Qdestin, move_save_path, move_read_path
-)
+Traj_move = get_traj_from_openrave_container(OBJECTS, Qmove_init, Qdestin, move_save_path, move_read_path)
 
 """Execute planned moving trajectory"""
 planning(Traj_move, recurrent_hidden_states, masks)
@@ -656,22 +665,22 @@ if USE_VISION_MODULE:
     top_shape = gt_odicts[top_obj_idx]["shape"]
     state_saver = StateSaver(p=p)
     state_saver.set_robot_id(env_core.robot.arm_id)
-    for obj_i in range(len(gt_odicts_internal)):
+    for obj_i in range(len(obj_ids)):
         odict = gt_odicts[obj_i]
         shape = odict["shape"]
-        # size = odict["size"]
+        size = odict["size"]
         state_saver.track_object(
-            oid=gt_odicts_internal[obj_i]["id"],
+            oid=obj_ids[obj_i],
             shape=shape,
             color=odict["color"],
-            radius=gt_odicts_internal[obj_i]["half_width"],
-            height=gt_odicts_internal[obj_i]["height"],
+            radius=SHAPE2SIZE2RADIUS[shape][size],
+            height=SIZE2HALF_H[size] * 2,
         )
     stacking_vision_module = VisionInference(
         state_saver=state_saver,
         checkpoint_path="/home/michelle/outputs/stacking_v003/checkpoint_best.pt",
         camera_position=[-0.2237938867122504, 0.0, 0.5425],
-        camera_offset=[0.0, utils.TABLE_OFFSET[1], 0.0],
+        camera_offset=[0.0, TABLE_OFFSET[1], 0.0],
         apply_offset_to_preds=False,
         html_dir="/home/michelle/html/demo_delay_vision_v003_{top_shape}",
     )
@@ -695,8 +704,6 @@ l_t_pos, l_t_up, l_b_pos, l_b_up, l_t_half_height = (
 )
 
 # TODO: an unly hack to force Bullet compute forward kinematics
-
-# TODO: deprecate IS_BOX.
 if MIX_SHAPE_PI:
     p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
         p_tx, p_ty, p_tz, t_half_height, IS_BOX, t_pos, t_up, b_pos, b_up
@@ -743,26 +750,11 @@ for i in tqdm(range(PLACE_END_STEP)):
             )
         if MIX_SHAPE_PI:
             p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
-                p_tx,
-                p_ty,
-                p_tz,
-                l_t_half_height,
-                IS_BOX,
-                l_t_pos,
-                l_t_up,
-                l_b_pos,
-                l_b_up,
+                p_tx, p_ty, p_tz, l_t_half_height, IS_BOX, l_t_pos, l_t_up, l_b_pos, l_b_up
             )
         else:
             p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
-                p_tx,
-                p_ty,
-                p_tz,
-                l_t_half_height,
-                l_t_pos,
-                l_t_up,
-                l_b_pos,
-                l_b_up,
+                p_tx, p_ty, p_tz, l_t_half_height, l_t_pos, l_t_up, l_b_pos, l_b_up
             )
     else:
         t_pos, t_quat, b_pos, b_quat, t_half_height = get_stacking_obs(
@@ -774,15 +766,7 @@ for i in tqdm(range(PLACE_END_STEP)):
 
         if MIX_SHAPE_PI:
             p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
-                p_tx,
-                p_ty,
-                p_tz,
-                t_half_height,
-                IS_BOX,
-                t_pos,
-                t_up,
-                b_pos,
-                b_up,
+                p_tx, p_ty, p_tz, t_half_height, IS_BOX, t_pos, t_up, b_pos, b_up
             )
         else:
             p_obs = env_core.get_robot_contact_txtytz_halfh_2obj6dUp_obs_nodup_from_up(
