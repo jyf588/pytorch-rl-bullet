@@ -145,25 +145,8 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
 
         self.desired_obj_pos_final = None
 
-        self.saved_file = None
-        with open(
-            os.path.join(
-                currentdir,
-                "assets/place_init_dist/final_states_"
-                + self.grasp_pi_name
-                + ".pickle",
-            ),
-            "rb",
-        ) as handle:
-            self.saved_file = pickle.load(handle)
-        assert self.saved_file is not None
-
-        self.o_pos_pf_ave = self.saved_file["ave_obj_pos_in_palm"]
-        self.o_quat_pf_ave = self.saved_file["ave_obj_quat_in_palm"]
-        self.o_quat_pf_ave /= np.linalg.norm(
-            self.o_quat_pf_ave
-        )  # in case not normalized
-        self.init_states = self.saved_file["init_states"]  # a list of dicts
+        self.o_pos_pf_ave, self.o_quat_pf_ave, self.init_states = \
+            utils.read_grasp_final_states_from_pickle(self.grasp_pi_name)
 
         # print(self.o_pos_pf_ave)
         # print(self.o_quat_pf_ave)
@@ -295,32 +278,32 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                 )
 
             # TODO: this will affect demo env
-            # desired_obj_pos = [
-            #     self.tx,
-            #     self.ty,
-            #     self.start_clearance + self.tz,
-            # ]  # used for planning
+            desired_obj_pos = [
+                self.tx,
+                self.ty,
+                self.start_clearance + self.tz,
+            ]  # used for planning
 
-            if self.place_floor:
-                desired_obj_pos = [
-                    self.tx,
-                    self.ty,
-                    utils.perturb_scalar(
-                        self.np_random,
-                        self.start_clearance + 0.0,
-                        0.01
-                    ),
-                ]  # used for planning
-            else:
-                desired_obj_pos = [
-                    self.tx,
-                    self.ty,
-                    utils.perturb_scalar(
-                        self.np_random,
-                        self.start_clearance + utils.H_MAX,
-                        0.01
-                    ),     # always start from higher
-                ]  # used for planning
+            # if self.place_floor:
+            #     desired_obj_pos = [
+            #         self.tx,
+            #         self.ty,
+            #         utils.perturb_scalar(
+            #             self.np_random,
+            #             self.start_clearance + 0.0,
+            #             0.01
+            #         ),
+            #     ]  # used for planning
+            # else:
+            #     desired_obj_pos = [
+            #         self.tx,
+            #         self.ty,
+            #         utils.perturb_scalar(
+            #             self.np_random,
+            #             self.start_clearance + utils.H_MAX,
+            #             0.01
+            #         ),     # always start from higher
+            #     ]  # used for planning
 
             p_pos_of_ave, p_quat_of_ave = p.invertTransform(
                 self.o_pos_pf_ave, self.o_quat_pf_ave
@@ -352,13 +335,8 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         if self.cotrain_stack_place:
             self.place_floor = self.np_random.randint(10) > 6  # 30%
 
-        self.table_id = p.loadURDF(
-            os.path.join(currentdir, "assets/tabletop.urdf"),
-            utils.TABLE_OFFSET,
-            useFixedBase=1,
-        )
         mu_f = self.np_random.uniform(utils.MU_MIN, utils.MU_MAX)
-        p.changeDynamics(self.table_id, -1, lateralFriction=mu_f)
+        self.table_id = utils.create_table(mu_f)
 
         self.robot = InmoovShadowNew(
             init_noise=False, timestep=self._timeStep, np_random=self.np_random
@@ -406,8 +384,8 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
 
         return np.array(self.observation)
 
-    def __del__(self):
-        p.disconnect()
+    # def __del__(self):
+    #     p.disconnect()
 
     def step(self, action):
         for _ in range(self.control_skip):
@@ -487,7 +465,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         # )
 
         diff_norm = self.robot.get_norm_diff_tar()      # TODO: necessary?
-        reward += np.maximum(7.0 - diff_norm, 0.)
+        reward += 10. / (diff_norm + 1.)
         # # print(10. / (diff_norm + 1.))
 
         # any_hand_contact = False
@@ -533,9 +511,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
             reward += 5.0
             # print("upright")
             if not any_hand_contact:
-                reward += 15.0
-                if self.timer == 100 * self.control_skip:       # TODO: hard coded length
-                    reward += 500      # TODO
+                reward += 20.0
                 # print("no hand con")
 
         # print("r_total", reward)
