@@ -80,7 +80,8 @@ async def send_to_client(websocket, path):
         src_shape = scene[0]["shape"]
         dst_shape = scene[1]["shape"]
 
-        for obs_mode in ["gt", "vision"]:
+        # for obs_mode in ["gt", "vision"]:
+        for obs_mode in ["vision"]:
             print(f"scene_idx: {scene_idx}")
             print(f"obs mode: {obs_mode}")
 
@@ -100,44 +101,57 @@ async def send_to_client(websocket, path):
                 stage, _ = env.get_current_stage()
                 state = env.get_state()
 
+                # Temporarily remove robot state.
+                state = {"objects": state["objects"]}
+
                 # Only have lucas look at / send images back when planning or placing.
                 if obs_mode == "vision" and stage in ["plan", "place"]:
                     render_frequency = 2
-                    send_to_unity = i % render_frequency == 0
-                    look_at_idxs = range(len(state["objects"]))
+                    unity_options = [(False, True), (True, False)]
                 else:
                     render_frequency = 16
-                    send_to_unity = i % render_frequency == 0
-                    look_at_idxs = []
+                    unity_options = [(True, False)]
 
-                if send_to_unity:
-                    # Add predicted objects.
-                    if obs_mode == "vision":
-                        if env.obs is not None:
-                            for obs_i, odict in enumerate(env.obs):
-                                odict["color"] = "red"
-                                state["objects"][f"obs_{obs_i}"] = odict
+                if i % render_frequency == 0:
+                    # First, render only states and get images. Then, render
+                    # both states and observations, but don't get images.
+                    for render_obs, get_images in unity_options:
+                        # If we are rendering observations, add them to the
+                        # render state.
+                        render_state = copy.deepcopy(state)
+                        if render_obs:
+                            render_state = add_obs_to_state(
+                                state=render_state, obs=env.obs
+                            )
 
-                    state_id = f"{env.timestep:06}"
-                    message = encode(
-                        state_id=state_id,
-                        bullet_state=state,
-                        look_at_idxs=look_at_idxs,
-                    )
+                        # If we are getting images, get object indexes from the
+                        # state.
+                        if get_images:
+                            look_at_idxs = range(len(state["objects"]))
+                        else:
+                            look_at_idxs = []
 
-                    # Send and get reply.
-                    await websocket.send(message)
-                    reply = await websocket.recv()
+                        state_id = f"{env.timestep:06}"
+                        message = encode(
+                            state_id=state_id,
+                            bullet_state=render_state,
+                            look_at_idxs=look_at_idxs,
+                        )
 
-                    received_state_id, data = decode(
-                        reply, look_at_idxs=look_at_idxs
-                    )
+                        # Send and get reply.
+                        await websocket.send(message)
+                        reply = await websocket.recv()
 
-                    # Verify that the sent ID and received ID are equivalent.
-                    assert received_state_id == state_id
+                        received_state_id, data = decode(
+                            reply, look_at_idxs=look_at_idxs
+                        )
 
-                    # Hand the data to the env for processing.
-                    env.set_unity_data(data)
+                        # Verify that the sent ID and received ID are equivalent.
+                        assert received_state_id == state_id
+
+                        # Hand the data to the env for processing.
+                        if get_images:
+                            env.set_unity_data(data)
 
                 # If we've reached the end of the sequence, we are done.
                 is_done = env.step()
@@ -148,6 +162,15 @@ async def send_to_client(websocket, path):
                     i += 1
             del env
     sys.exit(0)
+
+
+def add_obs_to_state(state: Dict, obs: Dict):
+    state = copy.deepcopy(state)
+    if obs is not None:
+        for oi, odict in enumerate(obs):
+            odict["color"] = "red"
+            state["objects"][f"o{oi}"] = odict
+    return state
 
 
 def encode(state_id: str, bullet_state: List[Any], look_at_idxs) -> str:
