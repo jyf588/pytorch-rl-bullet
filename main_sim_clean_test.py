@@ -58,7 +58,7 @@ args.det = not args.non_det
 
 USE_GV5 = False  # is false, use gv6
 DUMMY_SLEEP = False
-WITH_REACHING = True
+WITH_REACHING = False
 
 NUM_TRIALS = 400
 
@@ -106,18 +106,60 @@ GRASPING_CONTROL_SKIP = 6
 
 
 def planning(trajectory):
+    last_tar_arm_q = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
     # env_core.robot.maxForce = 1000
     for idx in range(len(trajectory) + 50):
         if idx > len(trajectory) - 1:
             tar_arm_q = trajectory[-1]
         else:
             tar_arm_q = trajectory[idx]
-        env_core.robot.tar_arm_q = tar_arm_q
+
+        # env_core.robot.tar_arm_q = tar_arm_q
         env_core.robot.apply_action([0.0] * 24)
-        p.stepSimulation()
+
+        # env_core.robot.reset_with_certain_arm_q(tar_arm_q)
+        # print(tar_arm_q)
+
+        tar_vel = (tar_arm_q - last_tar_arm_q) / utils.TS
+
+        # p.setJointMotorControlArray(
+        #     bodyIndex=env_core.robot.arm_id,
+        #     jointIndices=env_core.robot.arm_dofs,
+        #     controlMode=p.VELOCITY_CONTROL,
+        #     targetVelocities=list(tar_vel),
+        #     forces=[200. * 300] * len(env_core.robot.arm_dofs))  # TODO: wrist force limit?
+
+        p.setJointMotorControlArray(
+            bodyIndex=env_core.robot.arm_id,
+            jointIndices=env_core.robot.arm_dofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=list(tar_arm_q),
+            targetVelocities=list(tar_vel),
+            forces=[200. * 5] * len(env_core.robot.arm_dofs))  # TODO: wrist force limit?
+
+        # p.setJointMotorControlArray(
+        #     bodyIndex=env_core.robot.arm_id,
+        #     jointIndices=env_core.robot.arm_dofs,
+        #     controlMode=p.POSITION_CONTROL,
+        #     targetPositions=list(tar_arm_q),
+        #     forces=[200. * 300] * len(env_core.robot.arm_dofs))  # TODO: wrist force limit?
+
+        # print("act", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
+        diff = np.linalg.norm(env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
+                                     - tar_arm_q)
+        if diff > 1e-2:
+            print("diff", diff)
+
+        for _ in range(1):
+            p.stepSimulation()
+        # time.sleep(utils.TS * 1.0)
         if DUMMY_SLEEP:
             time.sleep(utils.TS / 2.0)
+
+        last_tar_arm_q = tar_arm_q
     # env_core.robot.maxForce = 200
+    env_core.robot.tar_arm_q = tar_arm_q    # reset?
+    # input("press enter")
 
 
 def get_relative_state_for_reset(oid):
