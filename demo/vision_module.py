@@ -1,4 +1,5 @@
 from argparse import Namespace
+import cv2
 import numpy as np
 import torch
 import torchvision.transforms as transforms
@@ -44,6 +45,13 @@ class VisionModule:
         data = dash_object.compute_X(
             oid=oid, img=rgb, seg=seg, keep_occluded=True
         )
+
+        # Debugging
+        # debug_seg = cv2.cvtColor(data[:, :, :3], cv2.COLOR_BGR2RGB)
+        # debug_rgb = cv2.cvtColor(data[:, :, 3:6], cv2.COLOR_BGR2RGB)
+        # input_debug = np.hstack([debug_seg, debug_rgb])
+        # cv2.imshow("input debug", input_debug)
+        # cv2.waitKey(0)
         data_transforms = transforms.Compose(
             [
                 transforms.ToTensor(),

@@ -119,7 +119,7 @@ class BulletWorld:
         """
         # Load the robot.
         robot_env = InmoovShadowHandDemoEnvV4(
-            seed=self.opt.seed,
+            # seed=self.opt.seed,
             init_noise=self.opt.init_noise,
             timestep=self.opt.ts,
             withVel=False,
