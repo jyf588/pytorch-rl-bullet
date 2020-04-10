@@ -22,13 +22,12 @@ Generated output structure:
 """
 
 import copy
-import json
 import os
 import pybullet as p
 from typing import *
 
 import my_pybullet_envs
-# import ns_vqa_dart.bullet.util as util
+from my_pybullet_envs import utils
 
 
 class StateSaver:
@@ -47,71 +46,28 @@ class StateSaver:
         self.robot_id = None
         self.oid2state = []
         self.sid = 0
+        self.oid2attr = {}
 
-    def track(self, odicts: List[Dict], robot_id: int):
+    def track(self, odicts: Dict[int, Dict], robot_id: int):
         """
         Tracks objects and robot.
         
         Args:
-            odicts: A list of object dictionaries to save poses for. Format:
+            odicts: A dict of obj dicts keyed by bullet id. Format:
                 {
-                    "id": Object ID.
-                    "shape": Pybullet geometry enum.
-                    "color": RGBA color.
-                    "half_width": The radius.
-                    "height": The height.
+                    <oid>: {
+                        "shape": <shape>,
+                        "color": <color>,
+                        "radius": <radius>,
+                        "height": <height>,
+                        "position": <position>,
+                        "orientation": <orientation>
+                    }
                 }
             robot_id: The ID of the robot.
         """
         self.robot_id = robot_id
-
-        self.oid2attr = {}
-        for odict in odicts:
-            oid, new_odict = self.convert_odict(odict=odict)
-            self.oid2attr[oid] = new_odict
-
-    def convert_odict(self, odict: Dict):
-        """Converts from Yifeng's object dictionary format for Michelle's 
-        format.
-
-        Args:
-            odict: An object dictionary with the following format:
-                {
-                    "id": Object ID.
-                    "shape": Pybullet geometry enum.
-                    "color": RGBA color.
-                    "half_width": The radius.
-                    "height": The height.
-                }
-            
-        Returns:
-            oid: The object ID.
-            new_odict: An object dictionary with the following format:
-                {
-                    "shape": <shape>,
-                    "color": <color>,
-                    "radius": <radius>,
-                    "height": <height>,
-                    "position": <position>,
-                    "orientation": <orientation>
-                }
-        
-        Note that if "color" is not supplied in the original input, the 
-        resulting dictionary will not contain color.
-        
-        """
-        oid = odict["id"]
-
-        new_odict = {
-            "shape": my_pybullet_envs.utils.GEOM2SHAPE[odict["shape"]],
-            "radius": odict["half_width"],
-            "height": odict["height"],
-        }
-        if "color" in odict:
-            new_odict["color"] = my_pybullet_envs.utils.RGBA2COLOR[
-                tuple(odict["color"])
-            ]
-        return oid, new_odict
+        self.oid2attr = odicts
 
     def save_state(self):
         """

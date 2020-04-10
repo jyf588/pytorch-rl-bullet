@@ -146,7 +146,7 @@ def planning(trajectory):
 
         # print("act", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
         diff = np.linalg.norm(env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
-                                     - tar_arm_q)
+                              - tar_arm_q)
         if diff > 1e-2:
             print("diff", diff)
 
@@ -208,7 +208,7 @@ def sample_obj_dict(is_thicker=False):
 
     if obj_dict["shape"] == "box":
         obj_dict["radius"] *= 0.8
-    obj_dict["position"][2] = obj_dict["height"] / 2.0 + 0.001  # TODO
+    obj_dict["position"][2] = obj_dict["height"] / 2.0
 
     return obj_dict
 
@@ -367,7 +367,7 @@ for trial in range(NUM_TRIALS):
     if WITH_REACHING:
         env_core.robot.reset_with_certain_arm_q([0.0]*7)
     else:
-        env_core.robot.reset_with_certain_arm_q(Qreach)     # TODO
+        env_core.robot.reset_with_certain_arm_q(Qreach)
 
     btm_id = utils.create_sym_prim_shape_helper_new(btm_dict)
     top_id = utils.create_sym_prim_shape_helper_new(top_dict)
