@@ -87,31 +87,9 @@ def bullet2unity_state(bullet_state: Dict, bullet_camera_targets):
     return unity_state
 
 
-# def compute_bworld2ucam_transformation(
-#     uworld_cam_position: List[float], uworld_cam_orientation: List[float]
-# ):
-#     """Computes the transformation between bullet world coordinate frame to
-#     unity camera coordinate frame.
-
-#     Args:
-#         uworld_cam_position: The camera position in unity world coordinate
-#             frame.
-#         uworld_cam_orientation: The camera orientation in unity world
-#             coordinate frame.
-
-#     Returns:
-#         transformation: A 4x4 transformation matrix.
-#     """
-#
-#     bworld2bshoulder
-#     bullet2unity(position, up)
-#     ushoulder2ucamera
-#     return transformation
-
-
 def bworld2ucam(
-    bworld_position: List[float],
-    bworld_orientation: List[float],
+    p_bw: List[float],
+    up_bw: List[float],
     uworld_cam_position: List[float],
     uworld_cam_orientation: List[float],
 ):
@@ -133,51 +111,25 @@ def bworld2ucam(
         ucam_euler: The input orientation, converted into unity camera
             coordinate frame and represented as xyz euler angles (degrees).
     """
-    T_bw_bs, T_us_uc = compute_bullet2unity_transforms(
+    T_bw_bs, T_uw_uc, T_us_uc = compute_bullet2unity_transforms(
         uworld_cam_position=uworld_cam_position,
         uworld_cam_orientation=uworld_cam_orientation,
     )
 
-    p_bw = bworld_position
+    # Transform position.
     p_bs = util.apply_transform(xyz=p_bw, transformation=T_bw_bs)
     p_us = bullet2unity_position(bullet_position=p_bs)
     p_uc = util.apply_transform(xyz=p_us, transformation=T_us_uc)
 
-    # Convert position from world coordinate frame to shoulder coordinate
-    # frame.
-    bshoulder_position = np.array(bworld_position) - np.array(
-        const.BULLET_SHOULDER_POS
-    )
-    bshoulder_orientation = bworld_orientation
-
-    # Convert from bullet to unity coordinates.
-    # Note that there is no rotation between world and shoulder coordinate
-    # frames.
-    ushoulder_position = bullet2unity_position(
-        bullet_position=bshoulder_position
-    )
-    ushoulder_euler = bullet2unity_euler(bullet_orn=bshoulder_orientation)
-
-    # Convert the unity camera from world2cam into shoulder2cam.
-    ushoulder2camera = util.create_transformation(
-        position=np.array(uworld_cam_position)
-        - np.array(const.UNITY_SHOULDER_POS),
-        orientation=uworld_cam_orientation,
-    )
-
-    # Convert from shoulder to camera coordinate frame.
-    ucam_position = util.apply_transform(
-        xyz=ushoulder_position, transformation=ushoulder2camera
-    )
-    ucam_euler = util.apply_transform(
-        xyz=ushoulder_euler, transformation=ushoulder2camera
-    )
-    return p_uc, ucam_euler
+    # Transform orientation.
+    up_uw = bullet2unity_up(bullet_up=up_bw)
+    up_uc = util.apply_transform(xyz=up_uw, transformation=T_uw_uc)
+    return p_uc, up_uc
 
 
 def ucam2bworld(
-    ucam_position: List[float],
-    ucam_up_vector: List[float],
+    p_uc: List[float],
+    up_uc: List[float],
     uworld_cam_position: List[float],
     uworld_cam_orientation: List[float],
 ):
@@ -196,42 +148,20 @@ def ucam2bworld(
         bworld_position: The position in bullet world coordinate frame.
         bworld_up_vector: The up vector in bullet world coordinate frame.
     """
-    T_bw_bs, T_us_uc = compute_bullet2unity_transforms(
+    T_bw_bs, T_uw_uc, T_us_uc = compute_bullet2unity_transforms(
         uworld_cam_position=uworld_cam_position,
         uworld_cam_orientation=uworld_cam_orientation,
     )
 
-    p_uc = ucam_position
+    # Transform the position.
     p_us = util.apply_inv_transform(xyz=p_uc, transformation=T_us_uc)
     p_bs = unity2bullet_position(unity_position=p_us)
     p_bw = util.apply_inv_transform(xyz=p_bs, transformation=T_bw_bs)
 
-    # Convert from unity camera coordinate frame to shoulder coordinate frame.
-    # This is equivalent to the inverse transform of shoulder to camera.
-    ushoulder2camera = util.create_transformation(
-        position=np.array(uworld_cam_position)
-        - np.array(const.UNITY_SHOULDER_POS),
-        orientation=uworld_cam_orientation,
-    )
-    ushoulder_position = util.apply_inv_transform(
-        xyz=ucam_position, transformation=ushoulder2camera
-    )
-    ushoulder_up_vector = util.apply_inv_transform(
-        xyz=ucam_up_vector, transformation=ushoulder2camera
-    )
-
-    # Then, convert from unity to bullet coordinate system.
-    bshoulder_position = unity2bullet_position(
-        unity_position=ushoulder_position
-    )
-    bshoulder_up_vector = unity2bullet_up(unity_up=ushoulder_up_vector)
-
-    # Finally, convert from bullet shoulder to bullet world coordinate frame.
-    bworld_position = np.array(const.BULLET_SHOULDER_POS) + np.array(
-        bshoulder_position
-    )
-    bworld_up_vector = bshoulder_up_vector
-    return p_bw, bworld_up_vector
+    # Transform orientation.
+    up_uw = util.apply_inv_transform(xyz=up_uc, transformation=T_uw_uc)
+    up_bw = unity2bullet_up(unity_up=up_uw)
+    return p_bw, up_bw
 
 
 def compute_bullet2unity_transforms(
@@ -244,11 +174,11 @@ def compute_bullet2unity_transforms(
         position=const.UNITY_SHOULDER_POS, orientation=[0.0, 0.0, 0.0, 1.0]
     )
     T_us_uw = np.linalg.inv(T_uw_us)
-    T_uc_uw = util.create_transformation(
+    T_uw_uc = util.create_transformation(
         position=uworld_cam_position, orientation=uworld_cam_orientation
     )
-    T_us_uc = T_uc_uw.dot(T_us_uw)
-    return T_bw_bs, T_us_uc
+    T_us_uc = T_uw_uc.dot(T_us_uw)
+    return T_bw_bs, T_uw_uc, T_us_uc
 
 
 def bullet2unity_robot(bullet_state: Dict[str, float]) -> List[float]:
@@ -418,6 +348,22 @@ def bullet2unity_euler(bullet_orn: List[float]) -> List[float]:
     # unity_rot[0] *= -1  # Negate x
     # unity_rot[1] *= -1  # Negate y
     return unity_euler
+
+
+def bullet2unity_up(bullet_up: List[float]) -> List[float]:
+    """Converts an up vector from bullet to unity coordinates.
+
+    Args:
+        bullet_up: The up vector in bullet coordinates.
+
+    Returns:
+        unity_up: The up vector in unity coordinates.
+    """
+    bullet_euler = util.up_to_euler(up=bullet_up)
+    x, y, z = bullet_euler
+    unity_euler = [-y, -z, x]
+    unity_up = util.euler_to_up(euler=unity_euler)
+    return unity_up
 
 
 def unity2bullet_up(unity_up: List[float]) -> List[float]:
