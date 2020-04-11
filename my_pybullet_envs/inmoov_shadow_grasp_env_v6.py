@@ -113,8 +113,11 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
                 self.tx, self.ty, self.tz, self.tx_act, self.ty_act, self.tz_act = \
                     utils.sample_tx_ty_tz(self.np_random, self.up, self.grasp_floor, 0.0, 0.0)
 
-            desired_obj_pos = [self.tx, self.ty, self.tz]    # used for planning
-            # obj frame (o_pos) in the COM of obj.
+            # desired_obj_pos = [self.tx, self.ty, self.tz]    # used for planning
+            if self.grasp_floor:
+                desired_obj_pos = [self.tx, self.ty, self.np_random.uniform(-0.01, 0.01)]
+            else:
+                desired_obj_pos = [self.tx, self.ty, self.np_random.uniform(0.15, 0.17)]    # TODO: hardcoded
 
             arm_qs = utils.get_n_optimal_init_arm_qs(self.robot, self.p_pos_of_init, self.p_quat_of_init,
                                                      desired_obj_pos, self.table_id, n=self.n_best_cand,
@@ -320,15 +323,21 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
                 curContact.extend([-1.0])
         self.observation.extend(curContact)
 
-        xyz = np.array([self.tx, self.ty, self.tz])
-        self.observation.extend(list(xyz))
+        # xyz = np.array([self.tx, self.ty, self.tz])
+        # self.observation.extend(list(xyz))
+        # if self.obs_noise:
+        #     self.observation.extend(list(xyz))
+        # else:
+        #     self.observation.extend([self.tx_act, self.ty_act, self.tz_act])
+        xy = np.array([self.tx, self.ty])
+        self.observation.extend(list(xy))
         if self.obs_noise:
-            self.observation.extend(list(xyz))
+            self.observation.extend(list(xy))
         else:
-            self.observation.extend([self.tx_act, self.ty_act, self.tz_act])
+            self.observation.extend([self.tx_act, self.ty_act])
 
-        # top height info, btm height info included in tz
-        self.observation.extend([self.half_height_est])
+        # # top height info, btm height info included in tz
+        # self.observation.extend([self.half_height_est])
 
         # btm obj shape is not important.
         if self.random_top_shape:
