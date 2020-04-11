@@ -26,6 +26,8 @@ import pybullet as p
 
 import my_pybullet_envs
 
+import logging
+import sys
 
 # TODO: modify NN size?
 # TODO: turn off normalization?
@@ -84,6 +86,18 @@ def main():
     print("source file stored")
     # input("source file stored press enter")
     dummy.close()
+
+    logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s")
+    rootLogger = logging.getLogger()
+    rootLogger.setLevel(logging.INFO)
+
+    fileHandler = logging.FileHandler("{0}/{1}.log".format(save_path, "console_output"))
+    fileHandler.setFormatter(logFormatter)
+    rootLogger.addHandler(fileHandler)
+
+    consoleHandler = logging.StreamHandler(sys.stdout)
+    consoleHandler.setFormatter(logFormatter)
+    rootLogger.addHandler(consoleHandler)
 
     if args.algo == 'a2c':
         agent = algo.A2C_ACKTR(
@@ -225,8 +239,9 @@ def main():
         if j % args.log_interval == 0 and len(episode_rewards) > 1:
             total_num_steps = (j + 1) * args.num_processes * args.num_steps
             end = time.time()
-            print(
-                "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}, dist en {}, l_pi {}, l_vf {}\n"
+            rootLogger.info(
+                ("Updates {}, num timesteps {}, FPS {} \n Last {} training episodes:" +
+                 " mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}, dist en {}, l_pi {}, l_vf {}\n")
                 .format(j, total_num_steps,
                         int(total_num_steps / (end - start)),
                         len(episode_rewards), np.mean(episode_rewards),
