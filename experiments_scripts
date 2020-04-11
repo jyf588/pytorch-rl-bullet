@@ -1746,6 +1746,26 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --l
 # add back action regularize
 python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 300 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 14000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0331_co_3_w_co_0331_1  --seed 8311 --random_top_shape 1 --cotrain_stack_place 1 --obs_noise 0 --exclude_hard 0 --n_best_cand 2 --grasp_pi_name "0331_co_3_w_25_45"
 
+python enjoy.py --env-name InmoovHandPlaceBulletEnv-v9 --load-dir trained_models_0331_co_3_w_co_0331_1/ppo --non-det 0 --seed=189801 --random_top_shape 1 --renders 1 --exclude_hard 0 --obs_noise 1 --n_best_cand 2 --cotrain_stack_place 1 --grasp_pi_name "0331_co_3_w_25_45"
+
+4/3 17:59
+# roll back changes on action regularize & starting z
+python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 300 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 14000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0331_co_3_w_co_0331_2  --seed 8312 --random_top_shape 1 --cotrain_stack_place 1 --obs_noise 0 --exclude_hard 0 --n_best_cand 2 --grasp_pi_name "0331_co_3_w_25_45"
+
+
+# 20~40 might be a better range for final state collection.
+4/4 00:16
+# run the old floor crack again
+# reward revert
+0403.sh
+
+4/8 00:04
+# run the 0404 crank again
+# train_0408.sh
+
+4/8 22:33
+# run the 0404 crank again
+# train_0409.sh
 
 
 # whole system issues:

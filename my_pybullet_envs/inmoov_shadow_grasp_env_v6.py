@@ -141,14 +141,12 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
             if self.cotrain_onstack_grasp:
                 self.grasp_floor = self.np_random.randint(10) >= 6  # 40%, TODO
 
-        self.table_id = p.loadURDF(os.path.join(currentdir, 'assets/tabletop.urdf'), utils.TABLE_OFFSET,
-                                   useFixedBase=1)
         mu_f = self.np_random.uniform(utils.MU_MIN, utils.MU_MAX)
-        p.changeDynamics(self.table_id, -1, lateralFriction=mu_f)
+        self.table_id = utils.create_table(mu_f)
 
         self.robot = InmoovShadowNew(init_noise=self.init_noise, timestep=self._timeStep, np_random=self.np_random)
 
-        arm_q = self.sample_valid_arm_q()  # reset done during solving IK
+        arm_q = self.sample_valid_arm_q()
         self.robot.reset_with_certain_arm_q(arm_q)
 
         if not self.grasp_floor:
@@ -242,7 +240,7 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
         top_xy_ideal = np.array([self.tx_act, self.ty_act])
         xy_dist = np.linalg.norm(top_xy_ideal - np.array(top_pos[:2]))
-        reward += -np.minimum(xy_dist, 0.4) * 10.0
+        reward += -np.minimum(xy_dist, 0.4) * 12.0
 
         for i in self.robot.fin_tips[:4]:
             tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
@@ -261,7 +259,7 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
             btm_vels = p.getBaseVelocity(bottom_id)
             btm_linv = np.array(btm_vels[0])
             btm_angv = np.array(btm_vels[1])
-            reward += np.maximum(-np.linalg.norm(btm_linv) * 2.0 - np.linalg.norm(btm_angv), -5.0)
+            reward += np.maximum(-np.linalg.norm(btm_linv) * 4.0 - np.linalg.norm(btm_angv), -5.0)
 
             z_axis, _ = p.multiplyTransforms(
                 [0, 0, 0], btm_quat, [0, 0, 1], [0, 0, 0, 1]
@@ -290,16 +288,16 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
         # object dropped during testing
         if top_pos[2] < (self.tz_act + 0.04) and self.timer > self.test_start * self.control_skip:
-            reward += -20.
+            reward += -15.
 
-        # add a final sparse reward
-        if self.timer == 65 * self.control_skip:        # TODO: hardcoded horizon
-            if xy_dist < 0.05:
-                # print("top good")
-                reward += 100
-            if self.warm_start and rot_metric > 0.9:
-                # print("btm good")
-                reward += 200
+        # # add a final sparse reward
+        # if self.timer == 65 * self.control_skip:        # TODO: hardcoded horizon
+        #     if xy_dist < 0.05:
+        #         # print("top good")
+        #         reward += 100
+        #     if self.warm_start and rot_metric > 0.9:
+        #         # print("btm good")
+        #         reward += 200
 
         #     print(self.robot.get_q_dq(range(29, 34))[0])
 

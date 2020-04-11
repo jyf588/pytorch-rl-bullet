@@ -133,11 +133,11 @@ if args.shape is not None:
 IS_BOX = (args.shape == "box")
 
 
-GRASP_PI = "0331_co_2_w_25_45"
-GRASP_DIR = "./trained_models_%s/ppo/" % "0331_co_2_w"  # TODO
+GRASP_PI = "0403_0_n_20_40"
+GRASP_DIR = "./trained_models_%s/ppo/" % "0403_0_n"  # TODO
 
 # PLACE_PI = "0325_graspco_16_n_w0_placeco_0331_2"  # 50ms
-PLACE_PI = "0331_co_2_w_co_0331_0"
+PLACE_PI = "0403_0_n_place_0403_0"
 PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
 if IS_BOX:
@@ -567,7 +567,7 @@ env_core = InmoovShadowHandDemoEnvV4(
     control_skip=GRASPING_CONTROL_SKIP,
 )  # TODO: does obj/robot order matter
 
-env_core.robot.reset_with_certain_arm_q([0.0] * 7)
+# env_core.robot.reset_with_certain_arm_q([0.0] * 7)
 
 construct_bullet_scene(gt_odicts, gt_odicts_internal)
 
@@ -588,16 +588,16 @@ else:
 
 """Prepare for grasping. Reach for the object."""
 
-print(f"Qreach: {Qreach}")
-reach_save_path = homedir + "/container_data/PB_REACH.npz"
-reach_read_path = homedir + "/container_data/OR_REACH.npy"
-Traj_reach = get_traj_from_openrave_container(
-    OBJECTS, None, Qreach, reach_save_path, reach_read_path
-)
-
-planning(Traj_reach, recurrent_hidden_states, masks)
+# print(f"Qreach: {Qreach}")
+# reach_save_path = homedir + "/container_data/PB_REACH.npz"
+# reach_read_path = homedir + "/container_data/OR_REACH.npy"
+# Traj_reach = get_traj_from_openrave_container(
+#     OBJECTS, None, Qreach, reach_save_path, reach_read_path
+# )
+#
+# planning(Traj_reach, recurrent_hidden_states, masks)
 # input("press enter")
-# env_core.robot.reset_with_certain_arm_q(Qreach)
+env_core.robot.reset_with_certain_arm_q(Qreach)
 # input("press enter 2")
 
 # pose_saver.get_poses()

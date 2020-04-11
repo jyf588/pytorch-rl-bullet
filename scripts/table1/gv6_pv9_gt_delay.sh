@@ -18,25 +18,25 @@ python main_sim_gv6_pv9.py \
   --scene 1 \
   --shape cylinder \
 
-python main_sim_gv6_pv9.py \
-  --pose_path ~/demo_poses/gt_delay/scene_4/small_box.json \
-  --scene 4 \
-  --shape box \
-
-python main_sim_gv6_pv9.py \
-  --pose_path ~/demo_poses/gt_delay/scene_4/large_box.json \
-  --scene 4 \
-  --shape box \
-
-python main_sim_gv6_pv9.py \
-  --pose_path ~/demo_poses/gt_delay/scene_4/small_cylinder.json \
-  --scene 4 \
-  --shape cylinder \
-
-python main_sim_gv6_pv9.py \
-  --pose_path ~/demo_poses/gt_delay/scene_4/large_cylinder.json \
-  --scene 4 \
-  --shape cylinder \
+#python main_sim_gv6_pv9.py \
+#  --pose_path ~/demo_poses/gt_delay/scene_4/small_box.json \
+#  --scene 4 \
+#  --shape box \
+#
+#python main_sim_gv6_pv9.py \
+#  --pose_path ~/demo_poses/gt_delay/scene_4/large_box.json \
+#  --scene 4 \
+#  --shape box \
+#
+#python main_sim_gv6_pv9.py \
+#  --pose_path ~/demo_poses/gt_delay/scene_4/small_cylinder.json \
+#  --scene 4 \
+#  --shape cylinder \
+#
+#python main_sim_gv6_pv9.py \
+#  --pose_path ~/demo_poses/gt_delay/scene_4/large_cylinder.json \
+#  --scene 4 \
+#  --shape cylinder \
 
 python main_sim_gv6_pv9.py \
   --pose_path ~/demo_poses/gt_delay/scene_2/small_box.json \

@@ -31,12 +31,14 @@ class InmoovShadowHandDemoEnvV4:
         control_skip=3,
         robot_mu=1.0,
         np_random=np.random,
+        sleep=True,
     ):
         self.renders = renders
         self.init_noise = init_noise
         self._timeStep = timestep
         self.withVel = withVel
         self.diffTar = diffTar
+        self.sleep = sleep
 
         self.timer = 0
         self.robot = None
@@ -72,7 +74,7 @@ class InmoovShadowHandDemoEnvV4:
                 self.act = action
                 self.robot.apply_action(self.act * self.action_scale)
             p.stepSimulation()
-            if self.renders:
+            if self.renders and self.sleep:
                 time.sleep(self._timeStep * 0.6)
             self.timer += 1
 

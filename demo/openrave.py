@@ -117,7 +117,7 @@ def get_traj_from_openrave_container(
     # Check for OpenRAVE's output file.
     start = time.time()
     while not os.path.exists(load_path):
-        time.sleep(0.2)
+        time.sleep(0.5)
         time_elapsed = time.time() - start
 
         # If longer than 5 seconds, return failure code.
