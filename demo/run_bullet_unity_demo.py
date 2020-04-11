@@ -73,7 +73,7 @@ async def send_to_client(websocket, path):
     )
     scenes = [generator.generate_tabletop_objects() for _ in range(100)]
 
-    for scene_idx in range(100):
+    for scene_idx in range(5, 100):
         scene = scenes[scene_idx]
         scene[0]["color"] = "green"
         scene[1]["color"] = "blue"
@@ -98,7 +98,7 @@ async def send_to_client(websocket, path):
             # Send states one by one.
             i = 0
             while 1:
-                stage, _ = env.get_current_stage()
+                stage, stage_ts = env.get_current_stage()
                 state = env.get_state()
 
                 # Temporarily remove robot state.
@@ -107,9 +107,17 @@ async def send_to_client(websocket, path):
                 # Only have lucas look at / send images back when planning or placing.
                 if obs_mode == "vision" and stage in ["plan", "place"]:
                     render_frequency = 2
+                    # unity_options = [(False, True)]
                     unity_options = [(False, True), (True, False)]
+
+                    if stage == "place" and stage_ts > 0:
+                        pass
+                    else:
+                        last_bullet_camera_targets = {}
+                        for tid, odict in enumerate(state["objects"].values()):
+                            last_bullet_camera_targets[tid] = odict["position"]
                 else:
-                    render_frequency = 16
+                    render_frequency = 20
                     unity_options = [(True, False)]
 
                 if i % render_frequency == 0:
@@ -127,15 +135,15 @@ async def send_to_client(websocket, path):
                         # If we are getting images, get object indexes from the
                         # state.
                         if get_images:
-                            look_at_idxs = range(len(state["objects"]))
+                            bullet_camera_targets = last_bullet_camera_targets
                         else:
-                            look_at_idxs = []
+                            bullet_camera_targets = {}
 
                         state_id = f"{env.timestep:06}"
                         message = encode(
                             state_id=state_id,
                             bullet_state=render_state,
-                            look_at_idxs=look_at_idxs,
+                            bullet_camera_targets=bullet_camera_targets,
                         )
 
                         # Send and get reply.
@@ -143,7 +151,8 @@ async def send_to_client(websocket, path):
                         reply = await websocket.recv()
 
                         received_state_id, data = decode(
-                            reply, look_at_idxs=look_at_idxs
+                            reply,
+                            target_ids=list(bullet_camera_targets.keys()),
                         )
 
                         # Verify that the sent ID and received ID are equivalent.
@@ -173,7 +182,9 @@ def add_obs_to_state(state: Dict, obs: Dict):
     return state
 
 
-def encode(state_id: str, bullet_state: List[Any], look_at_idxs) -> str:
+def encode(
+    state_id: str, bullet_state: List[Any], bullet_camera_targets
+) -> str:
     """Converts the provided bullet state into a Unity state, and encodes the
     message for sending to Unity.
 
@@ -203,7 +214,7 @@ def encode(state_id: str, bullet_state: List[Any], look_at_idxs) -> str:
         message: The message to send to unity.
     """
     unity_state = bullet2unity.states.bullet2unity_state(
-        bullet_state=bullet_state, look_at_idxs=look_at_idxs
+        bullet_state=bullet_state, bullet_camera_targets=bullet_camera_targets
     )
 
     # Combine the id and state, and stringify into a msg.
@@ -213,7 +224,7 @@ def encode(state_id: str, bullet_state: List[Any], look_at_idxs) -> str:
     return message
 
 
-def decode(reply: str, look_at_idxs: List[int]):
+def decode(reply: str, target_ids: List[int]):
     """Decodes messages received from Unity.
 
     Args:
@@ -247,14 +258,17 @@ def decode(reply: str, look_at_idxs: List[int]):
     # Split components by comma.
     reply = reply.split(",")
     print(f"Number of reply components: {len(reply)}")
-    print(f"Attempting to parse unity data for {len(look_at_idxs)} objects...")
+    print(f"Attempting to parse unity data for {len(target_ids)} objects...")
     # Extract the state ID.
     state_id = reply[0]
 
     idx = 1
     data = {}
-    for _ in range(len(look_at_idxs)):
-        unity_otag = reply[idx]
+    for target_id in range(len(target_ids)):
+        unity_target_id = int(reply[idx])
+        print(f"target_id: {target_id}")
+        print(f"unity_target_id: {unity_target_id}")
+        assert unity_target_id == target_id
         idx += 1
 
         camera_position = [float(x) for x in reply[idx : idx + 3]]
@@ -269,7 +283,7 @@ def decode(reply: str, look_at_idxs: List[int]):
         idx += 1
 
         # Store the data.
-        data[int(unity_otag)] = {
+        data[int(unity_target_id)] = {
             "camera_position": camera_position,
             "camera_orientation": camera_orientation,
             "rgb": rgb,

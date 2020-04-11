@@ -1,10 +1,12 @@
 """Contains various constants for the bullet2unity interface."""
 
-ROBOT_SHOULDER_POS = (
+BULLET_SHOULDER_POS = [
     -0.30000001192092896,
     0.28200000524520874,
     0.21199999749660492,
-)
+]
+
+UNITY_SHOULDER_POS = [-5.000653, 1.402408, -2.594684]
 
 """Robot-related constants"""
 
