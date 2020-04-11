@@ -122,7 +122,7 @@ def bworld2ucam(
     p_uc = util.apply_transform(xyz=p_us, transformation=T_us_uc)
 
     # Transform orientation.
-    up_uw = bullet2unity_up(bullet_up=up_bw)
+    up_uw = bullet2unity_vec(bvec=up_bw)
     up_uc = util.apply_transform(xyz=up_uw, transformation=T_uw_uc)
     return p_uc, up_uc
 
@@ -160,7 +160,7 @@ def ucam2bworld(
 
     # Transform orientation.
     up_uw = util.apply_inv_transform(xyz=up_uc, transformation=T_uw_uc)
-    up_bw = unity2bullet_up(unity_up=up_uw)
+    up_bw = unity2bullet_vec(uvec=up_uw)
     return p_bw, up_bw
 
 
@@ -350,7 +350,7 @@ def bullet2unity_euler(bullet_orn: List[float]) -> List[float]:
     return unity_euler
 
 
-def bullet2unity_up(bullet_up: List[float]) -> List[float]:
+def bullet2unity_vec(bvec: List[float]) -> List[float]:
     """Converts an up vector from bullet to unity coordinates.
 
     Args:
@@ -359,14 +359,14 @@ def bullet2unity_up(bullet_up: List[float]) -> List[float]:
     Returns:
         unity_up: The up vector in unity coordinates.
     """
-    bullet_euler = util.up_to_euler(up=bullet_up)
-    x, y, z = bullet_euler
-    unity_euler = [-y, -z, x]
-    unity_up = util.euler_to_up(euler=unity_euler)
-    return unity_up
+    # bullet_euler = util.up_to_euler(up=bullet_up)
+    x, y, z = bvec
+    uvec = [-y, -z, x]
+    # unity_up = util.euler_to_up(euler=unity_euler)
+    return uvec
 
 
-def unity2bullet_up(unity_up: List[float]) -> List[float]:
+def unity2bullet_vec(uvec: List[float]) -> List[float]:
     """Converts an up vector from unity coordinates into bullet coordinates.
 
     Args:
@@ -375,8 +375,8 @@ def unity2bullet_up(unity_up: List[float]) -> List[float]:
     Returns:
         bullet_up: The up vector, in bullet coordinates.
     """
-    unity_euler = util.up_to_euler(up=unity_up)
-    x, y, z = unity_euler
-    bullet_euler = [z, -x, -y]
-    bullet_up = util.euler_to_up(euler=bullet_euler)
-    return bullet_up
+    # unity_euler = util.up_to_euler(up=unity_up)
+    x, y, z = uvec
+    bvec = [z, -x, -y]
+    # bullet_up = util.euler_to_up(euler=bullet_euler)
+    return bvec
