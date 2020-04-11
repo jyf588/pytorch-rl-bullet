@@ -245,32 +245,32 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                 )
 
             # TODO: this will affect demo env
-            desired_obj_pos = [
-                self.tx,
-                self.ty,
-                self.start_clearance + self.tz,
-            ]  # used for planning
+            # desired_obj_pos = [
+            #     self.tx,
+            #     self.ty,
+            #     self.start_clearance + self.tz,
+            # ]  # used for planning
 
-            # if self.place_floor:
-            #     desired_obj_pos = [
-            #         self.tx,
-            #         self.ty,
-            #         utils.perturb_scalar(
-            #             self.np_random,
-            #             self.start_clearance + 0.0,
-            #             0.01
-            #         ),
-            #     ]  # used for planning
-            # else:
-            #     desired_obj_pos = [
-            #         self.tx,
-            #         self.ty,
-            #         utils.perturb_scalar(
-            #             self.np_random,
-            #             self.start_clearance + utils.H_MAX,
-            #             0.01
-            #         ),     # always start from higher
-            #     ]  # used for planning
+            if self.place_floor:
+                desired_obj_pos = [
+                    self.tx,
+                    self.ty,
+                    utils.perturb_scalar(
+                        self.np_random,
+                        self.start_clearance + 0.0,
+                        0.01
+                    ),
+                ]  # used for planning
+            else:
+                desired_obj_pos = [
+                    self.tx,
+                    self.ty,
+                    utils.perturb_scalar(
+                        self.np_random,
+                        self.start_clearance + utils.H_MAX,
+                        0.01
+                    ),     # always start from higher
+                ]  # used for planning
 
             p_pos_of_ave, p_quat_of_ave = p.invertTransform(
                 self.o_pos_pf_ave, self.o_quat_pf_ave
@@ -530,22 +530,28 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                 curContact.extend([-1.0])
         self.observation.extend(curContact)
 
-        xyz = np.array([self.tx, self.ty, self.tz])
-        self.observation.extend(list(xyz))
+        # xyz = np.array([self.tx, self.ty, self.tz])
+        # self.observation.extend(list(xyz))
+        # if self.obs_noise:
+        #     self.observation.extend(list(xyz))
+        # else:
+        #     self.observation.extend([self.tx_act, self.ty_act, self.tz_act])
+        xy = np.array([self.tx, self.ty])
+        self.observation.extend(list(xy))
         if self.obs_noise:
-            self.observation.extend(list(xyz))
+            self.observation.extend(list(xy))
         else:
-            self.observation.extend([self.tx_act, self.ty_act, self.tz_act])
+            self.observation.extend([self.tx_act, self.ty_act])
 
-        # note, per-frame noise here
-        # info of bottom height already included in tz
-        if self.obs_noise:
-            half_height_est = utils.perturb_scalar(
-                self.np_random, self.objs[self.top_id]["height"] / 2.0, 0.01
-            )
-        else:
-            half_height_est = self.objs[self.top_id]["height"] / 2.0
-        self.observation.extend([half_height_est])
+        # # note, per-frame noise here
+        # # info of bottom height already included in tz
+        # if self.obs_noise:
+        #     half_height_est = utils.perturb_scalar(
+        #         self.np_random, self.objs[self.top_id]["height"] / 2.0, 0.01
+        #     )
+        # else:
+        #     half_height_est = self.objs[self.top_id]["height"] / 2.0
+        # self.observation.extend([half_height_est])
 
         # TODO: ball
         # btm obj shape is not important.
