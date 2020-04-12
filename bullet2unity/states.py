@@ -18,28 +18,39 @@ def bullet2unity_state(bullet_state: Dict, bullet_camera_targets):
     """Converts a bullet state to a unity state.
 
     Args:
-        bullet_state, with the format: {
-            "objects": {
-                "<oid>": {
-                    "shape": shape,
-                    "color": color,
-                    "radius": radius,
-                    "height": height,
-                    "orientation": [x, y, z, w],
-                    "position": [x, y, z]
+        bullet_state, with the format: 
+            {
+                "objects": {
+                    "<oid>": {
+                        "shape": shape,
+                        "color": color,
+                        "radius": radius,
+                        "height": height,
+                        "orientation": [x, y, z, w],
+                        "position": [x, y, z]
+                    },
+                    ...
                 },
-                ...
-            },
-            "robot": {
-                "<joint_name>": <joint_angle>,
-                ...
+                "robot": {
+                    "<joint_name>": <joint_angle>,
+                    ...
+                }
+            }. Note that if "robot" key is not present, the default robot pose will
+            be used.
+        bullet_camera_targets: A dictionary of target positions that we want
+            Unity to point the camera at, in the format:
+            {
+                <id>: {
+                    "position": <List[float]>  # The xyz position, in bullet world coordinate frame.
+                    "save": <bool>,  # Whether to save an image using the camera.
+                    "send": <bool>,  # Whether to send the image over the websocket.
+                }
             }
-        }. Note that if "robot" key is not present, the default robot pose will
-        be used.
     
     Returns:
         unity_state: The Unity state, which is a list with the format: 
             [
+                targets_start_idx,
                 joint_angles[0],
                 ...
                 n_objects,
@@ -48,6 +59,11 @@ def bullet2unity_state(bullet_state: Dict, bullet_camera_targets):
                 objects[0].size,
                 objects[0].position,
                 objects[0].rotation,
+                ...
+                tids[0],
+                should_save,
+                should_send,
+                target_positions[0],
                 ...
             ]
     """
@@ -66,22 +82,27 @@ def bullet2unity_state(bullet_state: Dict, bullet_camera_targets):
 
     # Beginning is sid, and target camera start idx.
     targets_start_idx = 2 + len(unity_robot_state + unity_object_states)
-    n_targets = len(bullet_camera_targets)
-    unity_target_state = [n_targets]
-    for tid, bullet_pos in bullet_camera_targets.items():
+    unity_target_state = []
+    for tid, target_info in bullet_camera_targets.items():
+        bullet_pos = target_info["position"]
         bullet_rel_position = np.array(bullet_pos) - np.array(
             const.BULLET_SHOULDER_POS
         )
         unity_rel_position = bullet2unity_position(
             bullet_position=bullet_rel_position
         )
-        unity_target_state += [tid] + unity_rel_position
+        unity_target_state += [
+            tid,
+            int(target_info["should_save"]),
+            int(target_info["should_send"]),
+        ] + unity_rel_position
 
     # Combine the robot and object states.
     unity_state = (
         [targets_start_idx]
         + unity_robot_state
         + unity_object_states
+        + [len(bullet_camera_targets)]
         + unity_target_state
     )
     return unity_state
@@ -203,7 +224,7 @@ def bullet2unity_robot(bullet_state: Dict[str, float]) -> List[float]:
 
 
 def bullet2unity_objects(
-    bullet_state: Dict[int, Dict], bullet_shoulder_pos: List[float],
+    bullet_state: Dict[int, Dict], bullet_shoulder_pos: List[float]
 ):
     """Convert object states from bullet to unity.
     

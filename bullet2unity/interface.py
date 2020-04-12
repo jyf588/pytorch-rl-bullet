@@ -36,25 +36,34 @@ def encode(
 
     Args:
         state_id: The ID of the state.
-        bullet_state: The Bullet state dictionary, with the format {
-            "objects": {
-                "<oid>": {
-                    "shape": shape,
-                    "color": color,
-                    "radius": radius,
-                    "height": height,
-                    "orientation": [x, y, z, w],
-                    "position": [x, y, z]
+        bullet_state: The Bullet state dictionary, with the format 
+            {
+                "objects": {
+                    "<oid>": {
+                        "shape": shape,
+                        "color": color,
+                        "radius": radius,
+                        "height": height,
+                        "orientation": [x, y, z, w],
+                        "position": [x, y, z]
+                    },
+                    ...
                 },
-                ...
-            },
-            "robot": {
-                "<joint_name>": <joint_angle>,
-                ...
+                "robot": {
+                    "<joint_name>": <joint_angle>,
+                    ...
+                }
+            }. Note that if "robot" key is not provided, the default robot pose 
+            will be used.
+        bullet_camera_targets: A dictionary of target positions that we want
+            Unity to point the camera at, in the format:
+            {
+                <id>: {
+                    "position": <List[float]>  # The xyz position, in bullet world coordinate frame.
+                    "save": <bool>,  # Whether to save an image using the camera.
+                    "send": <bool>,  # Whether to send the image over the websocket.
+                }
             }
-        }. Note that if "robot" key is not provided, the default robot pose 
-        will be used.
-        look_at_idxs: Object idxs to look at.
 
     Returns:
         message: The message to send to unity.
@@ -70,10 +79,11 @@ def encode(
     return message
 
 
-def decode(message_id: str, reply: str, target_ids: List[int]):
+def decode(message_id: str, reply: str, bullet_camera_targets):
     """Decodes messages received from Unity.
 
     Args:
+        message_id: The original message ID we sent to the client.
         reply: The string message from the client, which is expected to be a
             comma separated string containing the following components:
             [
@@ -84,8 +94,16 @@ def decode(message_id: str, reply: str, target_ids: List[int]):
                 <image>,
                 ...
             ]
-        object_tags: A list of object tags.
-    
+        bullet_camera_targets: A dictionary of target positions that we want
+            Unity to point the camera at, in the format:
+            {
+                <id>: {
+                    "position": <List[float]>  # The xyz position, in bullet world coordinate frame.
+                    "save": <bool>,  # Whether to save an image using the camera.
+                    "send": <bool>,  # Whether to send the image over the websocket.
+                }
+            }
+
     Returns:
         state_id: The state ID received in the reply.
         data: A dictionary containing the data in the message, in the format
@@ -98,27 +116,26 @@ def decode(message_id: str, reply: str, target_ids: List[int]):
                 ...
             }
     """
-
     print(
         f"Received from client: {len(reply)} characters\tTime: {time.time()}"
     )
+
     # Split components by comma.
     reply = reply.split(",")
     print(f"Number of reply components: {len(reply)}")
-    print(f"Attempting to parse unity data for {len(target_ids)} objects...")
-    # Extract the state ID.
-    received_id = reply[0]
+    print(
+        f"Attempting to parse unity data for {len(bullet_camera_targets)} objects..."
+    )
 
-    # Verify that the sent ID and received ID are equivalent.
+    # Extract the state ID, and verify that the message IDs are equivalent,
+    received_id = reply[0]
     assert received_id == message_id
 
     idx = 1
     data = {}
-    for target_id in range(len(target_ids)):
+    for tid, info in bullet_camera_targets.items():
         unity_target_id = int(reply[idx])
-        print(f"target_id: {target_id}")
-        print(f"unity_target_id: {unity_target_id}")
-        assert unity_target_id == target_id
+        assert unity_target_id == tid
         idx += 1
 
         camera_position = [float(x) for x in reply[idx : idx + 3]]
@@ -127,10 +144,13 @@ def decode(message_id: str, reply: str, target_ids: List[int]):
         idx += 4
 
         # Convert from base 64 to an image tensor.
-        rgb = base64_to_numpy_image(b64=reply[idx])
-        idx += 1
-        seg_img = base64_to_numpy_image(b64=reply[idx])
-        idx += 1
+        if info["should_send"]:
+            rgb = base64_to_numpy_image(b64=reply[idx])
+            idx += 1
+            seg_img = base64_to_numpy_image(b64=reply[idx])
+            idx += 1
+        else:
+            rgb, seg_img = None, None
 
         # Store the data.
         data[int(unity_target_id)] = {
