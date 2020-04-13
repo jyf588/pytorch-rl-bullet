@@ -67,12 +67,10 @@ class DatasetLoader:
                     }
                 }
         """
-        # if self.scene_counter >= self.end_id:
-        #     return None, None
+        if self.scene_counter >= self.end_id:
+            return None, None
 
-        sids = [1, 5]
-        sid = sids[self.scene_counter % len(sids)]
-        sid = f"{sid:06}"
+        sid = f"{self.scene_counter:06}"
 
         # Loads the state for the current sid.
         state_path = os.path.join(self.states_dir, f"{sid}.p")

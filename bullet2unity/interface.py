@@ -13,6 +13,12 @@ from typing import *
 import bullet2unity.states
 
 
+# The number of elements to expect in the unity reply message for each
+# component.
+N_CAM_POS_ELEMS = 3  # Camera position, (x, y, z).
+N_CAM_ORN_ELEMS = 4  # Camera orientation, (x, y, z, w).
+
+
 def run_server(hostname: str, port: int, handler: Callable):
     """Runs the python server.
 
@@ -108,10 +114,11 @@ def decode(message_id: str, reply: str, bullet_camera_targets):
         state_id: The state ID received in the reply.
         data: A dictionary containing the data in the message, in the format
             {
-                <otag>:{
-                    "camera_position": <camera_position>,
-                    "camera_orientation": <camera_orientation>,
-                    "image": <image>,
+                <tag_id>:{
+                    "camera_position": List[float],  # The position of the camera, in unity world coordinate frame.
+                    "camera_orientation": List[float],  # The orientation of the camera (xyzw quaternion), in unity world coordinate frame.
+                    "rgb": np.ndarray,  # The RGB image.
+                    "seg_img": np.ndarray, # The segmentation, as a RGB image.
                 },
                 ...
             }
@@ -138,10 +145,14 @@ def decode(message_id: str, reply: str, bullet_camera_targets):
         assert unity_target_id == tid
         idx += 1
 
-        camera_position = [float(x) for x in reply[idx : idx + 3]]
-        idx += 3
-        camera_orientation = [float(x) for x in reply[idx : idx + 4]]
-        idx += 4
+        camera_position = [
+            float(x) for x in reply[idx : idx + N_CAM_POS_ELEMS]
+        ]
+        idx += N_CAM_POS_ELEMS
+        camera_orientation = [
+            float(x) for x in reply[idx : idx + N_CAM_ORN_ELEMS]
+        ]
+        idx += N_CAM_ORN_ELEMS
 
         # Convert from base 64 to an image tensor.
         if info["should_send"]:
@@ -159,7 +170,6 @@ def decode(message_id: str, reply: str, bullet_camera_targets):
             "rgb": rgb,
             "seg_img": seg_img,
         }
-
     return data
 
 

@@ -4,8 +4,9 @@ import os
 import sys
 import time
 
-from demo.dataset_loader import DatasetLoader
 import bullet2unity.interface as interface
+from demo.dataset_loader import DatasetLoader
+from demo.unity_saver import UnitySaver
 
 global args
 
@@ -20,16 +21,20 @@ def main():
 async def send_to_client(websocket, path):
     global args
 
-    loader = DatasetLoader(states_dir=args.states_dir, start_id=0, end_id=5000)
-    os.makedirs(args.out_dir, exist_ok=True)
+    loader = DatasetLoader(states_dir=args.states_dir, start_id=0, end_id=100)
+    saver = UnitySaver(
+        out_dir=args.out_dir,
+        save_keys=["camera_position", "camera_orientation"],
+    )
 
     while 1:
         msg_id, bullet_state = loader.get_next_state()
-        bullet_camera_targets = create_bullet_camera_targets(bullet_state)
 
         # No more states, so we are done.
         if bullet_state is None:
             break
+
+        bullet_camera_targets = create_bullet_camera_targets(bullet_state)
 
         # Encode, send, receive, and decode.
         message = interface.encode(
@@ -42,7 +47,7 @@ async def send_to_client(websocket, path):
         data = interface.decode(
             msg_id, reply, bullet_camera_targets=bullet_camera_targets
         )
-        time.sleep(5)
+        saver.save(msg_id, data)
     sys.exit(0)
 
 
@@ -73,13 +78,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--states_dir",
         type=str,
-        default="/Users/michelleguo/data/states/dash_v002_5K",
+        default="/Users/michelleguo/data/states/dash_v003_100",
         help="The directory of states to read from and send to client.",
     )
     parser.add_argument(
         "--out_dir",
         type=str,
-        default="/Users/michelleguo/data/temp/camera",
+        default="/Users/michelleguo/data/temp_unity_data",
         help="The output directory to save client data to.",
     )
     args = parser.parse_args()
