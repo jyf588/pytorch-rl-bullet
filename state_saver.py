@@ -23,6 +23,7 @@ Generated output structure:
 
 import copy
 import os
+import pprint
 import pybullet as p
 from typing import *
 
@@ -108,7 +109,13 @@ class StateSaver:
         object_states = []
         for oid, attr in self.oid2attr.items():
             state = copy.deepcopy(attr)
-            position, orientation = p.getBasePositionAndOrientation(oid)
+            try:
+                position, orientation = p.getBasePositionAndOrientation(oid)
+            except p.error as e:
+                pprint.pprint(self.oid2attr)
+                print(f"oid: {oid}")
+                print(f"attr: {attr}")
+                raise e
             state["position"] = list(position)
             state["orientation"] = list(orientation)
             object_states.append(state)

@@ -77,8 +77,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--states_dir",
+        required=True,
         type=str,
-        default="/Users/michelleguo/data/states/dash_v003_100",
         help="The directory of states to read from and send to client.",
     )
     parser.add_argument(
