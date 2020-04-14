@@ -59,6 +59,7 @@ args.det = not args.non_det
 USE_GV5 = False  # is false, use gv6
 DUMMY_SLEEP = False
 WITH_REACHING = True
+USE_HEIGHT_INFO = True
 
 NUM_TRIALS = 400
 
@@ -88,17 +89,24 @@ if USE_GV5:
     INIT_FIN_Q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.0])
 else:
     # use gv6
-    # GRASP_PI = "0404_0_n_20_40"
-    # GRASP_DIR = "./trained_models_%s/ppo/" % "0404_0_n"
-    #
-    # PLACE_PI = "0404_0_n_place_0404_0"
-    # PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
+    if USE_HEIGHT_INFO:
+        GRASP_PI = "0404_0_n_20_40"
+        GRASP_DIR = "./trained_models_%s/ppo/" % "0404_0_n"
 
-    GRASP_PI = "0410_0_n_25_45"
-    GRASP_DIR = "./trained_models_%s/ppo/" % "0410_0_n"
+        PLACE_PI = "0404_0_n_place_0404_0"
+        PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
-    PLACE_PI = "0410_0_n_place_0410_0"
-    PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
+        # GRASP_PI = "0410_0_n_25_45"
+        # GRASP_DIR = "./trained_models_%s/ppo/" % "0410_0_n"
+        #
+        # PLACE_PI = "0410_0_n_place_0410_0"
+        # PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
+    else:
+        GRASP_PI = "0411_0_n_25_45"
+        GRASP_DIR = "./trained_models_%s/ppo/" % "0411_0_n"
+
+        PLACE_PI = "0411_0_n_place_0411_0"
+        PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
     GRASP_PI_ENV_NAME = "InmoovHandGraspBulletEnv-v6"
     PLACE_PI_ENV_NAME = "InmoovHandPlaceBulletEnv-v9"
@@ -128,13 +136,6 @@ def planning(trajectory):
 
         tar_vel = (tar_arm_q - last_tar_arm_q) / utils.TS
 
-        # p.setJointMotorControlArray(
-        #     bodyIndex=env_core.robot.arm_id,
-        #     jointIndices=env_core.robot.arm_dofs,
-        #     controlMode=p.VELOCITY_CONTROL,
-        #     targetVelocities=list(tar_vel),
-        #     forces=[200. * 300] * len(env_core.robot.arm_dofs))  # TODO: wrist force limit?
-
         p.setJointMotorControlArray(
             bodyIndex=env_core.robot.arm_id,
             jointIndices=env_core.robot.arm_dofs,
@@ -142,13 +143,6 @@ def planning(trajectory):
             targetPositions=list(tar_arm_q),
             targetVelocities=list(tar_vel),
             forces=[200. * 5] * len(env_core.robot.arm_dofs))  # TODO: wrist force limit?
-
-        # p.setJointMotorControlArray(
-        #     bodyIndex=env_core.robot.arm_id,
-        #     jointIndices=env_core.robot.arm_dofs,
-        #     controlMode=p.POSITION_CONTROL,
-        #     targetPositions=list(tar_arm_q),
-        #     forces=[200. * 300] * len(env_core.robot.arm_dofs))  # TODO: wrist force limit?
 
         # print("act", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
         diff = np.linalg.norm(env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
@@ -221,9 +215,26 @@ def sample_obj_dict(is_thicker=False):
 
 def get_grasp_policy_obs_tensor(tx, ty, half_height, is_box):
     if USE_GV5:
+        assert USE_HEIGHT_INFO
         obs = env_core.get_robot_contact_txty_halfh_obs_nodup(tx, ty, half_height)
     else:
-        obs = env_core.get_robot_contact_txtytz_halfh_shape_obs_no_dup(tx, ty, 0.0, half_height, is_box)
+        if USE_HEIGHT_INFO:
+            obs = env_core.get_robot_contact_txtytz_halfh_shape_obs_no_dup(tx, ty, 0.0, half_height, is_box)
+        else:
+            obs = env_core.get_robot_contact_txty_shape_obs_no_dup(tx, ty, is_box)
+    obs = policy.wrap_obs(obs, IS_CUDA)
+    return obs
+
+
+def get_stack_policy_obs_tensor(tx, ty, tz, t_half_height, is_box, t_pos, t_up, b_pos, b_up):
+    if USE_HEIGHT_INFO:
+        obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
+            tx, ty, tz, t_half_height, is_box, t_pos, t_up, b_pos, b_up
+        )
+    else:
+        obs = env_core.get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
+            tx, ty, is_box, t_pos, t_up, b_pos, b_up
+        )
     obs = policy.wrap_obs(obs, IS_CUDA)
     return obs
 
@@ -329,7 +340,10 @@ for trial in range(NUM_TRIALS):
 
         p.resetSimulation()
 
-    desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + p_tz]
+    if USE_HEIGHT_INFO:
+        desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + p_tz]
+    else:
+        desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + utils.H_MAX]
 
     table_id = utils.create_table(FLOOR_MU)
 
@@ -477,14 +491,12 @@ for trial in range(NUM_TRIALS):
     )
 
     # TODO: an unly hack to force Bullet compute forward kinematics
-    p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
+    _ = get_stack_policy_obs_tensor(
         p_tx, p_ty, p_tz, t_half_height, is_box, t_pos, t_up, b_pos, b_up
     )
-    p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
+    p_obs = get_stack_policy_obs_tensor(
         p_tx, p_ty, p_tz, t_half_height, is_box, t_pos, t_up, b_pos, b_up
     )
-
-    p_obs = policy.wrap_obs(p_obs, IS_CUDA)
     print("pobs", p_obs)
     # input("ready to place")
 
@@ -511,11 +523,9 @@ for trial in range(NUM_TRIALS):
                 btm_oid=btm_id,
             )
 
-        p_obs = env_core.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
+        p_obs = get_stack_policy_obs_tensor(
             p_tx, p_ty, p_tz, l_t_half_height, is_box, l_t_pos, l_t_up, l_b_pos, l_b_up
         )
-
-        p_obs = policy.wrap_obs(p_obs, IS_CUDA)
 
         # print(action)
         # print(p_obs)
