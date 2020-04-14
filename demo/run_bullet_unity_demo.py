@@ -37,7 +37,7 @@ async def send_to_client(websocket, path):
         command = f"Put the green {src_shape} on top of the blue {dst_shape}"
 
         # for obs_mode in ["gt", "vision"]:
-        for obs_mode in ["vision"]:
+        for obs_mode in ["gt"]:
             print(f"scene_idx: {scene_idx}")
             print(f"obs mode: {obs_mode}")
 
@@ -58,23 +58,27 @@ async def send_to_client(websocket, path):
                 state = env.get_state()
 
                 # Temporarily remove robot state.
-                state = {"objects": state["objects"]}
+                # state = {"objects": state["objects"]}
 
                 # Only have lucas look at / send images back when planning or placing.
                 if obs_mode == "vision" and stage in ["plan", "place"]:
                     render_frequency = 2
-                    # unity_options = [(False, True)]
-                    unity_options = [(False, True), (True, False)]
+                    unity_options = [(False, True)]
+                    # unity_options = [(False, True), (True, False)]
 
                     if stage == "place" and stage_ts > 0:
                         pass
                     else:
                         last_bullet_camera_targets = {}
                         for tid, odict in enumerate(state["objects"].values()):
-                            last_bullet_camera_targets[tid] = odict["position"]
+                            last_bullet_camera_targets[tid] = {
+                                "position": odict["position"],
+                                "should_save": False,
+                                "should_send": True,
+                            }
                 else:
                     render_frequency = 20
-                    unity_options = [(True, False)]
+                    unity_options = [(False, False)]
 
                 if i % render_frequency == 0:
                     # First, render only states and get images. Then, render
@@ -108,7 +112,7 @@ async def send_to_client(websocket, path):
                         data = interface.decode(
                             state_id,
                             reply,
-                            target_ids=list(bullet_camera_targets.keys()),
+                            bullet_camera_targets=bullet_camera_targets,
                         )
 
                         # Hand the data to the env for processing.

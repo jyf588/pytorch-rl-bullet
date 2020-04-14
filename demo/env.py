@@ -459,8 +459,11 @@ class DemoEnvironment:
         position = odict["position"]
         half_height = odict["height"] / 2
         x, y = position[0], position[1]
-        obs = self.world.robot_env.get_robot_contact_txty_halfh_obs_nodup(
-            x, y, half_height
+        # obs = self.world.robot_env.get_robot_contact_txty_halfh_obs_nodup(
+        #     x, y, half_height
+        # )
+        obs = self.world.robot_env.get_robot_contact_txtytz_halfh_shape_obs_no_dup(
+            x, y, 0.0, half_height, odict["shape"] == "box"
         )
         return obs
 
