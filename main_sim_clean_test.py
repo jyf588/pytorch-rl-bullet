@@ -58,7 +58,7 @@ args.det = not args.non_det
 
 USE_GV5 = False  # is false, use gv6
 DUMMY_SLEEP = False
-WITH_REACHING = False
+WITH_REACHING = True
 
 NUM_TRIALS = 400
 
@@ -88,10 +88,16 @@ if USE_GV5:
     INIT_FIN_Q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.0])
 else:
     # use gv6
-    GRASP_PI = "0404_0_n_20_40"
-    GRASP_DIR = "./trained_models_%s/ppo/" % "0404_0_n"
+    # GRASP_PI = "0404_0_n_20_40"
+    # GRASP_DIR = "./trained_models_%s/ppo/" % "0404_0_n"
+    #
+    # PLACE_PI = "0404_0_n_place_0404_0"
+    # PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
-    PLACE_PI = "0404_0_n_place_0404_0"
+    GRASP_PI = "0410_0_n_25_45"
+    GRASP_DIR = "./trained_models_%s/ppo/" % "0410_0_n"
+
+    PLACE_PI = "0410_0_n_place_0410_0"
     PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
     GRASP_PI_ENV_NAME = "InmoovHandGraspBulletEnv-v6"
@@ -382,7 +388,7 @@ for trial in range(NUM_TRIALS):
 
     if WITH_REACHING:
         reach_save_path = homedir + "/container_data/PB_REACH.npz"
-        reach_read_path = homedir + "/container_data/OR_REACH.npy"
+        reach_read_path = homedir + "/container_data/OR_REACH.npz"
         Traj_reach = openrave.get_traj_from_openrave_container(OBJECTS, None, Qreach, reach_save_path, reach_read_path)
 
         if Traj_reach is None or len(Traj_reach) == 0:
@@ -433,7 +439,7 @@ for trial in range(NUM_TRIALS):
     print(f"Qmove_init: {Qmove_init}")
     print(f"Qdestin: {Qdestin}")
     move_save_path = homedir + "/container_data/PB_MOVE.npz"
-    move_read_path = homedir + "/container_data/OR_MOVE.npy"
+    move_read_path = homedir + "/container_data/OR_MOVE.npz"
     Traj_move = openrave.get_traj_from_openrave_container(OBJECTS, Qmove_init, Qdestin, move_save_path, move_read_path)
 
     """Execute planned moving trajectory"""
