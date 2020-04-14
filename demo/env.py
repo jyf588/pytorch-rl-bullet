@@ -164,7 +164,9 @@ class DemoEnvironment:
         # Zero-pad the scene's position with fourth dimension because that's
         # what the language module expects.
         language_input = copy.deepcopy(observation)
-        print(f"observation")
+        print(f"scene:")
+        pprint.pprint(self.scene)
+        print(f"observation:")
         pprint.pprint(observation)
         for idx, odict in enumerate(language_input):
             print(f'odict position: {odict["position"]}')
@@ -581,7 +583,7 @@ class DemoEnvironment:
             # information.
             y_dict = dash_object.y_vec_to_dict(
                 y=list(pred[0]),
-                coordinate_frame="camera",
+                coordinate_frame="unity_camera",
                 cam_position=self.unity_data[idx]["camera_position"],
                 cam_orientation=self.unity_data[idx]["camera_orientation"],
             )

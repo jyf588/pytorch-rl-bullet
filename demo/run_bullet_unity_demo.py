@@ -37,7 +37,7 @@ async def send_to_client(websocket, path):
         command = f"Put the green {src_shape} on top of the blue {dst_shape}"
 
         # for obs_mode in ["gt", "vision"]:
-        for obs_mode in ["gt"]:
+        for obs_mode in ["vision"]:
             print(f"scene_idx: {scene_idx}")
             print(f"obs mode: {obs_mode}")
 
@@ -58,13 +58,13 @@ async def send_to_client(websocket, path):
                 state = env.get_state()
 
                 # Temporarily remove robot state.
-                # state = {"objects": state["objects"]}
+                state = {"objects": state["objects"]}
 
                 # Only have lucas look at / send images back when planning or placing.
                 if obs_mode == "vision" and stage in ["plan", "place"]:
                     render_frequency = 2
-                    unity_options = [(False, True)]
-                    # unity_options = [(False, True), (True, False)]
+                    # unity_options = [(False, True)]
+                    unity_options = [(False, True), (True, False)]
 
                     if stage == "place" and stage_ts > 0:
                         pass
@@ -78,12 +78,28 @@ async def send_to_client(websocket, path):
                             }
                 else:
                     render_frequency = 20
-                    unity_options = [(False, False)]
+                    unity_options = [(True, False)]
 
+                """
+                Possible cases:
+                
+                    Render:
+                        Get images.
+                        Step (predict).
+                        Render with predictions.
+                    No render:
+                        Step.
+                """
+
+                # Rendering block.
                 if i % render_frequency == 0:
-                    # First, render only states and get images. Then, render
-                    # both states and observations, but don't get images.
-                    for render_obs, get_images in unity_options:
+                    for render_obs, get_and_predict_images in unity_options:
+                        print(f"render_obs: {render_obs}")
+                        print(
+                            f"get_and_predict_images: {get_and_predict_images}"
+                        )
+                        print(f"env.obs: {env.obs}")
+
                         # If we are rendering observations, add them to the
                         # render state.
                         render_state = copy.deepcopy(state)
@@ -92,9 +108,7 @@ async def send_to_client(websocket, path):
                                 state=render_state, obs=env.obs
                             )
 
-                        # If we are getting images, get object indexes from the
-                        # state.
-                        if get_images:
+                        if get_and_predict_images:
                             bullet_camera_targets = last_bullet_camera_targets
                         else:
                             bullet_camera_targets = {}
@@ -116,11 +130,13 @@ async def send_to_client(websocket, path):
                         )
 
                         # Hand the data to the env for processing.
-                        if get_images:
+                        if get_and_predict_images:
                             env.set_unity_data(data)
+                            is_done = env.step()
+                else:
+                    is_done = env.step()
 
-                # If we've reached the end of the sequence, we are done.
-                is_done = env.step()
+                # Break out if we're done.
                 if is_done:
                     break
 
