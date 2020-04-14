@@ -21,12 +21,16 @@ def main():
 async def send_to_client(websocket, path):
     global args
 
-    loader = DatasetLoader(states_dir=args.states_dir, start_id=0, end_id=100)
+    loader = DatasetLoader(
+        states_dir=args.states_dir, start_id=0, end_id=20000
+    )
     saver = UnitySaver(
         out_dir=args.out_dir,
         save_keys=["camera_position", "camera_orientation"],
     )
 
+    start = time.time()
+    n_iter = 0
     while 1:
         msg_id, bullet_state = loader.get_next_state()
 
@@ -48,6 +52,10 @@ async def send_to_client(websocket, path):
             msg_id, reply, bullet_camera_targets=bullet_camera_targets
         )
         saver.save(msg_id, data)
+
+        n_iter += 1
+        avg_iter_time = (time.time() - start) / n_iter
+        print(f"Average iteration time: {avg_iter_time:.2f}")
     sys.exit(0)
 
 
