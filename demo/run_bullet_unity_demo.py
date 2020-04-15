@@ -24,7 +24,7 @@ async def send_to_client(websocket, path):
         websocket: The websocket protocol instance.
         path: The URI path.
     """
-    scenes = generate_scenes()[3:]
+    scenes = generate_scenes()
 
     for scene_idx, scene in enumerate(scenes):
         scene = scenes[scene_idx]
@@ -37,7 +37,8 @@ async def send_to_client(websocket, path):
         command = f"Put the green {src_shape} on top of the blue {dst_shape}"
 
         # for obs_mode in ["gt", "vision"]:
-        for obs_mode in ["vision"]:
+        for obs_mode in ["gt"]:
+            # for obs_mode in ["vision"]:
             print(f"scene_idx: {scene_idx}")
             print(f"obs mode: {obs_mode}")
 

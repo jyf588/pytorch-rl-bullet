@@ -17,6 +17,7 @@ from demo.vision_module import VisionModule
 from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import (
     ImaginaryArmObjSession,
 )
+from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
 from my_pybullet_envs.inmoov_shadow_place_env_v9 import (
     InmoovShadowHandPlaceEnvV9,
 )
@@ -127,7 +128,6 @@ class DemoEnvironment:
             src_xy=self.initial_obs[self.src_idx]["position"][:2],
             dst_xyz=dst_xyz,
         )
-        p.resetSimulation()
 
         # Create the bullet world now that we've finished our imaginary
         # sessions.
@@ -332,26 +332,39 @@ class DemoEnvironment:
             q_transport_dst: The arm joint angles that transport should end at.
         """
         # Compute the destination arm pose for reaching.
-        src_x, src_y = src_xy
-        q_reach_dst = np.array(
-            self.imaginary_sess.get_most_comfortable_q_and_refangle(
-                src_x, src_y
-            )[0]
+        src_xyz = [src_xy[0], src_xy[1], 0.0]
+        table_id = utils.create_table(self.opt.floor_mu)
+        robot = InmoovShadowNew(
+            init_noise=False, timestep=utils.TS, np_random=np.random,
         )
+        q_reach_dst = utils.get_n_optimal_init_arm_qs(
+            robot,
+            utils.PALM_POS_OF_INIT,
+            p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
+            src_xyz,
+            table_id,
+            wrist_gain=3.0,
+        )[0]
+        p.resetSimulation()
 
         # Compute the destination arm pose for transport.
-        self.a.seed(self.opt.seed)
-        table_id = p.loadURDF(
-            os.path.join("my_pybullet_envs/assets/tabletop.urdf"),
-            utils.TABLE_OFFSET,
-            useFixedBase=1,
-        )
+        # self.a.seed(self.opt.seed)
+        table_id = utils.create_table(self.opt.floor_mu)
+        (
+            o_pos_pf_ave,
+            o_quat_pf_ave,
+            _,
+        ) = utils.read_grasp_final_states_from_pickle(self.opt.grasp_pi)
         p_pos_of_ave, p_quat_of_ave = p.invertTransform(
-            self.a.o_pos_pf_ave, self.a.o_quat_pf_ave
+            o_pos_pf_ave, o_quat_pf_ave
+        )
+        robot = InmoovShadowNew(
+            init_noise=False, timestep=utils.TS, np_random=np.random,
         )
         q_transport_dst = utils.get_n_optimal_init_arm_qs(
-            self.a.robot, p_pos_of_ave, p_quat_of_ave, dst_xyz, table_id
+            robot, p_pos_of_ave, p_quat_of_ave, dst_xyz, table_id
         )[0]
+        p.resetSimulation()
         return q_reach_dst, q_transport_dst
 
     def compute_reach_trajectory(self) -> np.ndarray:
