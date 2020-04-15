@@ -127,6 +127,10 @@ class BulletWorld:
             robot_mu=self.opt.hand_mu,
             control_skip=self.opt.grasping_control_skip,
         )
+        init_fin_q = np.array(
+            [0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.1]
+        )
+        robot_env.change_init_fin_q(init_fin_q)
 
         # Set the robot to zero pose.
         robot_env.robot.reset_with_certain_arm_q([0.0] * 7)

@@ -24,7 +24,7 @@ async def send_to_client(websocket, path):
         websocket: The websocket protocol instance.
         path: The URI path.
     """
-    scenes = generate_scenes()
+    scenes = generate_scenes()[31:]
 
     for scene_idx, scene in enumerate(scenes):
         scene = scenes[scene_idx]
@@ -36,8 +36,8 @@ async def send_to_client(websocket, path):
         dst_shape = scene[1]["shape"]
         command = f"Put the green {src_shape} on top of the blue {dst_shape}"
 
-        # for obs_mode in ["gt", "vision"]:
-        for obs_mode in ["gt"]:
+        for obs_mode in ["gt", "vision"]:
+            # for obs_mode in ["gt"]:
             # for obs_mode in ["vision"]:
             print(f"scene_idx: {scene_idx}")
             print(f"obs mode: {obs_mode}")
@@ -116,7 +116,7 @@ async def send_to_client(websocket, path):
                         else:
                             bullet_camera_targets = {}
 
-                        state_id = f"{env.timestep:06}"
+                        state_id = f"{scene_idx:06}_{env.timestep:06}"
 
                         # Encode, send, receive, and decode.
                         message = interface.encode(
