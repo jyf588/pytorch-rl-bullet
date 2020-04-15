@@ -64,7 +64,6 @@ class DemoEnvironment:
             renderer: The renderer to use to generate images, if 
                 `observation_mode` is `vision`.
         """
-        sys.exit(0)
 
         self.opt = opt
         self.scene = scene
@@ -225,6 +224,11 @@ class DemoEnvironment:
             }
         else:
             state = self.world.get_state()
+
+        # Additionally, compute the up vector from the orientation.
+        for idx in state["objects"].keys():
+            orn = state["objects"][idx]["orientation"]
+            state["objects"][idx]["up_vector"] = util.orientation_to_up(orn)
         return state
 
     def step(self):
@@ -266,6 +270,7 @@ class DemoEnvironment:
         done = self.is_done()
         if done:
             p.disconnect()
+            self.metrics.print()
         return done
 
     def get_current_stage(self) -> Tuple[str, int]:
@@ -583,17 +588,14 @@ class DemoEnvironment:
                 cam_orientation=self.unity_data[idx]["camera_orientation"],
             )
 
-            self.metrics.add_example(
-                gt_dict=self.get_state()["objects"][idx], pred_dict=y_dict
+            gt_odicts = self.get_observation(
+                observation_mode="gt", renderer=self.renderer
             )
-
-            self.metrics.print()
-            debug = 1 / 0
+            self.metrics.add_example(gt_dict=gt_odicts[idx], pred_dict=y_dict)
 
             # Update the position and up vector with predicted values.
             obs[idx]["position"] = y_dict["position"]
             obs[idx]["up_vector"] = y_dict["up_vector"]
-        debug = 1 / 0
         return obs
 
     def get_images(self, oid: int, renderer: str):

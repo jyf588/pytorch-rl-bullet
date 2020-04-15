@@ -50,7 +50,6 @@ async def send_to_client(websocket, path):
                 visualize_bullet=False,
                 visualize_unity=False,
             )
-            sys.exit(0)
 
             # Send states one by one.
             i = 0
@@ -59,7 +58,7 @@ async def send_to_client(websocket, path):
                 state = env.get_state()
 
                 # Temporarily remove robot state.
-                state = {"objects": state["objects"]}
+                # state = {"objects": state["objects"]}
 
                 # Only have lucas look at / send images back when planning or placing.
                 if obs_mode == "vision" and stage in ["plan", "place"]:
@@ -67,16 +66,24 @@ async def send_to_client(websocket, path):
                     # unity_options = [(False, True)]
                     unity_options = [(False, True), (True, False)]
 
-                    if stage == "place" and stage_ts > 0:
-                        pass
-                    else:
-                        last_bullet_camera_targets = {}
-                        for tid, odict in enumerate(state["objects"].values()):
-                            last_bullet_camera_targets[tid] = {
-                                "position": odict["position"],
-                                "should_save": False,
-                                "should_send": True,
-                            }
+                    # if stage == "place" and stage_ts > 0:
+                    #     pass
+                    # else:
+                    #     last_bullet_camera_targets = {}
+                    #     for tid, odict in enumerate(state["objects"].values()):
+                    #         last_bullet_camera_targets[tid] = {
+                    #             "position": odict["position"],
+                    #             "should_save": False,
+                    #             "should_send": True,
+                    #         }
+                    # Turn on moving the camera each frame again.
+                    last_bullet_camera_targets = {}
+                    for tid, odict in enumerate(state["objects"].values()):
+                        last_bullet_camera_targets[tid] = {
+                            "position": odict["position"],
+                            "should_save": False,
+                            "should_send": True,
+                        }
                 else:
                     render_frequency = 20
                     unity_options = [(True, False)]
@@ -95,12 +102,6 @@ async def send_to_client(websocket, path):
                 # Rendering block.
                 if i % render_frequency == 0:
                     for render_obs, get_and_predict_images in unity_options:
-                        print(f"render_obs: {render_obs}")
-                        print(
-                            f"get_and_predict_images: {get_and_predict_images}"
-                        )
-                        print(f"env.obs: {env.obs}")
-
                         # If we are rendering observations, add them to the
                         # render state.
                         render_state = copy.deepcopy(state)
