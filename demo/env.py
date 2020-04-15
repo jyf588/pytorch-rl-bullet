@@ -270,7 +270,8 @@ class DemoEnvironment:
         done = self.is_done()
         if done:
             p.disconnect()
-            self.metrics.print()
+            if self.observation_mode == "vision":
+                self.metrics.print()
         return done
 
     def get_current_stage(self) -> Tuple[str, int]:

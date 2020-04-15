@@ -24,7 +24,7 @@ async def send_to_client(websocket, path):
         websocket: The websocket protocol instance.
         path: The URI path.
     """
-    scenes = generate_scenes()
+    scenes = generate_scenes()[3:]
 
     for scene_idx, scene in enumerate(scenes):
         scene = scenes[scene_idx]
@@ -85,8 +85,8 @@ async def send_to_client(websocket, path):
                             "should_send": True,
                         }
                 else:
-                    render_frequency = 20
-                    unity_options = [(True, False)]
+                    render_frequency = 25
+                    unity_options = [(False, False)]
 
                 """
                 Possible cases:
@@ -134,6 +134,8 @@ async def send_to_client(websocket, path):
                         # Hand the data to the env for processing.
                         if get_and_predict_images:
                             env.set_unity_data(data)
+                            is_done = env.step()
+                        elif obs_mode == "gt":
                             is_done = env.step()
                 else:
                     is_done = env.step()
