@@ -5,6 +5,7 @@ import numpy as np
 import os
 import pprint
 import pybullet as p
+import sys
 import time
 import torch
 from typing import *
@@ -22,6 +23,7 @@ from my_pybullet_envs.inmoov_shadow_place_env_v9 import (
 import my_pybullet_envs.utils as utils
 from NLP_module import NLPmod
 from ns_vqa_dart.bullet import dash_object, util
+from ns_vqa_dart.bullet.metrics import Metrics
 
 
 class DemoEnvironment:
@@ -62,6 +64,8 @@ class DemoEnvironment:
             renderer: The renderer to use to generate images, if 
                 `observation_mode` is `vision`.
         """
+        sys.exit(0)
+
         self.opt = opt
         self.scene = scene
         self.command = command
@@ -83,6 +87,9 @@ class DemoEnvironment:
         if self.observation_mode == "vision":
             self.vision_module = VisionModule()
 
+            # Initialize a class for tracking and computing metrics for the
+            # vision module's predictions.
+            self.metrics = Metrics()
         if visualize_bullet:
             p.connect(p.GUI)
         else:
@@ -395,10 +402,7 @@ class DemoEnvironment:
         )
         with torch.no_grad():
             _, action, _, self.hidden_states = self.policy.act(
-                obs,
-                self.hidden_states,
-                self.masks,
-                deterministic=self.opt.det,
+                obs, self.hidden_states, self.masks, deterministic=self.opt.det
             )
         self.world.step_robot(
             action=demo.policy.unwrap_action(
@@ -432,10 +436,7 @@ class DemoEnvironment:
         )
         with torch.no_grad():
             _, action, _, self.hidden_states = self.policy.act(
-                obs,
-                self.hidden_states,
-                self.masks,
-                deterministic=self.opt.det,
+                obs, self.hidden_states, self.masks, deterministic=self.opt.det
             )
 
         self.world.step_robot(
@@ -566,12 +567,6 @@ class DemoEnvironment:
             self.get_observation(observation_mode="gt", renderer=self.renderer)
         )
 
-        # print(f"unity keys:")
-        # print(f"{self.unity_data.keys()}")
-
-        # print(f"obs keys:")
-        # keys = obs["objects"].keys()
-        # print(keys)
         # Predict the object pose for the objects that we've "looked" at.
         for idx in range(len(obs)):
             rgb, seg_img = self.get_images(oid=idx, renderer=renderer)
@@ -588,9 +583,17 @@ class DemoEnvironment:
                 cam_orientation=self.unity_data[idx]["camera_orientation"],
             )
 
+            self.metrics.add_example(
+                gt_dict=self.get_state()["objects"][idx], pred_dict=y_dict
+            )
+
+            self.metrics.print()
+            debug = 1 / 0
+
             # Update the position and up vector with predicted values.
             obs[idx]["position"] = y_dict["position"]
             obs[idx]["up_vector"] = y_dict["up_vector"]
+        debug = 1 / 0
         return obs
 
     def get_images(self, oid: int, renderer: str):

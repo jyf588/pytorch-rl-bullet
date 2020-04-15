@@ -50,6 +50,7 @@ async def send_to_client(websocket, path):
                 visualize_bullet=False,
                 visualize_unity=False,
             )
+            sys.exit(0)
 
             # Send states one by one.
             i = 0
