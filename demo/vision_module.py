@@ -20,7 +20,7 @@ class VisionModule:
         """Creates the options namespace to define the vision model."""
         options = Namespace(
             inference_only=True,
-            load_checkpoint_path="/home/michelle/mguo/outputs/dash_v002_5K/checkpoint_best.pt",
+            load_checkpoint_path="/home/michelle/mguo/outputs/dash_v005_20K/checkpoint_best.pt",
             gpu_ids="0",
             concat_img=True,
             with_depth=False,

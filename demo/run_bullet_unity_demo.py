@@ -24,7 +24,7 @@ async def send_to_client(websocket, path):
         websocket: The websocket protocol instance.
         path: The URI path.
     """
-    scenes = generate_scenes()
+    scenes = generate_scenes()[31:]
 
     for scene_idx, scene in enumerate(scenes):
         scene = scenes[scene_idx]
@@ -36,8 +36,9 @@ async def send_to_client(websocket, path):
         dst_shape = scene[1]["shape"]
         command = f"Put the green {src_shape} on top of the blue {dst_shape}"
 
-        # for obs_mode in ["gt", "vision"]:
-        for obs_mode in ["vision"]:
+        for obs_mode in ["gt", "vision"]:
+            # for obs_mode in ["gt"]:
+            # for obs_mode in ["vision"]:
             print(f"scene_idx: {scene_idx}")
             print(f"obs mode: {obs_mode}")
 
@@ -58,7 +59,7 @@ async def send_to_client(websocket, path):
                 state = env.get_state()
 
                 # Temporarily remove robot state.
-                state = {"objects": state["objects"]}
+                # state = {"objects": state["objects"]}
 
                 # Only have lucas look at / send images back when planning or placing.
                 if obs_mode == "vision" and stage in ["plan", "place"]:
@@ -66,20 +67,42 @@ async def send_to_client(websocket, path):
                     # unity_options = [(False, True)]
                     unity_options = [(False, True), (True, False)]
 
-                    if stage == "place" and stage_ts > 0:
-                        pass
-                    else:
-                        last_bullet_camera_targets = {}
-                        for tid, odict in enumerate(state["objects"].values()):
-                            last_bullet_camera_targets[tid] = odict["position"]
+                    # if stage == "place" and stage_ts > 0:
+                    #     pass
+                    # else:
+                    #     last_bullet_camera_targets = {}
+                    #     for tid, odict in enumerate(state["objects"].values()):
+                    #         last_bullet_camera_targets[tid] = {
+                    #             "position": odict["position"],
+                    #             "should_save": False,
+                    #             "should_send": True,
+                    #         }
+                    # Turn on moving the camera each frame again.
+                    last_bullet_camera_targets = {}
+                    for tid, odict in enumerate(state["objects"].values()):
+                        last_bullet_camera_targets[tid] = {
+                            "position": odict["position"],
+                            "should_save": False,
+                            "should_send": True,
+                        }
                 else:
-                    render_frequency = 20
-                    unity_options = [(True, False)]
+                    render_frequency = 25
+                    unity_options = [(False, False)]
 
+                """
+                Possible cases:
+                
+                    Render:
+                        Get images.
+                        Step (predict).
+                        Render with predictions.
+                    No render:
+                        Step.
+                """
+
+                # Rendering block.
                 if i % render_frequency == 0:
-                    # First, render only states and get images. Then, render
-                    # both states and observations, but don't get images.
-                    for render_obs, get_images in unity_options:
+                    for render_obs, get_and_predict_images in unity_options:
                         # If we are rendering observations, add them to the
                         # render state.
                         render_state = copy.deepcopy(state)
@@ -88,14 +111,12 @@ async def send_to_client(websocket, path):
                                 state=render_state, obs=env.obs
                             )
 
-                        # If we are getting images, get object indexes from the
-                        # state.
-                        if get_images:
+                        if get_and_predict_images:
                             bullet_camera_targets = last_bullet_camera_targets
                         else:
                             bullet_camera_targets = {}
 
-                        state_id = f"{env.timestep:06}"
+                        state_id = f"{scene_idx:06}_{env.timestep:06}"
 
                         # Encode, send, receive, and decode.
                         message = interface.encode(
@@ -108,15 +129,19 @@ async def send_to_client(websocket, path):
                         data = interface.decode(
                             state_id,
                             reply,
-                            target_ids=list(bullet_camera_targets.keys()),
+                            bullet_camera_targets=bullet_camera_targets,
                         )
 
                         # Hand the data to the env for processing.
-                        if get_images:
+                        if get_and_predict_images:
                             env.set_unity_data(data)
+                            is_done = env.step()
+                        elif obs_mode == "gt":
+                            is_done = env.step()
+                else:
+                    is_done = env.step()
 
-                # If we've reached the end of the sequence, we are done.
-                is_done = env.step()
+                # Break out if we're done.
                 if is_done:
                     break
 

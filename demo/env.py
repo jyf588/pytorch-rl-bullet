@@ -5,6 +5,7 @@ import numpy as np
 import os
 import pprint
 import pybullet as p
+import sys
 import time
 import torch
 from typing import *
@@ -16,12 +17,14 @@ from demo.vision_module import VisionModule
 from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import (
     ImaginaryArmObjSession,
 )
+from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
 from my_pybullet_envs.inmoov_shadow_place_env_v9 import (
     InmoovShadowHandPlaceEnvV9,
 )
 import my_pybullet_envs.utils as utils
 from NLP_module import NLPmod
 from ns_vqa_dart.bullet import dash_object, util
+from ns_vqa_dart.bullet.metrics import Metrics
 
 
 class DemoEnvironment:
@@ -62,6 +65,7 @@ class DemoEnvironment:
             renderer: The renderer to use to generate images, if 
                 `observation_mode` is `vision`.
         """
+
         self.opt = opt
         self.scene = scene
         self.command = command
@@ -83,6 +87,9 @@ class DemoEnvironment:
         if self.observation_mode == "vision":
             self.vision_module = VisionModule()
 
+            # Initialize a class for tracking and computing metrics for the
+            # vision module's predictions.
+            self.metrics = Metrics()
         if visualize_bullet:
             p.connect(p.GUI)
         else:
@@ -121,7 +128,6 @@ class DemoEnvironment:
             src_xy=self.initial_obs[self.src_idx]["position"][:2],
             dst_xyz=dst_xyz,
         )
-        p.resetSimulation()
 
         # Create the bullet world now that we've finished our imaginary
         # sessions.
@@ -164,7 +170,9 @@ class DemoEnvironment:
         # Zero-pad the scene's position with fourth dimension because that's
         # what the language module expects.
         language_input = copy.deepcopy(observation)
-        print(f"observation")
+        print(f"scene:")
+        pprint.pprint(self.scene)
+        print(f"observation:")
         pprint.pprint(observation)
         for idx, odict in enumerate(language_input):
             print(f'odict position: {odict["position"]}')
@@ -216,6 +224,11 @@ class DemoEnvironment:
             }
         else:
             state = self.world.get_state()
+
+        # Additionally, compute the up vector from the orientation.
+        for idx in state["objects"].keys():
+            orn = state["objects"][idx]["orientation"]
+            state["objects"][idx]["up_vector"] = util.orientation_to_up(orn)
         return state
 
     def step(self):
@@ -257,6 +270,8 @@ class DemoEnvironment:
         done = self.is_done()
         if done:
             p.disconnect()
+            if self.observation_mode == "vision":
+                self.metrics.print()
         return done
 
     def get_current_stage(self) -> Tuple[str, int]:
@@ -317,26 +332,39 @@ class DemoEnvironment:
             q_transport_dst: The arm joint angles that transport should end at.
         """
         # Compute the destination arm pose for reaching.
-        src_x, src_y = src_xy
-        q_reach_dst = np.array(
-            self.imaginary_sess.get_most_comfortable_q_and_refangle(
-                src_x, src_y
-            )[0]
+        src_xyz = [src_xy[0], src_xy[1], 0.0]
+        table_id = utils.create_table(self.opt.floor_mu)
+        robot = InmoovShadowNew(
+            init_noise=False, timestep=utils.TS, np_random=np.random,
         )
+        q_reach_dst = utils.get_n_optimal_init_arm_qs(
+            robot,
+            utils.PALM_POS_OF_INIT,
+            p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
+            src_xyz,
+            table_id,
+            wrist_gain=3.0,
+        )[0]
+        p.resetSimulation()
 
         # Compute the destination arm pose for transport.
-        self.a.seed(self.opt.seed)
-        table_id = p.loadURDF(
-            os.path.join("my_pybullet_envs/assets/tabletop.urdf"),
-            utils.TABLE_OFFSET,
-            useFixedBase=1,
-        )
+        # self.a.seed(self.opt.seed)
+        table_id = utils.create_table(self.opt.floor_mu)
+        (
+            o_pos_pf_ave,
+            o_quat_pf_ave,
+            _,
+        ) = utils.read_grasp_final_states_from_pickle(self.opt.grasp_pi)
         p_pos_of_ave, p_quat_of_ave = p.invertTransform(
-            self.a.o_pos_pf_ave, self.a.o_quat_pf_ave
+            o_pos_pf_ave, o_quat_pf_ave
+        )
+        robot = InmoovShadowNew(
+            init_noise=False, timestep=utils.TS, np_random=np.random,
         )
         q_transport_dst = utils.get_n_optimal_init_arm_qs(
-            self.a.robot, p_pos_of_ave, p_quat_of_ave, dst_xyz, table_id
+            robot, p_pos_of_ave, p_quat_of_ave, dst_xyz, table_id
         )[0]
+        p.resetSimulation()
         return q_reach_dst, q_transport_dst
 
     def compute_reach_trajectory(self) -> np.ndarray:
@@ -393,10 +421,7 @@ class DemoEnvironment:
         )
         with torch.no_grad():
             _, action, _, self.hidden_states = self.policy.act(
-                obs,
-                self.hidden_states,
-                self.masks,
-                deterministic=self.opt.det,
+                obs, self.hidden_states, self.masks, deterministic=self.opt.det
             )
         self.world.step_robot(
             action=demo.policy.unwrap_action(
@@ -430,10 +455,7 @@ class DemoEnvironment:
         )
         with torch.no_grad():
             _, action, _, self.hidden_states = self.policy.act(
-                obs,
-                self.hidden_states,
-                self.masks,
-                deterministic=self.opt.det,
+                obs, self.hidden_states, self.masks, deterministic=self.opt.det
             )
 
         self.world.step_robot(
@@ -459,8 +481,11 @@ class DemoEnvironment:
         position = odict["position"]
         half_height = odict["height"] / 2
         x, y = position[0], position[1]
-        obs = self.world.robot_env.get_robot_contact_txty_halfh_obs_nodup(
-            x, y, half_height
+        # obs = self.world.robot_env.get_robot_contact_txty_halfh_obs_nodup(
+        #     x, y, half_height
+        # )
+        obs = self.world.robot_env.get_robot_contact_txtytz_halfh_shape_obs_no_dup(
+            x, y, 0.0, half_height, odict["shape"] == "box"
         )
         return obs
 
@@ -561,12 +586,6 @@ class DemoEnvironment:
             self.get_observation(observation_mode="gt", renderer=self.renderer)
         )
 
-        # print(f"unity keys:")
-        # print(f"{self.unity_data.keys()}")
-
-        # print(f"obs keys:")
-        # keys = obs["objects"].keys()
-        # print(keys)
         # Predict the object pose for the objects that we've "looked" at.
         for idx in range(len(obs)):
             rgb, seg_img = self.get_images(oid=idx, renderer=renderer)
@@ -578,10 +597,15 @@ class DemoEnvironment:
             # information.
             y_dict = dash_object.y_vec_to_dict(
                 y=list(pred[0]),
-                coordinate_frame="camera",
+                coordinate_frame="unity_camera",
                 cam_position=self.unity_data[idx]["camera_position"],
                 cam_orientation=self.unity_data[idx]["camera_orientation"],
             )
+
+            gt_odicts = self.get_observation(
+                observation_mode="gt", renderer=self.renderer
+            )
+            self.metrics.add_example(gt_dict=gt_odicts[idx], pred_dict=y_dict)
 
             # Update the position and up vector with predicted values.
             obs[idx]["position"] = y_dict["position"]
