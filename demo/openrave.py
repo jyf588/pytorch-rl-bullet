@@ -4,6 +4,7 @@ import os
 import pprint
 import time
 from typing import *
+import matplotlib.pyplot as plt
 
 
 homedir = os.path.expanduser("~")
@@ -98,7 +99,7 @@ def get_traj_from_openrave_container(
     
     Returns:
         traj: The trajectory computed by OpenRAVE of shape (200, 7). Returns
-            None if OpenRAVE failed to give us a result.
+            None if OpenRAVE failed to give us a result.    # TODO
     """
     print("Printing inputs to computing trajectory")
     print(f"object_positions: {object_positions}")
@@ -117,15 +118,22 @@ def get_traj_from_openrave_container(
     # Check for OpenRAVE's output file.
     start = time.time()
     while not os.path.exists(load_path):
-        time.sleep(0.5)
+        time.sleep(0.02)
         time_elapsed = time.time() - start
 
         # If longer than 5 seconds, return failure code.
         if time_elapsed > 5:
             return None
     if os.path.isfile(load_path):
-        traj = np.load(load_path)
+        time.sleep(0.3)     # TODO: wait for networking
+        loaded_data = np.load(load_path)
+        traj_i = loaded_data['arr_0']
+        traj_s = loaded_data['arr_1']
         print("loaded")
+        # for k in range(7):
+        #     plt.plot(range(400), traj_i[:,k])
+        #     plt.plot(range(400), traj_s[:,k])
+        #     plt.show()
         try:
             os.remove(load_path)
             print("deleted")
@@ -137,4 +145,4 @@ def get_traj_from_openrave_container(
         raise ValueError("%s isn't a file!" % load_path)
     print("Trajectory obtained from OpenRave!")
     # input("press enter")
-    return traj
+    return traj_s

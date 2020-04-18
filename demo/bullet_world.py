@@ -80,7 +80,7 @@ class BulletWorld:
             deterministicOverlappingPairs=self.opt.det_contact
         )
         self.bc.setTimeStep(self.opt.ts)
-        self.bc.setGravity(0, 0, -10)
+        self.bc.setGravity(0, 0, -utils.GRAVITY)
 
     def load_scene(self, scene: List):
         """Loads a bullet world scene.

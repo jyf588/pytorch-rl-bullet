@@ -5,6 +5,9 @@ BULLET_SHOULDER_POS = [
     0.28200000524520874,
     0.21199999749660492,
 ]
+# note:
+# in inmoov_shadow_hand_v2,  self.base_init_pos is [-0.30, 0.348, 0.272]
+# up to a translation of "0 -0.066 -0.06"(r_shoulder_out_joint) in the urdf file
 
 UNITY_SHOULDER_POS = [-5.000653, 1.402408, -2.594684]
 

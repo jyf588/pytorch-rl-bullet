@@ -1772,7 +1772,12 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --l
 
 # train_0410_2.sh
 # try get rid of height during training/planning
-
+Floor v6 crank:
+0404, 0410
+without height
+0411
+without height and from stack grasping (TB tested)
+0412
 
 # whole system issues:
 # TODO: large obj collide during transporting --> make a large BB, move up & move down
@@ -1784,13 +1789,15 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --l
 # TODO: new issue, hand penetrate into obj, will slip during transporting.
 
 # TODO: planning hacks:
-# move uses slightly larger forearm, while reach uses slightly smaller one --> should solve fore-arm reach in collision
+Now, if reaching planning fails, probably because:
+	- pre-grasp arm q in collision with other object(s) -> second candidate helpful or not?
+Now, if transporting planning fails
+	- BB already in collision with other objects (mostly before transport) -> jitter helpful or not?
 # hand BB size different -> this is fine.
 # move make table lower than reach -> should be solvable by move up first, but not really necessary
 # ---> cannot make table top higher, unless when PB calculates Qreach, filter out using elevated table. & move up first
 # move table very large -> should also be fine if move up first.
-# reaching/moving: <box size="0.15 0.15 0.18"/>
-# hack: making obstacles smaller (0.2->0.16)
+# TODO hack: making obstacles smaller (0.2->0.16)
 
 MISC TODO s:
 # TODO: does obj/robot order matter
@@ -1800,6 +1807,7 @@ MISC TODO s:
 # train with thinner btm objects?
 # store screen log
 
+TODO: wrist gain of placing is too small maybe
 
 
 # run the crack
