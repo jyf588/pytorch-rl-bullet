@@ -76,6 +76,8 @@ class DemoEnvironment:
 
         print("**********DEMO ENVIRONMENT**********")
 
+        self.stage2ts_bounds, self.n_total_steps = self.compute_stages()
+
         # Whether we've finished planning.
         self.planning_complete = False
         self.initial_obs = None
@@ -101,13 +103,36 @@ class DemoEnvironment:
         )
 
         self.timestep = 0
-        self.n_total_steps = (
-            self.opt.n_plan_steps  # reach
-            + self.opt.n_grasp_steps  # grasp
-            + self.opt.n_plan_steps  # transport
-            + self.opt.n_place_steps  # place
-            + self.opt.n_release_steps  # release
-        )
+
+    def compute_stages(self):
+        if self.opt.disable_reaching:
+            reach_start = -1
+            reach_end = -1
+            grasp_start = 0
+        else:
+            reach_start = 0
+            reach_end = reach_start + self.opt.n_plan_steps
+            grasp_start = reach_end
+        grasp_end = grasp_start + self.opt.n_grasp_steps
+        transport_start = grasp_end
+        transport_end = transport_start + self.opt.n_plan_steps
+        place_start = transport_end
+        place_end = place_start + self.opt.n_place_steps
+        release_start = place_end
+        release_end = release_start + self.opt.n_release_steps
+
+        stage2ts_bounds = {
+            "reach": (reach_start, reach_end),
+            "grasp": (grasp_start, grasp_end),
+            "transport": (transport_start, transport_end),
+            "place": (place_start, place_end),
+            "release": (release_start, release_end),
+        }
+
+        n_total_steps = 0
+        for start_ts, end_ts in stage2ts_bounds.values():
+            n_total_steps += end_ts - start_ts
+        return stage2ts_bounds, n_total_steps
 
     def plan(self):
         # First, get the current observation which we will store as the initial
@@ -137,6 +162,13 @@ class DemoEnvironment:
             scene=self.scene,
             visualize=self.visualize_bullet,
         )
+
+        # If reaching is disabled, set the robot arm directly to the dstination
+        # of reaching.
+        if self.opt.disable_reaching:
+            self.world.robot_env.robot.reset_with_certain_arm_q(
+                self.q_reach_dst
+            )
 
         # Flag planning as complete.
         self.planning_complete = True
@@ -284,26 +316,8 @@ class DemoEnvironment:
         if not self.planning_complete:
             return "plan", 0
 
-        reach_start = 0
-        reach_end = reach_start + self.opt.n_plan_steps
-        grasp_start = reach_end
-        grasp_end = grasp_start + self.opt.n_grasp_steps
-        transport_start = grasp_end
-        transport_end = transport_start + self.opt.n_plan_steps
-        place_start = transport_end
-        place_end = place_start + self.opt.n_place_steps
-        release_start = place_end
-        release_end = release_start + self.opt.n_release_steps
-
-        stage2ts_bounds = {
-            "reach": (reach_start, reach_end),
-            "grasp": (grasp_start, grasp_end),
-            "transport": (transport_start, transport_end),
-            "place": (place_start, place_end),
-            "release": (release_start, release_end),
-        }
         current_stage = None
-        for stage, ts_bounds in stage2ts_bounds.items():
+        for stage, ts_bounds in self.stage2ts_bounds.items():
             start, end = ts_bounds
             if start <= self.timestep < end:
                 stage_ts = self.timestep - start
@@ -610,6 +624,21 @@ class DemoEnvironment:
             # Update the position and up vector with predicted values.
             obs[idx]["position"] = y_dict["position"]
             obs[idx]["up_vector"] = y_dict["up_vector"]
+
+            # Important: override the GT orientation with the predicted
+            # orientation. The predicted orientation will be the GT rotation
+            # matrix, except with the last column overridden with the predicted
+            # up vector.
+            # First, we extract the GT orientation. The observation currently
+            # holds the GT orientation.
+            gt_orientation = obs[idx]["orientation"]
+
+            # Convert the predicted up vector into an orientation, using the
+            # GT z rot.
+            pred_orientation = util.up_to_orientation(
+                up=y_dict["up_vector"], gt_orientation=gt_orientation
+            )
+            obs[idx]["orientation"] = pred_orientation
         return obs
 
     def get_images(self, oid: int, renderer: str):

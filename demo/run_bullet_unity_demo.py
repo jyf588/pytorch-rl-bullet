@@ -24,7 +24,7 @@ async def send_to_client(websocket, path):
         websocket: The websocket protocol instance.
         path: The URI path.
     """
-    scenes = generate_scenes()[31:]
+    scenes = generate_scenes()
 
     for scene_idx, scene in enumerate(scenes):
         scene = scenes[scene_idx]
@@ -65,18 +65,8 @@ async def send_to_client(websocket, path):
                 if obs_mode == "vision" and stage in ["plan", "place"]:
                     render_frequency = 2
                     # unity_options = [(False, True)]
-                    unity_options = [(False, True), (True, False)]
+                    unity_options = [(False, True, True), (True, False, False)]
 
-                    # if stage == "place" and stage_ts > 0:
-                    #     pass
-                    # else:
-                    #     last_bullet_camera_targets = {}
-                    #     for tid, odict in enumerate(state["objects"].values()):
-                    #         last_bullet_camera_targets[tid] = {
-                    #             "position": odict["position"],
-                    #             "should_save": False,
-                    #             "should_send": True,
-                    #         }
                     # Turn on moving the camera each frame again.
                     last_bullet_camera_targets = {}
                     for tid, odict in enumerate(state["objects"].values()):
@@ -87,7 +77,10 @@ async def send_to_client(websocket, path):
                         }
                 else:
                     render_frequency = 25
-                    unity_options = [(False, False)]
+                    if obs_mode == "vision":
+                        unity_options = [(True, False, True)]
+                    elif obs_mode == "gt":
+                        unity_options = [(False, False, True)]
 
                 """
                 Possible cases:
@@ -102,7 +95,7 @@ async def send_to_client(websocket, path):
 
                 # Rendering block.
                 if i % render_frequency == 0:
-                    for render_obs, get_and_predict_images in unity_options:
+                    for render_obs, send_image, should_step in unity_options:
                         # If we are rendering observations, add them to the
                         # render state.
                         render_state = copy.deepcopy(state)
@@ -111,7 +104,7 @@ async def send_to_client(websocket, path):
                                 state=render_state, obs=env.obs
                             )
 
-                        if get_and_predict_images:
+                        if send_image:
                             bullet_camera_targets = last_bullet_camera_targets
                         else:
                             bullet_camera_targets = {}
@@ -133,10 +126,9 @@ async def send_to_client(websocket, path):
                         )
 
                         # Hand the data to the env for processing.
-                        if get_and_predict_images:
+                        if send_image:
                             env.set_unity_data(data)
-                            is_done = env.step()
-                        elif obs_mode == "gt":
+                        if should_step:
                             is_done = env.step()
                 else:
                     is_done = env.step()
