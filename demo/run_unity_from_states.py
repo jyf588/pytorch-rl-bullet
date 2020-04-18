@@ -22,7 +22,7 @@ async def send_to_client(websocket, path):
     global args
 
     loader = DatasetLoader(
-        states_dir=args.states_dir, start_id=0, end_id=20000
+        states_dir=args.states_dir, start_id=args.start_id, end_id=args.end_id
     )
     saver = UnitySaver(
         out_dir=args.out_dir,
@@ -88,6 +88,18 @@ if __name__ == "__main__":
         required=True,
         type=str,
         help="The directory of states to read from and send to client.",
+    )
+    parser.add_argument(
+        "--start_id",
+        required=True,
+        type=int,
+        help="The state ID to start generation at.",
+    )
+    parser.add_argument(
+        "--end_id",
+        required=True,
+        type=int,
+        help="The state ID to end generation at.",
     )
     parser.add_argument(
         "--out_dir",
