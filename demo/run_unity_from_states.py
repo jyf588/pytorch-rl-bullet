@@ -93,7 +93,7 @@ def create_bullet_camera_targets(camera_control: str, bullet_state: Dict):
     elif camera_control == "center":
         bullet_camera_targets = {
             "0": {
-                "position": utils.compute_object_distribution_center(),
+                "position": utils.compute_object_distribution_mean(),
                 "should_save": True,
                 "should_send": False,
             }

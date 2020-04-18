@@ -75,7 +75,7 @@ TS = 1.0 / 240
 GRAVITY = 10  # scalar
 
 
-def compute_object_distribution_center():
+def compute_object_distribution_mean():
     x = (TX_MIN + TX_MAX) / 2
     y = (TY_MIN + TY_MAX) / 2
     z = (H_MIN + H_MAX) / 2
