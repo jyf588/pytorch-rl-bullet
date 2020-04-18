@@ -7,6 +7,7 @@ import time
 import bullet2unity.interface as interface
 from demo.dataset_loader import DatasetLoader
 from demo.unity_saver import UnitySaver
+import my_pybullet_envs.utils as utils
 
 global args
 
@@ -38,7 +39,9 @@ async def send_to_client(websocket, path):
         if bullet_state is None:
             break
 
-        bullet_camera_targets = create_bullet_camera_targets(bullet_state)
+        bullet_camera_targets = create_bullet_camera_targets(
+            camera_control=args.camera_control, bullet_state=bullet_state
+        )
 
         # Encode, send, receive, and decode.
         message = interface.encode(
@@ -59,14 +62,41 @@ async def send_to_client(websocket, path):
     sys.exit(0)
 
 
-def create_bullet_camera_targets(bullet_state):
+def create_bullet_camera_targets(camera_control: str, bullet_state: Dict):
+    """ Creates bullet camera targets.
+
+    Args:
+        camera_control: The method of camera control.
+        bullet_state: The bullet state.
+    
+    Returns:
+        bullet_camera_targets: A dictionary of camera targets in the bullet
+            world coordinate frame, with the following format:
+            {
+                <target_id: str>: {
+                    "position": <List[float]>,
+                    "should_save": <bool>,
+                    "should_send": <bool>,
+                }
+            }
+    """
     # Tell unity to look at every single object.
-    bullet_camera_targets = {}
-    for oid, odict in bullet_state["objects"].items():
-        bullet_camera_targets[oid] = {
-            "position": odict["position"],
-            "should_save": True,
-            "should_send": False,
+    if camera_control == "all":
+        bullet_camera_targets = {}
+        for oid, odict in bullet_state["objects"].items():
+            bullet_camera_targets[oid] = {
+                "position": odict["position"],
+                "should_save": True,
+                "should_send": False,
+            }
+    # Tell unity to look only once at the center of the object distribution.
+    elif camera_control == "center":
+        bullet_camera_targets = {
+            "0": {
+                "position": utils.compute_object_distribution_center(),
+                "should_save": True,
+                "should_send": False,
+            }
         }
     return bullet_camera_targets
 
@@ -100,6 +130,13 @@ if __name__ == "__main__":
         required=True,
         type=int,
         help="The state ID to end generation at.",
+    )
+    parser.add_argument(
+        "--camera_control",
+        required=True,
+        type=str,
+        choices=["all", "center"],
+        help="The method of camera control.",
     )
     parser.add_argument(
         "--out_dir",
