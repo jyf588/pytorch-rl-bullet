@@ -184,8 +184,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--out_dir",
+        required=True,
         type=str,
-        default="/Users/michelleguo/data/temp_unity_data",
         help="The output directory to save client data to.",
     )
     args = parser.parse_args()
