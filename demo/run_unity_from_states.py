@@ -1,8 +1,10 @@
 """A script that sends states to Unity and receives Unity images in return."""
 import argparse
+import copy
 import os
 import sys
 import time
+from typing import *
 
 import bullet2unity.interface as interface
 from demo.dataset_loader import DatasetLoader
@@ -29,18 +31,57 @@ async def send_to_client(websocket, path):
         out_dir=args.out_dir,
         save_keys=["camera_position", "camera_orientation"],
     )
+    # cam_target_position = [0.075, 0.2, 0.155]
+    cam_target_position = [-0.06, 0.3, 0.0]
 
     start = time.time()
     n_iter = 0
     while 1:
         msg_id, bullet_state = loader.get_next_state()
 
+        # Create a state with extreme object locations and sides.
+        # extreme_xy = [
+        #     (utils.TX_MIN, utils.TY_MIN),
+        #     (utils.TX_MIN + 0.15, utils.TY_MAX - 0.15),
+        #     (utils.TX_MAX, utils.TY_MIN),
+        #     (utils.TX_MAX, utils.TY_MAX),
+        # ]
+        # base_odict = {
+        #     "radius": utils.HALF_W_MAX,
+        #     "height": utils.H_MAX,
+        #     "orientation": [0.0, 0.0, 0.0, 1.0],
+        # }
+        # colors = ["red", "green", "blue", "yellow"]
+        # shapes = ["cylinder", "box", "cylinder", "box"]
+        # bullet_state = {"objects": {}}
+        # for odict_idx, (x, y) in enumerate(extreme_xy):
+        #     extreme_odict = copy.deepcopy(base_odict)
+        #     extreme_odict["shape"] = shapes[odict_idx]
+        #     extreme_odict["color"] = colors[odict_idx]
+        #     extreme_odict["position"] = [x, y, utils.H_MAX / 2]
+        #     bullet_state["objects"][odict_idx] = extreme_odict
+
         # No more states, so we are done.
         if bullet_state is None:
             break
 
+        # x = input("Enter new x: ")
+        # y = input("Enter new y: ")
+        # z = input("Enter new z: ")
+        # if len(x) == 0:
+        #     x = cam_target_position[0]
+        # if len(y) == 0:
+        #     y = cam_target_position[1]
+        # if len(z) == 0:
+        #     z = cam_target_position[2]
+        # cam_target_position = [x, y, z]
+        # cam_target_position = [float(val) for val in cam_target_position]
+        # print(f"Entered cam_target_position: {cam_target_position}")
+
         bullet_camera_targets = create_bullet_camera_targets(
-            camera_control=args.camera_control, bullet_state=bullet_state
+            camera_control=args.camera_control,
+            position=cam_target_position,
+            bullet_state=bullet_state,
         )
 
         # Encode, send, receive, and decode.
@@ -62,7 +103,9 @@ async def send_to_client(websocket, path):
     sys.exit(0)
 
 
-def create_bullet_camera_targets(camera_control: str, bullet_state: Dict):
+def create_bullet_camera_targets(
+    camera_control: str, position: List[float], bullet_state: Dict
+):
     """ Creates bullet camera targets.
 
     Args:
@@ -73,7 +116,7 @@ def create_bullet_camera_targets(camera_control: str, bullet_state: Dict):
         bullet_camera_targets: A dictionary of camera targets in the bullet
             world coordinate frame, with the following format:
             {
-                <target_id: str>: {
+                <target_id: int>: {
                     "position": <List[float]>,
                     "should_save": <bool>,
                     "should_send": <bool>,
@@ -91,9 +134,10 @@ def create_bullet_camera_targets(camera_control: str, bullet_state: Dict):
             }
     # Tell unity to look only once at the center of the object distribution.
     elif camera_control == "center":
+        # position = utils.compute_object_distribution_mean()
         bullet_camera_targets = {
-            "0": {
-                "position": utils.compute_object_distribution_mean(),
+            0: {
+                "position": position,
                 "should_save": True,
                 "should_send": False,
             }
