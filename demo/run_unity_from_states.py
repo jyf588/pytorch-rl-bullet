@@ -2,6 +2,7 @@
 import argparse
 import copy
 import os
+import pprint
 import sys
 import time
 from typing import *
@@ -142,6 +143,19 @@ def create_bullet_camera_targets(
                 "should_send": False,
             }
         }
+    elif camera_control == "stack":
+        dst_odict = copy.deepcopy(bullet_state["objects"][0])
+        position = dst_odict["position"]
+        position[2] += dst_odict["height"] / 2
+        bullet_camera_targets = {
+            0: {
+                "position": position,
+                "should_save": True,
+                "should_send": False,
+            }
+        }
+    else:
+        raise ValueError(f"Invalid camera control method: {camera_control}")
     return bullet_camera_targets
 
 
@@ -179,7 +193,7 @@ if __name__ == "__main__":
         "--camera_control",
         required=True,
         type=str,
-        choices=["all", "center"],
+        choices=["all", "center", "stack"],
         help="The method of camera control.",
     )
     parser.add_argument(
