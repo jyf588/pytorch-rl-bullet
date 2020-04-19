@@ -11,16 +11,16 @@ from ns_vqa_dart.scene_parse.attr_net.options import BaseOptions
 
 
 class VisionModule:
-    def __init__(self):
-        options = self.get_options()
+    def __init__(self, load_checkpoint_path: str):
+        options = self.get_options(load_checkpoint_path=load_checkpoint_path)
         self.model = get_model(options)
         self.model.eval_mode()
 
-    def get_options(self):
+    def get_options(self, load_checkpoint_path: str):
         """Creates the options namespace to define the vision model."""
         options = Namespace(
             inference_only=True,
-            load_checkpoint_path="/home/michelle/mguo/outputs/dash_v005_20K/checkpoint_best.pt",
+            load_checkpoint_path=load_checkpoint_path,
             gpu_ids="0",
             concat_img=True,
             with_depth=False,

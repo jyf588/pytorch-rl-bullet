@@ -24,4 +24,6 @@ OPTIONS = argparse.Namespace(
     place_dir="./trained_models_0404_0_n_place_0404_0/ppo/",
     place_env_name="InmoovHandPlaceBulletEnv-v9",
     vision_delay=2,
+    vision_checkpoint_path="/home/michelle/mguo/outputs/dash_v005_20K/checkpoint_best.pt",
+    coordinate_frame="unity_camera",
 )

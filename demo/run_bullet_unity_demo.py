@@ -26,7 +26,7 @@ async def send_to_client(websocket, path):
     """
     scenes = generate_scenes()
 
-    for scene_idx, scene in enumerate(scenes):
+    for scene_idx in range(0, len(scenes)):
         scene = scenes[scene_idx]
 
         # Hard code top object to be green, and bottom object to be blue.

@@ -87,7 +87,9 @@ class DemoEnvironment:
         # Initialize the vision module if we are using vision for our
         # observations.
         if self.observation_mode == "vision":
-            self.vision_module = VisionModule()
+            self.vision_module = VisionModule(
+                load_checkpoint_path=self.opt.vision_checkpoint_path
+            )
 
             # Initialize a class for tracking and computing metrics for the
             # vision module's predictions.
@@ -351,6 +353,15 @@ class DemoEnvironment:
         robot = InmoovShadowNew(
             init_noise=False, timestep=utils.TS, np_random=np.random,
         )
+        debug = utils.get_n_optimal_init_arm_qs(
+            robot,
+            utils.PALM_POS_OF_INIT,
+            p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
+            src_xyz,
+            table_id,
+            wrist_gain=3.0,
+        )
+        print(f"get_n_optimal_init_arm_qs: {debug}")
         q_reach_dst = utils.get_n_optimal_init_arm_qs(
             robot,
             utils.PALM_POS_OF_INIT,
@@ -611,7 +622,7 @@ class DemoEnvironment:
             # information.
             y_dict = dash_object.y_vec_to_dict(
                 y=list(pred[0]),
-                coordinate_frame="unity_camera",
+                coordinate_frame=self.opt.coordinate_frame,
                 cam_position=self.unity_data[idx]["camera_position"],
                 cam_orientation=self.unity_data[idx]["camera_orientation"],
             )
