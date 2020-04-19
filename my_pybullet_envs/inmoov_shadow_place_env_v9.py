@@ -482,7 +482,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
 
         obs = self.getExtendedObservation()
 
-        if self.save_states:
+        if self.save_states and not self.place_floor:
             self.state_saver.save_state()
 
         return obs, reward, False, {}
