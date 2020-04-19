@@ -26,6 +26,8 @@ import os
 import pprint
 import pybullet as p
 from typing import *
+import shutil
+import sys
 
 import my_pybullet_envs
 from my_pybullet_envs import utils
@@ -40,8 +42,17 @@ class StateSaver:
         """
         self.out_dir = out_dir
 
-        # Create the directory if it doesn't already exist.
-        os.makedirs(out_dir, exist_ok=True)
+        # Create the directory, deleting the existing directory contents if
+        # requested.
+        if os.path.exists(out_dir):
+            print(f"Existing out_dir: {out_dir}.")
+            user_input = input(f"Delete folder? [Y/n] ")
+            if user_input == "Y":
+                shutil.rmtree(out_dir)
+            else:
+                print(f"Recieved user input: {user_input}. Exiting.")
+                sys.exit(0)
+        os.makedirs(out_dir)
 
         self.poses = []
         self.robot_id = None
