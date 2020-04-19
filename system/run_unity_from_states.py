@@ -8,8 +8,8 @@ import time
 from typing import *
 
 import bullet2unity.interface as interface
-from demo.dataset_loader import DatasetLoader
-from demo.unity_saver import UnitySaver
+from system.dataset_loader import DatasetLoader
+from system.unity_saver import UnitySaver
 import my_pybullet_envs.utils as utils
 
 global args
@@ -93,6 +93,7 @@ async def send_to_client(websocket, path):
         )
         await websocket.send(message)
         reply = await websocket.recv()
+        x = input("enter")
         data = interface.decode(
             msg_id, reply, bullet_camera_targets=bullet_camera_targets
         )
@@ -145,6 +146,7 @@ def create_bullet_camera_targets(
         }
     elif camera_control == "stack":
         dst_odict = copy.deepcopy(bullet_state["objects"][0])
+        pprint.pprint(dst_odict)
         position = dst_odict["position"]
         position[2] += dst_odict["height"] / 2
         bullet_camera_targets = {
