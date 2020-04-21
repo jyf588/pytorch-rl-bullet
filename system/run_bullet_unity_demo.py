@@ -196,7 +196,9 @@ def generate_scenes():
     scenes = []
     for _ in range(100):
         top_scene = generator_top.generate_tabletop_objects()
-        all_scene = generator_all.generate_tabletop_objects()
+        all_scene = generator_all.generate_tabletop_objects(
+            existing_odicts=top_scene
+        )
         scene = top_scene + all_scene
         scenes.append(scene)
     return scenes
