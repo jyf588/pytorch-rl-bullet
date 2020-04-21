@@ -82,8 +82,8 @@ async def send_to_client(websocket, path):
 
         bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
             camera_control=args.camera_control,
-            bullet_state=bullet_state,
-            use_oids=True,
+            bullet_odicts=list(bullet_state["objects"].values()),
+            use_oids=False,
             should_save=True,
             should_send=False,
         )

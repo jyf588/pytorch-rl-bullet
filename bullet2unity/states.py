@@ -61,6 +61,11 @@ def create_bullet_camera_targets(
             # Assumes that the first object in the object states corresponds to
             # the destination object (i.e., the "bottom" object in the stack).
             dst_odict = copy.deepcopy(bullet_odicts[0])
+            # print("bullet_odicts:")
+            # pprint.pprint(bullet_odicts)
+            # print("dst_odict:")
+            # pprint.pprint(dst_odict)
+            # input("enter")
             position = dst_odict["position"]
             position[2] += dst_odict["height"] / 2
         bullet_camera_targets = {
