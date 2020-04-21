@@ -38,16 +38,16 @@ async def send_to_client(websocket, path):
         # Hard code top object to be green, and bottom object to be blue.
         scene[0]["shape"] = "cylinder"
         scene[0]["color"] = "blue"
-        scene[0]["radius"] = utils.HALF_W_MIN_BTM
+        scene[0]["radius"] = utils.HALF_W_MIN_BTM  # Bottom object fatter
         scene[1]["shape"] = "cylinder"
         scene[1]["color"] = "green"
         dst_shape = scene[0]["shape"]
         src_shape = scene[1]["shape"]
         command = f"Put the green {src_shape} on top of the blue {dst_shape}"
 
-        # for obs_mode in ["gt", "vision"]:
-        # for obs_mode in ["gt"]:
-        for obs_mode in ["vision"]:
+        for obs_mode in ["gt", "vision"]:
+            # for obs_mode in ["gt"]:
+            # for obs_mode in ["vision"]:
             print(f"scene_idx: {scene_idx}")
             print(f"obs mode: {obs_mode}")
 
@@ -81,7 +81,7 @@ async def send_to_client(websocket, path):
                     # Turn on moving the camera each frame again.
                     last_bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
                         camera_control=STAGE2CAMERA_CONTROL[stage],
-                        bullet_state=state,
+                        bullet_odicts=env.initial_obs,
                         use_oids=False,
                         should_save=False,
                         should_send=True,
@@ -159,13 +159,31 @@ async def send_to_client(websocket, path):
 
 
 def generate_scenes():
-    generator = RandomObjectsGenerator(
+    # Top object, with different min radius.
+    generator_top = RandomObjectsGenerator(
         seed=OPTIONS.seed,
-        n_objs_bounds=(2, 2),
+        n_objs_bounds=(1, 1),
         obj_dist_thresh=0.2,
         max_retries=50,
         shapes=["box", "cylinder"],
-        colors=["red", "yellow"],
+        colors=["blue", "green"],
+        radius_bounds=(utils.HALF_W_MIN_BTM, utils.HALF_W_MAX),
+        height_bounds=(utils.H_MIN, utils.H_MAX),
+        x_bounds=(utils.TX_MIN, utils.TX_MAX),
+        y_bounds=(utils.TY_MIN, utils.TY_MAX),
+        z_bounds=(0.0, 0.0),
+        mass_bounds=(utils.MASS_MIN, utils.MASS_MAX),
+        mu_bounds=(OPTIONS.obj_mu, OPTIONS.obj_mu),
+        position_mode="com",
+    )
+    # Remaining objects.
+    generator_all = RandomObjectsGenerator(
+        seed=OPTIONS.seed,
+        n_objs_bounds=(1, 1),
+        obj_dist_thresh=0.2,
+        max_retries=50,
+        shapes=["box", "cylinder"],
+        colors=["blue", "green"],
         radius_bounds=(utils.HALF_W_MIN, utils.HALF_W_MAX),
         height_bounds=(utils.H_MIN, utils.H_MAX),
         x_bounds=(utils.TX_MIN, utils.TX_MAX),
@@ -175,7 +193,12 @@ def generate_scenes():
         mu_bounds=(OPTIONS.obj_mu, OPTIONS.obj_mu),
         position_mode="com",
     )
-    scenes = [generator.generate_tabletop_objects() for _ in range(100)]
+    scenes = []
+    for _ in range(100):
+        top_scene = generator_top.generate_tabletop_objects()
+        all_scene = generator_all.generate_tabletop_objects()
+        scene = top_scene + all_scene
+        scenes.append(scene)
     return scenes
 
 

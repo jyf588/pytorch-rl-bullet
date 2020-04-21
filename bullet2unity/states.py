@@ -17,7 +17,7 @@ import ns_vqa_dart.bullet.util as util
 
 def create_bullet_camera_targets(
     camera_control: str,
-    bullet_state: Dict,
+    bullet_odicts: Dict,
     use_oids: bool,
     should_save: bool,
     should_send: bool,
@@ -26,7 +26,9 @@ def create_bullet_camera_targets(
 
     Args:
         camera_control: The method of camera control.
-        bullet_state: The bullet state.
+        bullet_odicts: The bullet object dictionaries. If the camera control
+            method is `stack`, we assume that the destination object dictionary
+            comes first.
     
     Returns:
         bullet_camera_targets: A dictionary of camera targets in the bullet
@@ -42,8 +44,9 @@ def create_bullet_camera_targets(
     # Tell unity to look at every single object.
     if camera_control == "all":
         bullet_camera_targets = {}
-        for idx, (oid, odict) in enumerate(bullet_state["objects"].items()):
-            cam_tid = oid if use_oids else idx
+        for idx, odict in enumerate(bullet_odicts):
+            # cam_tid = oid if use_oids else idx
+            cam_tid = idx
             bullet_camera_targets[cam_tid] = {
                 "position": odict["position"],
                 "should_save": should_save,
@@ -57,9 +60,7 @@ def create_bullet_camera_targets(
         elif camera_control == "stack":
             # Assumes that the first object in the object states corresponds to
             # the destination object (i.e., the "bottom" object in the stack).
-            dst_odict = copy.deepcopy(
-                list(bullet_state["objects"].values())[0]
-            )
+            dst_odict = copy.deepcopy(bullet_odicts[0])
             position = dst_odict["position"]
             position[2] += dst_odict["height"] / 2
         bullet_camera_targets = {

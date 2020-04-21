@@ -30,21 +30,36 @@ from ns_vqa_dart.bullet.metrics import Metrics
 def main(args: argparse.Namespace):
     # Initialize the metrics class.
     plot_path = os.path.join(args.input_dir, "plot.png")
-    metrics = Metrics(plot_path=plot_path)
+    planning_metrics = Metrics(plot_path=plot_path)
+    stacking_metrics = Metrics(plot_path=plot_path)
 
-    for scene_id in range(0, 1):
+    for scene_id in range(0, 100):
         scene_dir = os.path.join(args.input_dir, f"{scene_id:02}")
         if not os.path.isdir(scene_dir):
             continue
-        path = os.path.join(scene_dir, "0000.p")
-        data = util.load_pickle(path=path)
-        gt_odicts = data["gt"]
-        pred_odicts = data["pred"]
 
-        for gt_odict, pred_odict in zip(gt_odicts, pred_odicts):
-            metrics.add_example(gt_dict=gt_odict, pred_dict=pred_odict)
+        ts2path = {}
+        for fname in sorted(os.listdir(scene_dir)):
+            ts = int(fname.split(".")[0])
+            ts2path[ts] = os.path.join(scene_dir, fname)
 
-    metrics.print()
+        for ts, path in ts2path.items():
+            data = util.load_pickle(path=path)
+            gt_odicts = data["gt"]
+            pred_odicts = data["pred"]
+
+            for gt_odict, pred_odict in zip(gt_odicts, pred_odicts):
+                if ts == 0:
+                    planning_metrics.add_example(
+                        gt_dict=gt_odict, pred_dict=pred_odict
+                    )
+                else:
+                    stacking_metrics.add_example(
+                        gt_dict=gt_odict, pred_dict=pred_odict
+                    )
+
+    planning_metrics.print()
+    stacking_metrics.print()
 
 
 if __name__ == "__main__":
