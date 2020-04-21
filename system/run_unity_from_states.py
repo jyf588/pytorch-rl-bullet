@@ -96,7 +96,7 @@ async def send_to_client(websocket, path):
         )
         await websocket.send(message)
         reply = await websocket.recv()
-        x = input("enter")
+        # input("enter")
         data = interface.decode(
             msg_id, reply, bullet_camera_targets=bullet_camera_targets
         )
