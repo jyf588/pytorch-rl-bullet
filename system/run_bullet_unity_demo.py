@@ -7,14 +7,20 @@ from typing import *
 
 import bullet2unity.interface as interface
 import bullet2unity.states
-import demo.base_scenes
-from demo.env import DemoEnvironment
-from demo.options import OPTIONS
-from demo.scene import SceneGenerator
+import system.base_scenes
+from system.env import DemoEnvironment
+from system.options import OPTIONS
+from system.scene import SceneGenerator
 import my_pybullet_envs.utils as utils
 from ns_vqa_dart.bullet.random_objects import RandomObjectsGenerator
 
 global args
+
+
+STAGE2CAMERA_CONTROL = {
+    "plan": "center",
+    "place": "stack",
+}
 
 
 async def send_to_client(websocket, path):
@@ -30,20 +36,21 @@ async def send_to_client(websocket, path):
         scene = scenes[scene_idx]
 
         # Hard code top object to be green, and bottom object to be blue.
-        scene[0]["color"] = "green"
-        scene[1]["color"] = "blue"
-        src_shape = scene[0]["shape"]
-        dst_shape = scene[1]["shape"]
+        scene[0]["color"] = "blue"
+        scene[1]["color"] = "green"
+        dst_shape = scene[0]["shape"]
+        src_shape = scene[1]["shape"]
         command = f"Put the green {src_shape} on top of the blue {dst_shape}"
 
-        for obs_mode in ["gt", "vision"]:
-            # for obs_mode in ["gt"]:
-            # for obs_mode in ["vision"]:
+        # for obs_mode in ["gt", "vision"]:
+        # for obs_mode in ["gt"]:
+        for obs_mode in ["vision"]:
             print(f"scene_idx: {scene_idx}")
             print(f"obs mode: {obs_mode}")
 
             env = DemoEnvironment(
                 opt=OPTIONS,
+                trial=scene_idx,
                 scene=copy.deepcopy(scene),
                 command=command,
                 observation_mode=obs_mode,
@@ -68,13 +75,13 @@ async def send_to_client(websocket, path):
                     unity_options = [(False, True, True), (True, False, False)]
 
                     # Turn on moving the camera each frame again.
-                    last_bullet_camera_targets = {}
-                    for tid, odict in enumerate(state["objects"].values()):
-                        last_bullet_camera_targets[tid] = {
-                            "position": odict["position"],
-                            "should_save": False,
-                            "should_send": True,
-                        }
+                    last_bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
+                        camera_control=STAGE2CAMERA_CONTROL[stage],
+                        bullet_state=state,
+                        use_oids=False,
+                        should_save=False,
+                        should_send=True,
+                    )
                 else:
                     render_frequency = 25
                     if obs_mode == "vision":
@@ -139,6 +146,10 @@ async def send_to_client(websocket, path):
 
                 if stage != "plan":
                     i += 1
+
+                # Temporarily finish after planning.
+                if stage == "plan":
+                    break
             del env
     sys.exit(0)
 

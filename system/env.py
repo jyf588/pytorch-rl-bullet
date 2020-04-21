@@ -10,10 +10,10 @@ import time
 import torch
 from typing import *
 
-from demo import openrave
-from demo.bullet_world import BulletWorld
-import demo.policy
-from demo.vision_module import VisionModule
+from system import openrave
+from system.bullet_world import BulletWorld
+import system.policy
+from system.vision_module import VisionModule
 from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import (
     ImaginaryArmObjSession,
 )
@@ -23,7 +23,7 @@ from my_pybullet_envs.inmoov_shadow_place_env_v9 import (
 )
 import my_pybullet_envs.utils as utils
 from NLP_module import NLPmod
-from ns_vqa_dart.bullet import dash_object, util
+from ns_vqa_dart.bullet import dash_object, gen_dataset, util
 from ns_vqa_dart.bullet.metrics import Metrics
 
 
@@ -31,6 +31,7 @@ class DemoEnvironment:
     def __init__(
         self,
         opt: argparse.Namespace,
+        trial: int,
         scene: List[Dict],
         command: str,
         observation_mode: str,
@@ -42,6 +43,7 @@ class DemoEnvironment:
         """
         Args:
             opt: Various demo configurations/options.
+            trial: The trial number.
             scene: A list of object dictionaries defining the starting
                 configuration of tabletop objects in the scene, in the format:
                 [
@@ -65,8 +67,8 @@ class DemoEnvironment:
             renderer: The renderer to use to generate images, if 
                 `observation_mode` is `vision`.
         """
-
         self.opt = opt
+        self.trial = trial
         self.scene = scene
         self.command = command
         self.observation_mode = observation_mode
@@ -87,13 +89,15 @@ class DemoEnvironment:
         # Initialize the vision module if we are using vision for our
         # observations.
         if self.observation_mode == "vision":
-            self.vision_module = VisionModule(
-                load_checkpoint_path=self.opt.vision_checkpoint_path
+            self.planning_vision_module = VisionModule(
+                load_checkpoint_path=self.opt.planning_checkpoint_path
             )
-
+            self.stacking_vision_module = VisionModule(
+                load_checkpoint_path=self.opt.stacking_checkpoint_path
+            )
             # Initialize a class for tracking and computing metrics for the
             # vision module's predictions.
-            self.metrics = Metrics()
+            # self.metrics = Metrics()
         if visualize_bullet:
             p.connect(p.GUI)
         else:
@@ -304,8 +308,8 @@ class DemoEnvironment:
         done = self.is_done()
         if done:
             p.disconnect()
-            if self.observation_mode == "vision":
-                self.metrics.print()
+            # if self.observation_mode == "vision":
+            #     self.metrics.print()
         return done
 
     def get_current_stage(self) -> Tuple[str, int]:
@@ -436,12 +440,17 @@ class DemoEnvironment:
     def grasp(self, stage_ts: int):
         # Load the grasping actor critic model.
         if stage_ts == 0:
-            self.policy, _, self.hidden_states, self.masks = demo.policy.load(
+            (
+                self.policy,
+                _,
+                self.hidden_states,
+                self.masks,
+            ) = system.policy.load(
                 policy_dir=self.opt.grasp_dir,
                 env_name=self.opt.grasp_env_name,
                 is_cuda=self.opt.is_cuda,
             )
-        obs = demo.policy.wrap_obs(
+        obs = system.policy.wrap_obs(
             self.get_grasping_observation(), is_cuda=self.opt.is_cuda
         )
         with torch.no_grad():
@@ -449,7 +458,7 @@ class DemoEnvironment:
                 obs, self.hidden_states, self.masks, deterministic=self.opt.det
             )
         self.world.step_robot(
-            action=demo.policy.unwrap_action(
+            action=system.policy.unwrap_action(
                 action=action, is_cuda=self.opt.is_cuda
             )
         )
@@ -468,14 +477,19 @@ class DemoEnvironment:
             self.world.robot_env.change_control_skip_scaling(
                 c_skip=self.opt.placing_control_skip
             )
-            self.policy, _, self.hidden_states, self.masks = demo.policy.load(
+            (
+                self.policy,
+                _,
+                self.hidden_states,
+                self.masks,
+            ) = system.policy.load(
                 policy_dir=self.opt.place_dir,
                 env_name=self.opt.place_env_name,
                 is_cuda=self.opt.is_cuda,
             )
 
         # Get the current observation.
-        obs = demo.policy.wrap_obs(
+        obs = system.policy.wrap_obs(
             self.get_placing_observation(), is_cuda=self.opt.is_cuda
         )
         with torch.no_grad():
@@ -484,7 +498,7 @@ class DemoEnvironment:
             )
 
         self.world.step_robot(
-            action=demo.policy.unwrap_action(
+            action=system.policy.unwrap_action(
                 action=action, is_cuda=self.opt.is_cuda
             )
         )
@@ -575,7 +589,7 @@ class DemoEnvironment:
             raise ValueError(
                 "Unsupported observation mode: {self.observation_mode}"
             )
-        return obs
+        return copy.deepcopy(obs)
 
     def get_vision_observation(self, renderer: str):
         """Computes the observation of the bullet world using the vision 
@@ -605,32 +619,47 @@ class DemoEnvironment:
                 }.
         """
         # The final visual observation, for now, is the same as the ground
-        # truth state with the source object's pose predicted. So, we
+        # truth state except with the source object's pose predicted. So, we
         # initialize the observation with the true state as a starting point.
-        obs = copy.deepcopy(
+        gt_odicts = copy.deepcopy(
             self.get_observation(observation_mode="gt", renderer=self.renderer)
         )
+        obs = copy.deepcopy(gt_odicts)
+
+        # Select the vision module based on the current stage.
+        stage, _ = self.get_current_stage()
+        if stage == "plan":
+            vision_module = self.planning_vision_module
+            camera_control = "center"
+        elif stage == "place":
+            vision_module = self.stacking_vision_module
+            camera_control = "stack"
+        else:
+            raise ValueError(f"No vision module for stage: {stage}.")
 
         # Predict the object pose for the objects that we've "looked" at.
+        pred_odicts = []
         for idx in range(len(obs)):
-            rgb, seg_img = self.get_images(oid=idx, renderer=renderer)
-            pred = self.vision_module.predict(
-                oid=idx, rgb=rgb, seg_img=seg_img
+            cam_tid = gen_dataset.get_camera_target_id(
+                oid=idx, camera_control=camera_control
             )
+
+            rgb, seg_img = self.get_images(
+                oid=idx, renderer=renderer, cam_tid=cam_tid
+            )
+            pred = vision_module.predict(oid=idx, rgb=rgb, seg_img=seg_img)
 
             # Convert vectorized predictions to dictionary form using camera
             # information.
             y_dict = dash_object.y_vec_to_dict(
                 y=list(pred[0]),
                 coordinate_frame=self.opt.coordinate_frame,
-                cam_position=self.unity_data[idx]["camera_position"],
-                cam_orientation=self.unity_data[idx]["camera_orientation"],
+                cam_position=self.unity_data[cam_tid]["camera_position"],
+                cam_orientation=self.unity_data[cam_tid]["camera_orientation"],
             )
 
-            gt_odicts = self.get_observation(
-                observation_mode="gt", renderer=self.renderer
-            )
-            self.metrics.add_example(gt_dict=gt_odicts[idx], pred_dict=y_dict)
+            # self.metrics.add_example(gt_dict=gt_odicts[idx], pred_dict=y_dict)
+            pred_odicts.append(y_dict)
 
             # Update the position and up vector with predicted values.
             obs[idx]["position"] = y_dict["position"]
@@ -650,9 +679,21 @@ class DemoEnvironment:
                 up=y_dict["up_vector"], gt_orientation=gt_orientation
             )
             obs[idx]["orientation"] = pred_orientation
+
+        # Save the predicted and ground truth object dictionaries.
+        if self.opt.save_predictions:
+            path = os.path.join(
+                self.opt.save_preds_dir,
+                f"{self.trial:02}",
+                f"{self.timestep:04}.p",
+            )
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            util.save_pickle(
+                path=path, data={"gt": gt_odicts, "pred": pred_odicts}
+            )
         return obs
 
-    def get_images(self, oid: int, renderer: str):
+    def get_images(self, oid: int, renderer: str, cam_tid: int):
         """Retrieves the images that are input to the vision module.
 
         Args:
@@ -669,8 +710,8 @@ class DemoEnvironment:
             raise NotImplementedError
         elif renderer == "unity":
             # Unity should have already called set_unity_data before this.
-            rgb = self.unity_data[oid]["rgb"]
-            seg_rgb = self.unity_data[oid]["seg_img"]
+            rgb = self.unity_data[cam_tid]["rgb"]
+            seg_rgb = self.unity_data[cam_tid]["seg_img"]
 
             # Optionally we can visualize unity images using OpenCV.
             if self.visualize_unity:

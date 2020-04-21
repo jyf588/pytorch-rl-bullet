@@ -31,6 +31,7 @@ import sys
 
 import my_pybullet_envs
 from my_pybullet_envs import utils
+from ns_vqa_dart.bullet import util
 
 
 class StateSaver:
@@ -44,15 +45,7 @@ class StateSaver:
 
         # Create the directory, deleting the existing directory contents if
         # requested.
-        if os.path.exists(out_dir):
-            print(f"Existing out_dir: {out_dir}.")
-            user_input = input(f"Delete folder? [Y/n] ")
-            if user_input == "Y":
-                shutil.rmtree(out_dir)
-            else:
-                print(f"Recieved user input: {user_input}. Exiting.")
-                sys.exit(0)
-        os.makedirs(out_dir)
+        util.delete_and_create_dir(dir=out_dir)
 
         self.poses = []
         self.robot_id = None
@@ -95,7 +88,7 @@ class StateSaver:
         }
 
         # Save into a pickle file.
-        path = os.path.join(self.out_dir, f"{self.sid:06}.p")
+        path = os.path.join(self.out_dir, f"{self.sid:07}.p")
         my_pybullet_envs.utils.save_pickle(path=path, data=state)
         print(f"Saved poses to: {path}")
         self.sid += 1

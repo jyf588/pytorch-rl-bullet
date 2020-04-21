@@ -8,6 +8,7 @@ import time
 from typing import *
 
 import bullet2unity.interface as interface
+import bullet2unity.states
 from system.dataset_loader import DatasetLoader
 from system.unity_saver import UnitySaver
 import my_pybullet_envs.utils as utils
@@ -33,7 +34,7 @@ async def send_to_client(websocket, path):
         save_keys=["camera_position", "camera_orientation"],
     )
     # cam_target_position = [0.075, 0.2, 0.155]
-    cam_target_position = [-0.06, 0.3, 0.0]
+    # cam_target_position = [-0.06, 0.3, 0.0]
 
     start = time.time()
     n_iter = 0
@@ -79,10 +80,12 @@ async def send_to_client(websocket, path):
         # cam_target_position = [float(val) for val in cam_target_position]
         # print(f"Entered cam_target_position: {cam_target_position}")
 
-        bullet_camera_targets = create_bullet_camera_targets(
+        bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
             camera_control=args.camera_control,
-            position=cam_target_position,
             bullet_state=bullet_state,
+            use_oids=True,
+            should_save=True,
+            should_send=False,
         )
 
         # Encode, send, receive, and decode.
@@ -103,62 +106,6 @@ async def send_to_client(websocket, path):
         avg_iter_time = (time.time() - start) / n_iter
         print(f"Average iteration time: {avg_iter_time:.2f}")
     sys.exit(0)
-
-
-def create_bullet_camera_targets(
-    camera_control: str, position: List[float], bullet_state: Dict
-):
-    """ Creates bullet camera targets.
-
-    Args:
-        camera_control: The method of camera control.
-        bullet_state: The bullet state.
-    
-    Returns:
-        bullet_camera_targets: A dictionary of camera targets in the bullet
-            world coordinate frame, with the following format:
-            {
-                <target_id: int>: {
-                    "position": <List[float]>,
-                    "should_save": <bool>,
-                    "should_send": <bool>,
-                }
-            }
-    """
-    # Tell unity to look at every single object.
-    if camera_control == "all":
-        bullet_camera_targets = {}
-        for oid, odict in bullet_state["objects"].items():
-            bullet_camera_targets[oid] = {
-                "position": odict["position"],
-                "should_save": True,
-                "should_send": False,
-            }
-    # Tell unity to look only once at the center of the object distribution.
-    elif camera_control == "center":
-        # position = utils.compute_object_distribution_mean()
-        bullet_camera_targets = {
-            0: {
-                "position": position,
-                "should_save": True,
-                "should_send": False,
-            }
-        }
-    elif camera_control == "stack":
-        dst_odict = copy.deepcopy(bullet_state["objects"][0])
-        pprint.pprint(dst_odict)
-        position = dst_odict["position"]
-        position[2] += dst_odict["height"] / 2
-        bullet_camera_targets = {
-            0: {
-                "position": position,
-                "should_save": True,
-                "should_send": False,
-            }
-        }
-    else:
-        raise ValueError(f"Invalid camera control method: {camera_control}")
-    return bullet_camera_targets
 
 
 if __name__ == "__main__":
