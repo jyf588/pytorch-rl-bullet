@@ -47,11 +47,16 @@ class VisionModule:
         )
 
         # Debugging
-        # debug_seg = cv2.cvtColor(data[:, :, :3], cv2.COLOR_BGR2RGB)
-        # debug_rgb = cv2.cvtColor(data[:, :, 3:6], cv2.COLOR_BGR2RGB)
-        # input_debug = np.hstack([debug_seg, debug_rgb])
+        debug_seg = cv2.cvtColor(data[:, :, :3], cv2.COLOR_BGR2RGB)
+        debug_rgb = cv2.cvtColor(data[:, :, 3:6], cv2.COLOR_BGR2RGB)
+        input_debug = np.hstack([debug_seg, debug_rgb])
+        cv2.imwrite(f"/home/michelle/test_{oid}.png", input_debug)
         # cv2.imshow("input debug", input_debug)
         # cv2.waitKey(0)
+        pred = self.predict_from_data(data=data)
+        return pred
+
+    def predict_from_data(self, data: np.ndarray):
         data_transforms = transforms.Compose(
             [
                 transforms.ToTensor(),

@@ -32,8 +32,10 @@ def main(args: argparse.Namespace):
     plot_path = os.path.join(args.input_dir, "plot.png")
     metrics = Metrics(plot_path=plot_path)
 
-    for scene_id in os.listdir(args.input_dir):
-        scene_dir = os.path.join(args.input_dir, scene_id)
+    for scene_id in range(0, 1):
+        scene_dir = os.path.join(args.input_dir, f"{scene_id:02}")
+        if not os.path.isdir(scene_dir):
+            continue
         path = os.path.join(scene_dir, "0000.p")
         data = util.load_pickle(path=path)
         gt_odicts = data["gt"]

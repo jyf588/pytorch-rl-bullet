@@ -36,7 +36,10 @@ async def send_to_client(websocket, path):
         scene = scenes[scene_idx]
 
         # Hard code top object to be green, and bottom object to be blue.
+        scene[0]["shape"] = "cylinder"
         scene[0]["color"] = "blue"
+        scene[0]["radius"] = utils.HALF_W_MIN_BTM
+        scene[1]["shape"] = "cylinder"
         scene[1]["color"] = "green"
         dst_shape = scene[0]["shape"]
         src_shape = scene[1]["shape"]
@@ -73,6 +76,7 @@ async def send_to_client(websocket, path):
                     render_frequency = 2
                     # unity_options = [(False, True)]
                     unity_options = [(False, True, True), (True, False, False)]
+                    # unity_options = [(False, True, True)]
 
                     # Turn on moving the camera each frame again.
                     last_bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
@@ -148,8 +152,8 @@ async def send_to_client(websocket, path):
                     i += 1
 
                 # Temporarily finish after planning.
-                if stage == "plan":
-                    break
+                # if stage == "plan":
+                #     break
             del env
     sys.exit(0)
 
@@ -161,6 +165,7 @@ def generate_scenes():
         obj_dist_thresh=0.2,
         max_retries=50,
         shapes=["box", "cylinder"],
+        colors=["red", "yellow"],
         radius_bounds=(utils.HALF_W_MIN, utils.HALF_W_MAX),
         height_bounds=(utils.H_MIN, utils.H_MAX),
         x_bounds=(utils.TX_MIN, utils.TX_MAX),
