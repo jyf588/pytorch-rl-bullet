@@ -40,10 +40,13 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         renders=False,
         init_noise=True,  # variation during reset
         up=True,
-        random_top_shape=True,
+
+        random_top_shape=True,     # TODO: deprecate these 2 flags
         det_top_shape_ind=1,  # if not random shape, 1 means always box
+
         cotrain_stack_place=True,
         place_floor=True,  # if not cotrain, is stack or place-on-floor
+
         grasp_pi_name=None,
         exclude_hard=False,
         use_gt_6d=True,
@@ -59,8 +62,6 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         self.renders = renders
         self.init_noise = init_noise
         self.up = up
-
-        self.random_top_shape = random_top_shape
 
         self.cotrain_stack_place = cotrain_stack_place
         self.place_floor = place_floor
@@ -90,7 +91,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         if grasp_pi_name:
             self.grasp_pi_name = grasp_pi_name
         else:
-            if not self.random_top_shape:
+            if not random_top_shape:
                 if det_top_shape_ind:
                     self.grasp_pi_name = "0311_box_2_n_20_50"
                 else:
@@ -279,6 +280,17 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
             p_pos_of_ave, p_quat_of_ave = p.invertTransform(
                 self.o_pos_pf_ave, self.o_quat_pf_ave
             )
+
+            if "sph" in self.grasp_pi_name:     # TODO: hardcoded
+                _, desired_obj_quat = p.multiplyTransforms(
+                    [0, 0, 0],
+                    p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
+                    [0, 0, 0],
+                    self.o_quat_pf_ave
+                )
+            else:
+                desired_obj_quat = [0., 0, 0, 1]    # box or cyl be upright
+
             arm_qs = utils.get_n_optimal_init_arm_qs(
                 self.robot,
                 p_pos_of_ave,
@@ -286,6 +298,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                 desired_obj_pos,
                 self.table_id,
                 n=self.n_best_cand,
+                desired_obj_quat=desired_obj_quat
             )
             if len(arm_qs) == 0:
                 continue
@@ -405,45 +418,9 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         # print(vel_metric * 5)
         # print("upright", reward)
 
-        # total_nf = 0
-        # cps_floor = p.getContactPoints(self.top_obj["id"], bottom_id, -1, -1)
-        # for cp in cps_floor:
-        #     total_nf += cp[9]
-        # if np.abs(total_nf) > (
-        #     self.top_obj["mass"] * 4.0
-        # ):  # mg        # TODO:tmp contact force hack
-        #     meaningful_c = True
-        #     reward += 5.0
-        # else:
-        #     meaningful_c = False
-        # #     # reward += np.abs(total_nf) / 10.
-
-        # # not used when placing on floor
-        # btm_vels = p.getBaseVelocity(bottom_id)
-        # btm_linv = np.array(btm_vels[0])
-        # btm_angv = np.array(btm_vels[1])
-        # reward += (
-        #     np.maximum(
-        #         -np.linalg.norm(btm_linv) - np.linalg.norm(btm_angv) / 2.0, -5.0
-        #     )
-        # )
-
         diff_norm = self.robot.get_norm_diff_tar()  # TODO: necessary?
         reward += 10.0 / (diff_norm + 1.0)
         # # print(10. / (diff_norm + 1.))
-
-        # any_hand_contact = False
-        # hand_r = 0
-        # for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
-        #     cps = p.getContactPoints(
-        #         self.top_obj["id"], self.robot.arm_id, -1, i
-        #     )
-        #     if len(cps) == 0:
-        #         hand_r += 1.0  # the fewer links in contact, the better
-        #     else:
-        #         any_hand_contact = True
-        # # print(hand_r)
-        # reward += hand_r - 15
 
         any_hand_contact = False
         hand_r = 0
@@ -565,14 +542,16 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
             else:
                 self.observation.extend([self.tx_act, self.ty_act])
 
-        # TODO: ball
         # btm obj shape is not important.
-        if self.random_top_shape:
-            if self.objs[self.top_id]["shape"] == "box":
-                shape_info = [1, -1, -1]
-            else:
-                shape_info = [-1, 1, -1]
-            self.observation.extend(shape_info)
+        if self.objs[self.top_id]["shape"] == "box":
+            shape_info = [1, -1, -1]
+        elif self.objs[self.top_id]["shape"] == "cylinder":
+            shape_info = [-1, 1, -1]
+        elif self.objs[self.top_id]["shape"] == "sphere":
+            shape_info = [-1, -1, 1]
+        else:
+            assert False
+        self.observation.extend(shape_info)
 
         if self.use_gt_6d:
             self.vision_counter += 1

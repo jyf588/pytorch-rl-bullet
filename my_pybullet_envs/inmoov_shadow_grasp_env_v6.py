@@ -180,11 +180,12 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         to['mass'] = self.np_random.uniform(utils.MASS_MIN, utils.MASS_MAX)
         to['mu'] = self.np_random.uniform(utils.MU_MIN, utils.MU_MAX)
         to['half_width'] = self.np_random.uniform(utils.HALF_W_MIN, utils.HALF_W_MAX)
+        to['height'] = self.np_random.uniform(utils.H_MIN, utils.H_MAX)
         if to['shape'] == p.GEOM_BOX:
             to['half_width'] *= 0.8
         elif to['shape'] == p.GEOM_SPHERE:
             to['height'] *= 0.75
-        to['height'] = self.np_random.uniform(utils.H_MIN, utils.H_MAX)
+            to['half_width'] = None
 
         top_xyz = np.array([self.tx_act, self.ty_act, self.tz_act + to['height'] / 2.0])
         top_quat = p.getQuaternionFromEuler([0., 0., self.np_random.uniform(low=0, high=2.0 * math.pi)])
@@ -268,7 +269,7 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
                 [0, 0, 0], btm_quat, [0, 0, 1], [0, 0, 0, 1]
             )  # R_cl * unitz[0,0,1]
             rot_metric = np.array(z_axis).dot(np.array([0, 0, 1]))
-            reward += np.maximum(rot_metric * 20 - 15, 0.0)
+            reward += np.maximum(rot_metric * 20 - 15, 0.0) * 2
 
         cps = p.getContactPoints(self.top_obj['id'], self.robot.arm_id, -1, self.robot.ee_id)    # palm
         if len(cps) > 0:
@@ -293,15 +294,6 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         if top_pos[2] < (self.tz_act + 0.04) and self.timer > self.test_start * self.control_skip:
             reward += -15.
 
-        # # add a final sparse reward
-        # if self.timer == 65 * self.control_skip:        # TODO: hardcoded horizon
-        #     if xy_dist < 0.05:
-        #         # print("top good")
-        #         reward += 100
-        #     if self.warm_start and rot_metric > 0.9:
-        #         # print("btm good")
-        #         reward += 200
-
         #     print(self.robot.get_q_dq(range(29, 34))[0])
 
         return self.getExtendedObservation(), reward, False, {}
@@ -323,6 +315,7 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
                 curContact.extend([-1.0])
         self.observation.extend(curContact)
 
+        # TODO: make this use height flag
         # xyz = np.array([self.tx, self.ty, self.tz])
         # self.observation.extend(list(xyz))
         # if self.obs_noise:
@@ -340,16 +333,15 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         # self.observation.extend([self.half_height_est])
 
         # btm obj shape is not important.
-        if self.random_top_shape:
-            if self.top_obj['shape'] == p.GEOM_BOX:
-                shape_info = [1, -1, -1]
-            elif self.top_obj['shape'] == p.GEOM_CYLINDER:
-                shape_info = [-1, 1, -1]
-            elif self.top_obj['shape'] == p.GEOM_SPHERE:
-                shape_info = [-1, -1, 1]
-            else:
-                shape_info = [-1, -1, -1]
-            self.observation.extend(shape_info)
+        if self.top_obj['shape'] == p.GEOM_BOX:
+            shape_info = [1, -1, -1]
+        elif self.top_obj['shape'] == p.GEOM_CYLINDER:
+            shape_info = [-1, 1, -1]
+        elif self.top_obj['shape'] == p.GEOM_SPHERE:
+            shape_info = [-1, -1, 1]
+        else:
+            assert False
+        self.observation.extend(shape_info)
 
         return self.observation
 
@@ -368,7 +360,8 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
         unitz_hf = p.multiplyTransforms([0, 0, 0], o_q_hf, [0, 0, 1], [0, 0, 0, 1])[0]
         # TODO: a heuritics that if obj up_vec points outside palm, then probably holding bottom & bad
-        if unitz_hf[1] < -0.3:
+        # ball does not care up vector pointing
+        if self.top_obj['shape'] != p.GEOM_SPHERE and unitz_hf[1] < -0.3:
             return
         else:
             fin_q, _ = self.robot.get_q_dq(self.robot.all_findofs)
