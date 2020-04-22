@@ -131,8 +131,8 @@ def get_traj_from_openrave_container(
     if os.path.isfile(load_path):
         time.sleep(0.3)  # TODO: wait for networking
         loaded_data = np.load(load_path)
-        # traj_i = loaded_data["arr_0"]
-        # traj_s = loaded_data["arr_1"]
+        traj_i = loaded_data["arr_0"]
+        traj_s = loaded_data["arr_1"]
         print("loaded")
         # for k in range(7):
         #     plt.plot(range(400), traj_i[:,k])
@@ -149,4 +149,4 @@ def get_traj_from_openrave_container(
         raise ValueError("%s isn't a file!" % load_path)
     print("Trajectory obtained from OpenRave!")
     # input("press enter")
-    return loaded_data
+    return traj_s

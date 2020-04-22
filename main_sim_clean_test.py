@@ -15,7 +15,7 @@ import torch
 import math
 
 import my_pybullet_envs
-from demo import policy, openrave
+from system import policy, openrave
 import pybullet as p
 import time
 
@@ -59,7 +59,8 @@ args.det = not args.non_det
 USE_GV5 = False  # is false, use gv6
 DUMMY_SLEEP = False
 WITH_REACHING = True
-USE_HEIGHT_INFO = True
+USE_HEIGHT_INFO = False
+TEST_PLACING = False    # if true, test stacking
 
 NUM_TRIALS = 400
 
@@ -258,7 +259,10 @@ def get_stacking_obs(
     """
 
     t_pos, t_quat = p.getBasePositionAndOrientation(top_oid)
-    b_pos, b_quat = p.getBasePositionAndOrientation(btm_oid)
+    if btm_id is None:
+        b_pos, b_quat = [0.0, 0, 0], [0.0, 0, 0, 1]
+    else:
+        b_pos, b_quat = p.getBasePositionAndOrientation(btm_oid)
 
     t_up = utils.quat_to_upv(t_quat)
     b_up = utils.quat_to_upv(b_quat)
@@ -309,8 +313,15 @@ for trial in range(NUM_TRIALS):
         p_ty += np.random.uniform(low=-0.01, high=0.01)
         p_tz += np.random.uniform(low=-0.01, high=0.01)
 
-        # required by OpenRave
-        OBJECTS = np.array([top_dict["position"][:2]+[0., 0.], btm_dict["position"][:2]+[0., 0.]])
+        if TEST_PLACING:
+            # overwrite ptz
+            p_tz = 0.0
+            # required by OpenRave
+            OBJECTS = np.array([top_dict["position"][:2] + [0., 0.]])
+        else:
+            # required by OpenRave
+            OBJECTS = np.array([top_dict["position"][:2] + [0., 0.], btm_dict["position"][:2] + [0., 0.]])
+
         is_box = (top_dict["shape"] == "box")
 
         if (g_tx - p_tx)**2 + (g_ty - p_ty)**2 > 0.2**2:
@@ -343,7 +354,10 @@ for trial in range(NUM_TRIALS):
     if USE_HEIGHT_INFO:
         desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + p_tz]
     else:
-        desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + utils.H_MAX]
+        if TEST_PLACING:
+            desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + 0.0]
+        else:
+            desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + utils.H_MAX]
 
     table_id = utils.create_table(FLOOR_MU)
 
@@ -389,12 +403,19 @@ for trial in range(NUM_TRIALS):
     else:
         env_core.robot.reset_with_certain_arm_q(Qreach)
 
-    btm_id = utils.create_sym_prim_shape_helper_new(btm_dict)
-    top_id = utils.create_sym_prim_shape_helper_new(top_dict)
-    objs = {
-        btm_id: btm_dict,
-        top_id: top_dict,
-    }
+    if TEST_PLACING:
+        btm_id = None
+        top_id = utils.create_sym_prim_shape_helper_new(top_dict)
+        objs = {
+            top_id: top_dict,
+        }
+    else:
+        btm_id = utils.create_sym_prim_shape_helper_new(btm_dict)
+        top_id = utils.create_sym_prim_shape_helper_new(top_dict)
+        objs = {
+            btm_id: btm_dict,
+            top_id: top_dict,
+        }
 
     """Prepare for grasping. Reach for the object."""
 
@@ -549,7 +570,7 @@ for trial in range(NUM_TRIALS):
     #     pose_saver.save()
 
     t_pos, t_quat = p.getBasePositionAndOrientation(top_id)
-    if t_pos[2] > 0.15 and (t_pos[0] - p_tx)**2 + (t_pos[1] - p_ty)**2 < 0.1**2:
+    if t_pos[2] - p_tz > 0.05 and (t_pos[0] - p_tx)**2 + (t_pos[1] - p_ty)**2 < 0.1**2:
         # a very rough check
         success_count += 1
 
