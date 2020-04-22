@@ -53,7 +53,7 @@ class StateSaver:
         self.sid = 0
         self.oid2attr = {}
 
-    def track(self, odicts: Dict[int, Dict], robot_id: int):
+    def track(self, trial: int, odicts: Dict[int, Dict], robot_id: int):
         """
         Tracks objects and robot.
         
@@ -73,6 +73,7 @@ class StateSaver:
         """
         self.robot_id = robot_id
         self.oid2attr = odicts
+        self.trial = trial
 
     def save_state(self):
         """
@@ -83,6 +84,7 @@ class StateSaver:
 
         # Combine in a state dictionary.
         state = {
+            "trial": self.trial,
             "objects": object_states,
             "robot": robot_state,
         }
@@ -91,6 +93,7 @@ class StateSaver:
         path = os.path.join(self.out_dir, f"{self.sid:07}.p")
         my_pybullet_envs.utils.save_pickle(path=path, data=state)
         print(f"Saved poses to: {path}")
+        print(f"trial: {self.trial}")
         self.sid += 1
 
     def get_object_states(self) -> List[Dict]:

@@ -114,6 +114,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         )  # used once temporarily, will be overwritten outside by env
         self.viewer = None
         self.timer = 0
+        self.trial = 0
 
         self.control_skip = int(control_skip)
         # shadow hand is 22-5=17dof
@@ -350,9 +351,9 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
 
         if self.save_states:
             self.state_saver.track(
-                odicts=self.objs, robot_id=self.robot.arm_id
+                trial=self.trial, odicts=self.objs, robot_id=self.robot.arm_id
             )
-
+        self.trial += 1
         return np.array(self.observation)
 
     def step(self, action):
