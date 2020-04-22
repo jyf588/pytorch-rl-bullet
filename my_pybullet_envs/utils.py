@@ -6,7 +6,10 @@ from typing import *
 
 import os
 import inspect
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+
+currentdir = os.path.dirname(
+    os.path.abspath(inspect.getfile(inspect.currentframe()))
+)
 
 PLACE_START_CLEARANCE = 0.14
 
@@ -68,8 +71,17 @@ INIT_PALM_CANDIDATE_QUATS = [
     for cand_angle in INIT_PALM_CANDIDATE_ANGLES
 ]
 
-TS = 1./240
-GRAVITY = 10        # scalar
+TS = 1.0 / 240
+GRAVITY = 10  # scalar
+
+
+def compute_object_distribution_mean():
+    x = (TX_MIN + TX_MAX) / 2
+    y = (TY_MIN + TY_MAX) / 2
+    z = (H_MIN + H_MAX) / 2
+    center_position = [x, y, z]
+    return center_position
+
 
 def perturb(np_rand_gen, arr, r=0.02):
     r = np.abs(r)
@@ -317,22 +329,18 @@ def save_pickle(path: str, data: Any):
 
 def read_grasp_final_states_from_pickle(grasp_pi_name: str):
     with open(
-            os.path.join(
-                currentdir,
-                "assets/place_init_dist/final_states_"
-                + grasp_pi_name
-                + ".pickle",
-            ),
-            "rb",
+        os.path.join(
+            currentdir,
+            "assets/place_init_dist/final_states_" + grasp_pi_name + ".pickle",
+        ),
+        "rb",
     ) as handle:
         saved_file = pickle.load(handle)
     assert saved_file is not None
 
     o_pos_pf_ave = saved_file["ave_obj_pos_in_palm"]
     o_quat_pf_ave = saved_file["ave_obj_quat_in_palm"]
-    o_quat_pf_ave /= np.linalg.norm(
-        o_quat_pf_ave
-    )  # in case not normalized
+    o_quat_pf_ave /= np.linalg.norm(o_quat_pf_ave)  # in case not normalized
     init_states = saved_file["init_states"]  # a list of dicts
     return o_pos_pf_ave, o_quat_pf_ave, init_states
 
@@ -382,4 +390,3 @@ def read_grasp_final_states_from_pickle(grasp_pi_name: str):
 # should split GT info dict & prediction dict
 
 # are we predicting (shape,color) for stacking still?
-

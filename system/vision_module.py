@@ -11,16 +11,16 @@ from ns_vqa_dart.scene_parse.attr_net.options import BaseOptions
 
 
 class VisionModule:
-    def __init__(self):
-        options = self.get_options()
+    def __init__(self, load_checkpoint_path: str):
+        options = self.get_options(load_checkpoint_path=load_checkpoint_path)
         self.model = get_model(options)
         self.model.eval_mode()
 
-    def get_options(self):
+    def get_options(self, load_checkpoint_path: str):
         """Creates the options namespace to define the vision model."""
         options = Namespace(
             inference_only=True,
-            load_checkpoint_path="/home/michelle/mguo/outputs/dash_v005_20K/checkpoint_best.pt",
+            load_checkpoint_path=load_checkpoint_path,
             gpu_ids="0",
             concat_img=True,
             with_depth=False,
@@ -47,11 +47,16 @@ class VisionModule:
         )
 
         # Debugging
-        # debug_seg = cv2.cvtColor(data[:, :, :3], cv2.COLOR_BGR2RGB)
-        # debug_rgb = cv2.cvtColor(data[:, :, 3:6], cv2.COLOR_BGR2RGB)
-        # input_debug = np.hstack([debug_seg, debug_rgb])
+        debug_seg = cv2.cvtColor(data[:, :, :3], cv2.COLOR_BGR2RGB)
+        debug_rgb = cv2.cvtColor(data[:, :, 3:6], cv2.COLOR_BGR2RGB)
+        input_debug = np.hstack([debug_seg, debug_rgb])
+        cv2.imwrite(f"/home/michelle/test_{oid}.png", input_debug)
         # cv2.imshow("input debug", input_debug)
         # cv2.waitKey(0)
+        pred = self.predict_from_data(data=data)
+        return pred
+
+    def predict_from_data(self, data: np.ndarray):
         data_transforms = transforms.Compose(
             [
                 transforms.ToTensor(),

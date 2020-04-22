@@ -9,7 +9,7 @@ import time
 import torch
 from typing import *
 
-import demo.policy
+import system.policy
 from my_pybullet_envs.inmoov_shadow_demo_env_v4 import (
     InmoovShadowHandDemoEnvV4,
 )

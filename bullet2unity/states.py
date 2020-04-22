@@ -1,3 +1,4 @@
+import copy
 import json
 import math
 import numpy as np
@@ -12,6 +13,76 @@ from typing import *
 
 import bullet2unity.const as const
 import ns_vqa_dart.bullet.util as util
+
+
+def create_bullet_camera_targets(
+    camera_control: str,
+    bullet_odicts: Dict,
+    use_oids: bool,
+    should_save: bool,
+    should_send: bool,
+    position: Optional[List[float]] = None,
+):
+    """ Creates bullet camera targets.
+
+    Args:
+        camera_control: The method of camera control.
+        bullet_odicts: The bullet object dictionaries. If the camera control
+            method is `stack`, we assume that the destination object dictionary
+            comes first.
+    
+    Returns:
+        bullet_camera_targets: A dictionary of camera targets in the bullet
+            world coordinate frame, with the following format:
+            {
+                <target_id: int>: {
+                    "position": <List[float]>,
+                    "should_save": <bool>,
+                    "should_send": <bool>,
+                }
+            }
+    """
+    # Tell unity to look at every single object.
+    if camera_control == "all":
+        bullet_camera_targets = {}
+        for idx, odict in enumerate(bullet_odicts):
+            # cam_tid = oid if use_oids else idx
+            cam_tid = idx
+            bullet_camera_targets[cam_tid] = {
+                "position": odict["position"],
+                "should_save": should_save,
+                "should_send": should_send,
+            }
+    # Only look once.
+    elif camera_control in ["center", "stack", "position"]:
+        # Tell unity to look only once at the center of the object distribution.
+        if camera_control == "center":
+            position = [-0.06, 0.3, 0.0]
+        elif camera_control == "stack":
+            raise NotImplementedError
+            # Assumes that the first object in the object states corresponds to
+            # the destination object (i.e., the "bottom" object in the stack).
+        # Control the camera with a specified position.
+        elif camera_control == "position":
+            assert position is not None
+        bullet_camera_targets = {
+            0: {
+                "position": position,
+                "should_save": should_save,
+                "should_send": should_send,
+            }
+        }
+
+    else:
+        raise ValueError(f"Invalid camera control method: {camera_control}")
+    return bullet_camera_targets
+
+
+def get_first_object_camera_target(bullet_odicts: List[Dict]):
+    dst_odict = copy.deepcopy(bullet_odicts[0])
+    position = dst_odict["position"]
+    position[2] += dst_odict["height"] / 2
+    return position
 
 
 def bullet2unity_state(bullet_state: Dict, bullet_camera_targets):

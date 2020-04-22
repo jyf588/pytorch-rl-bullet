@@ -7,14 +7,20 @@ from typing import *
 
 import bullet2unity.interface as interface
 import bullet2unity.states
-import demo.base_scenes
-from demo.env import DemoEnvironment
-from demo.options import OPTIONS
-from demo.scene import SceneGenerator
+import system.base_scenes
+from system.env import DemoEnvironment
+from system.options import OPTIONS
+from system.scene import SceneGenerator
 import my_pybullet_envs.utils as utils
 from ns_vqa_dart.bullet.random_objects import RandomObjectsGenerator
 
 global args
+
+
+STAGE2CAMERA_CONTROL = {
+    "plan": "center",
+    "place": "stack",
+}
 
 
 async def send_to_client(websocket, path):
@@ -24,16 +30,19 @@ async def send_to_client(websocket, path):
         websocket: The websocket protocol instance.
         path: The URI path.
     """
-    scenes = generate_scenes()[31:]
+    scenes = generate_scenes()
 
-    for scene_idx, scene in enumerate(scenes):
+    for scene_idx in range(0, len(scenes)):
         scene = scenes[scene_idx]
 
         # Hard code top object to be green, and bottom object to be blue.
-        scene[0]["color"] = "green"
-        scene[1]["color"] = "blue"
-        src_shape = scene[0]["shape"]
-        dst_shape = scene[1]["shape"]
+        scene[0]["shape"] = "cylinder"
+        scene[0]["color"] = "blue"
+        scene[0]["radius"] = utils.HALF_W_MIN_BTM  # Bottom object fatter
+        scene[1]["shape"] = "cylinder"
+        scene[1]["color"] = "green"
+        dst_shape = scene[0]["shape"]
+        src_shape = scene[1]["shape"]
         command = f"Put the green {src_shape} on top of the blue {dst_shape}"
 
         for obs_mode in ["gt", "vision"]:
@@ -44,6 +53,7 @@ async def send_to_client(websocket, path):
 
             env = DemoEnvironment(
                 opt=OPTIONS,
+                trial=scene_idx,
                 scene=copy.deepcopy(scene),
                 command=command,
                 observation_mode=obs_mode,
@@ -65,29 +75,23 @@ async def send_to_client(websocket, path):
                 if obs_mode == "vision" and stage in ["plan", "place"]:
                     render_frequency = 2
                     # unity_options = [(False, True)]
-                    unity_options = [(False, True), (True, False)]
+                    unity_options = [(False, True, True), (True, False, False)]
+                    # unity_options = [(False, True, True)]
 
-                    # if stage == "place" and stage_ts > 0:
-                    #     pass
-                    # else:
-                    #     last_bullet_camera_targets = {}
-                    #     for tid, odict in enumerate(state["objects"].values()):
-                    #         last_bullet_camera_targets[tid] = {
-                    #             "position": odict["position"],
-                    #             "should_save": False,
-                    #             "should_send": True,
-                    #         }
                     # Turn on moving the camera each frame again.
-                    last_bullet_camera_targets = {}
-                    for tid, odict in enumerate(state["objects"].values()):
-                        last_bullet_camera_targets[tid] = {
-                            "position": odict["position"],
-                            "should_save": False,
-                            "should_send": True,
-                        }
+                    last_bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
+                        camera_control=STAGE2CAMERA_CONTROL[stage],
+                        bullet_odicts=env.initial_obs,
+                        use_oids=False,
+                        should_save=False,
+                        should_send=True,
+                    )
                 else:
                     render_frequency = 25
-                    unity_options = [(False, False)]
+                    if obs_mode == "vision":
+                        unity_options = [(True, False, True)]
+                    elif obs_mode == "gt":
+                        unity_options = [(False, False, True)]
 
                 """
                 Possible cases:
@@ -102,7 +106,7 @@ async def send_to_client(websocket, path):
 
                 # Rendering block.
                 if i % render_frequency == 0:
-                    for render_obs, get_and_predict_images in unity_options:
+                    for render_obs, send_image, should_step in unity_options:
                         # If we are rendering observations, add them to the
                         # render state.
                         render_state = copy.deepcopy(state)
@@ -111,7 +115,7 @@ async def send_to_client(websocket, path):
                                 state=render_state, obs=env.obs
                             )
 
-                        if get_and_predict_images:
+                        if send_image:
                             bullet_camera_targets = last_bullet_camera_targets
                         else:
                             bullet_camera_targets = {}
@@ -133,10 +137,9 @@ async def send_to_client(websocket, path):
                         )
 
                         # Hand the data to the env for processing.
-                        if get_and_predict_images:
+                        if send_image:
                             env.set_unity_data(data)
-                            is_done = env.step()
-                        elif obs_mode == "gt":
+                        if should_step:
                             is_done = env.step()
                 else:
                     is_done = env.step()
@@ -147,17 +150,40 @@ async def send_to_client(websocket, path):
 
                 if stage != "plan":
                     i += 1
+
+                # Temporarily finish after planning.
+                # if stage == "plan":
+                #     break
             del env
     sys.exit(0)
 
 
 def generate_scenes():
-    generator = RandomObjectsGenerator(
+    # Top object, with different min radius.
+    generator_top = RandomObjectsGenerator(
         seed=OPTIONS.seed,
-        n_objs_bounds=(2, 2),
+        n_objs_bounds=(1, 1),
         obj_dist_thresh=0.2,
         max_retries=50,
         shapes=["box", "cylinder"],
+        colors=["blue", "green"],
+        radius_bounds=(utils.HALF_W_MIN_BTM, utils.HALF_W_MAX),
+        height_bounds=(utils.H_MIN, utils.H_MAX),
+        x_bounds=(utils.TX_MIN, utils.TX_MAX),
+        y_bounds=(utils.TY_MIN, utils.TY_MAX),
+        z_bounds=(0.0, 0.0),
+        mass_bounds=(utils.MASS_MIN, utils.MASS_MAX),
+        mu_bounds=(OPTIONS.obj_mu, OPTIONS.obj_mu),
+        position_mode="com",
+    )
+    # Remaining objects.
+    generator_all = RandomObjectsGenerator(
+        seed=OPTIONS.seed,
+        n_objs_bounds=(1, 1),
+        obj_dist_thresh=0.2,
+        max_retries=50,
+        shapes=["box", "cylinder"],
+        colors=["blue", "green"],
         radius_bounds=(utils.HALF_W_MIN, utils.HALF_W_MAX),
         height_bounds=(utils.H_MIN, utils.H_MAX),
         x_bounds=(utils.TX_MIN, utils.TX_MAX),
@@ -167,7 +193,14 @@ def generate_scenes():
         mu_bounds=(OPTIONS.obj_mu, OPTIONS.obj_mu),
         position_mode="com",
     )
-    scenes = [generator.generate_tabletop_objects() for _ in range(100)]
+    scenes = []
+    for _ in range(100):
+        top_scene = generator_top.generate_tabletop_objects()
+        all_scene = generator_all.generate_tabletop_objects(
+            existing_odicts=top_scene
+        )
+        scene = top_scene + all_scene
+        scenes.append(scene)
     return scenes
 
 
