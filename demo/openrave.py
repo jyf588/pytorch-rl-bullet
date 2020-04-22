@@ -106,10 +106,14 @@ def get_traj_from_openrave_container(
     print(f"q_start: {q_start}")
     print(f"q_end: {q_end}")
 
-    if q_start is not None:
+    if q_start is not None and q_end is not None:
         np.savez(save_path, object_positions, q_start, q_end)  # move
-    else:
+    elif q_end is not None:
         np.savez(save_path, object_positions, q_end)  # reach has q_start 0
+    elif q_start is not None:
+        np.savez(save_path, object_positions, q_start)  # retract always ends at zero
+    else:
+        assert False
 
     # Wait for command from OpenRave
 
