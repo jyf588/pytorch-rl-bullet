@@ -38,8 +38,26 @@ async def send_to_client(websocket, path):
 
     start = time.time()
     n_iter = 0
+    last_trial = None
     while 1:
         msg_id, bullet_state = loader.get_next_state()
+
+        # No more states, so we are done.
+        if bullet_state is None:
+            break
+
+        # This is the first frame of the trial if the trial of the current
+        # state is different from the last trial.
+        trial = bullet_state["trial"]
+        first_frame = trial != last_trial
+
+        if first_frame:
+            first_object_cam_target = bullet2unity.states.get_first_object_camera_target(
+                bullet_odicts=list(bullet_state["objects"].values())
+            )
+        # print(f"first_frame: {first_frame}")
+        # print(f"first_object_cam_target: {first_object_cam_target}")
+        # input("x")
 
         # Create a state with extreme object locations and sides.
         # extreme_xy = [
@@ -63,30 +81,18 @@ async def send_to_client(websocket, path):
         #     extreme_odict["position"] = [x, y, utils.H_MAX / 2]
         #     bullet_state["objects"][odict_idx] = extreme_odict
 
-        # No more states, so we are done.
-        if bullet_state is None:
-            break
-
-        # x = input("Enter new x: ")
-        # y = input("Enter new y: ")
-        # z = input("Enter new z: ")
-        # if len(x) == 0:
-        #     x = cam_target_position[0]
-        # if len(y) == 0:
-        #     y = cam_target_position[1]
-        # if len(z) == 0:
-        #     z = cam_target_position[2]
-        # cam_target_position = [x, y, z]
-        # cam_target_position = [float(val) for val in cam_target_position]
-        # print(f"Entered cam_target_position: {cam_target_position}")
-
         bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
             camera_control=args.camera_control,
-            bullet_odicts=list(bullet_state["objects"].values()),
+            bullet_odicts=None,
             use_oids=False,
             should_save=True,
             should_send=False,
+            position=first_object_cam_target,
         )
+
+        # print("bullet state objects:")
+        # pprint.pprint(bullet_state["objects"])
+        # input("x")
 
         # Encode, send, receive, and decode.
         message = interface.encode(
@@ -105,6 +111,9 @@ async def send_to_client(websocket, path):
         n_iter += 1
         avg_iter_time = (time.time() - start) / n_iter
         print(f"Average iteration time: {avg_iter_time:.2f}")
+
+        # Store the current trial as the "last trial".
+        last_trial = trial
     sys.exit(0)
 
 
@@ -142,7 +151,7 @@ if __name__ == "__main__":
         "--camera_control",
         required=True,
         type=str,
-        choices=["all", "center", "stack"],
+        choices=["all", "center", "stack", "position"],
         help="The method of camera control.",
     )
     parser.add_argument(

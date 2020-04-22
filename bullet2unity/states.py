@@ -21,6 +21,7 @@ def create_bullet_camera_targets(
     use_oids: bool,
     should_save: bool,
     should_send: bool,
+    position: Optional[List[float]] = None,
 ):
     """ Creates bullet camera targets.
 
@@ -53,21 +54,17 @@ def create_bullet_camera_targets(
                 "should_send": should_send,
             }
     # Only look once.
-    elif camera_control in ["center", "stack"]:
+    elif camera_control in ["center", "stack", "position"]:
         # Tell unity to look only once at the center of the object distribution.
         if camera_control == "center":
             position = [-0.06, 0.3, 0.0]
         elif camera_control == "stack":
+            raise NotImplementedError
             # Assumes that the first object in the object states corresponds to
             # the destination object (i.e., the "bottom" object in the stack).
-            dst_odict = copy.deepcopy(bullet_odicts[0])
-            # print("bullet_odicts:")
-            # pprint.pprint(bullet_odicts)
-            # print("dst_odict:")
-            # pprint.pprint(dst_odict)
-            # input("enter")
-            position = dst_odict["position"]
-            position[2] += dst_odict["height"] / 2
+        # Control the camera with a specified position.
+        elif camera_control == "position":
+            assert position is not None
         bullet_camera_targets = {
             0: {
                 "position": position,
@@ -75,9 +72,17 @@ def create_bullet_camera_targets(
                 "should_send": should_send,
             }
         }
+
     else:
         raise ValueError(f"Invalid camera control method: {camera_control}")
     return bullet_camera_targets
+
+
+def get_first_object_camera_target(bullet_odicts: List[Dict]):
+    dst_odict = copy.deepcopy(bullet_odicts[0])
+    position = dst_odict["position"]
+    position[2] += dst_odict["height"] / 2
+    return position
 
 
 def bullet2unity_state(bullet_state: Dict, bullet_camera_targets):
