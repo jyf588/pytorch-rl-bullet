@@ -29,9 +29,10 @@ from ns_vqa_dart.bullet.metrics import Metrics
 
 def main(args: argparse.Namespace):
     # Initialize the metrics class.
-    plot_path = os.path.join(args.input_dir, "plot.png")
-    planning_metrics = Metrics(plot_path=plot_path)
-    stacking_metrics = Metrics(plot_path=plot_path)
+    planning_plot_path = os.path.join(args.input_dir, "planning.png")
+    stacking_plot_path = os.path.join(args.input_dir, "stacking.png")
+    planning_metrics = Metrics(plot_path=planning_plot_path)
+    stacking_metrics = Metrics(plot_path=stacking_plot_path)
 
     for scene_id in range(0, 100):
         scene_dir = os.path.join(args.input_dir, f"{scene_id:02}")
@@ -67,7 +68,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--input_dir",
         type=str,
-        default="/home/michelle/mguo/outputs/system",
+        default="/media/sdc3/mguo/outputs/system",
+        # default="/home/michelle/mguo/outputs/system",
         help="The input directory to read ground truth and predicted objects from.",
     )
     args = parser.parse_args()
