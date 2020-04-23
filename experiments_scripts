@@ -1807,7 +1807,12 @@ MISC TODO s:
 # train with thinner btm objects?
 # store screen log
 
-TODO: wrist gain of placing is too small maybe
+# TODO: wrist gain of placing is too small maybe
+# TODO: Place ball should not use 6D!!! & test sphere
+# TODO: move table seems can be smaller
+# TODO: add torso
+# TODO: add more white noise
+# sometimes obj blocked by floor during moving.
 
 
 # run the crack

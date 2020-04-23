@@ -81,8 +81,8 @@ def compute_trajectory(
 
 def get_traj_from_openrave_container(
     object_positions: np.ndarray,
-    q_start: np.ndarray,
-    q_end: np.ndarray,
+    q_start: Union[np.ndarray, None],
+    q_end: Union[np.ndarray, None],
     save_path: str,
     load_path: str,
 ) -> np.ndarray:

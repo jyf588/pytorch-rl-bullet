@@ -46,10 +46,16 @@ HALF_W_MIN_BTM = 0.045  # only stack on larger objects
 H_MIN = 0.13
 H_MAX = 0.18
 
+# manipulable range
 TX_MIN = -0.1
 TX_MAX = 0.25
 TY_MIN = -0.1
 TY_MAX = 0.5
+# whole table range
+X_MIN = -0.1
+X_MAX = 0.3
+Y_MIN = -0.3
+Y_MAX = 0.7
 
 TABLE_OFFSET = [0.1, 0.2, 0.0]
 # TODO: during training, make table a bit thicker/higher?
