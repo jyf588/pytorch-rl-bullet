@@ -62,7 +62,7 @@ WITH_REACHING = True
 USE_HEIGHT_INFO = False
 TEST_PLACING = False    # if false, test stacking
 ADD_SURROUNDING_OBJS = True
-LONG_MOVE = True
+LONG_MOVE = False
 SURROUNDING_OBJS_MAX_NUM = 4
 
 CLOSE_THRES = 0.25
@@ -151,8 +151,12 @@ def planning(trajectory):
             forces=[200. * 5] * len(env_core.robot.arm_dofs))  # TODO: wrist force limit?
 
         # print("act", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
-        # diff = np.linalg.norm(env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
-        #                       - tar_arm_q)
+        diff = np.linalg.norm(env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
+                              - tar_arm_q)
+        if idx == len(trajectory) - 1:
+            print("diff 0", diff)
+        if idx == len(trajectory) + 49:
+            print("diff 1", diff)
         # if diff > 1e-2:
         #     print("diff", diff)
 
@@ -239,10 +243,12 @@ def load_obj_and_construct_state(obj_dicts_list):
     bottom_id = None
     # ignore btm if placing on tabletop
     if not TEST_PLACING:
+        obj_dicts_list[1]['color'] = 'green'
         bottom_id = utils.create_sym_prim_shape_helper_new(obj_dicts_list[1])
         state[bottom_id] = obj_dicts_list[1]
 
     # TODO:tmp load grasp obj last
+    obj_dicts_list[0]['color'] = 'red'
     topobj_id = utils.create_sym_prim_shape_helper_new(obj_dicts_list[0])
     state[topobj_id] = obj_dicts_list[0]
     return state, topobj_id, bottom_id
@@ -389,7 +395,7 @@ for trial in range(NUM_TRIALS):
         is_box = (top_dict["shape"] == "box")
 
         dist = CLOSE_THRES*2.0 if LONG_MOVE else CLOSE_THRES
-        if is_close(top_dict, btm_dict, dist=CLOSE_THRES*2.0):
+        if is_close(top_dict, btm_dict, dist=dist):
             continue        # discard & re-sample
         else:
             all_dicts = [top_dict, btm_dict]
