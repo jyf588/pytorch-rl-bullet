@@ -49,6 +49,9 @@ homedir = os.path.expanduser("~")
 sys.path.append("a2c_ppo_acktr")
 parser = argparse.ArgumentParser(description="RL")
 parser.add_argument("--seed", type=int, default=101)    # only keep np.random
+parser.add_argument("--use_height", type=int, default=0)
+parser.add_argument("--test_placing", type=int, default=0)
+parser.add_argument("--long_move", type=int, default=0)
 parser.add_argument("--non-det", type=int, default=0)
 args = parser.parse_args()
 np.random.seed(args.seed)
@@ -59,18 +62,19 @@ args.det = not args.non_det
 USE_GV5 = False  # is false, use gv6
 DUMMY_SLEEP = False
 WITH_REACHING = True
-USE_HEIGHT_INFO = False
-TEST_PLACING = False    # if false, test stacking
+WITH_RETRACT = True
+USE_HEIGHT_INFO = bool(args.use_height)
+TEST_PLACING = bool(args.test_placing)    # if false, test stacking
 ADD_SURROUNDING_OBJS = True
-LONG_MOVE = False
+LONG_MOVE = bool(args.long_move)
 SURROUNDING_OBJS_MAX_NUM = 4
 
 CLOSE_THRES = 0.25
 
-NUM_TRIALS = 400
+NUM_TRIALS = 1000
 
 GRASP_END_STEP = 35
-PLACE_END_STEP = 90
+PLACE_END_STEP = 75
 
 INIT_NOISE = True
 DET_CONTACT = 0  # 0 false, 1 true
@@ -125,7 +129,7 @@ PLACING_CONTROL_SKIP = 6
 GRASPING_CONTROL_SKIP = 6
 
 
-def planning(trajectory):
+def planning(trajectory, restore_fingers=False):
     last_tar_arm_q = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
     # env_core.robot.maxForce = 1000
     for idx in range(len(trajectory) + 50):
@@ -133,6 +137,12 @@ def planning(trajectory):
             tar_arm_q = trajectory[-1]
         else:
             tar_arm_q = trajectory[idx]
+
+        if restore_fingers and idx >= len(trajectory) * 0.1:   # TODO: hardcoded
+            blending = np.clip((idx - len(trajectory) * 0.1) / (len(trajectory) * 0.6), 0.0, 1.0)
+            cur_fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
+            tar_fin_q = env_core.robot.init_fin_q * blending + cur_fin_q * (1-blending)
+            env_core.robot.tar_fin_q = tar_fin_q
 
         # env_core.robot.tar_arm_q = tar_arm_q
         env_core.robot.apply_action([0.0] * 24)
@@ -148,7 +158,7 @@ def planning(trajectory):
             controlMode=p.POSITION_CONTROL,
             targetPositions=list(tar_arm_q),
             targetVelocities=list(tar_vel),
-            forces=[200. * 5] * len(env_core.robot.arm_dofs))  # TODO: wrist force limit?
+            forces=[200. * 5] * len(env_core.robot.arm_dofs))  # TODO: wrist force limit *3?
 
         # print("act", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
         diff = np.linalg.norm(env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
@@ -157,12 +167,9 @@ def planning(trajectory):
             print("diff 0", diff)
         if idx == len(trajectory) + 49:
             print("diff 1", diff)
-        # if diff > 1e-2:
-        #     print("diff", diff)
 
         for _ in range(1):
             p.stepSimulation()
-        # time.sleep(utils.TS * 1.0)
         if DUMMY_SLEEP:
             time.sleep(utils.TS / 2.0)
 
@@ -621,16 +628,24 @@ for trial in range(NUM_TRIALS):
     # print(f"Pose after placing")
     # pprint.pprint(pose_saver.poses[-1])
 
-    print(f"Starting release trajectory")
-    # # execute_release_traj()
-    # for ind in range(0, 100):
-    #     p.stepSimulation()
-    #     if DUMMY_SLEEP:
-    #         time.sleep(utils.TS)
-        # pose_saver.get_poses()
+    if WITH_RETRACT:
+        print(f"Starting release trajectory")
+        Qretract_init = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
+        retract_save_path = homedir + "/container_data/PB_RETRACT.npz"
+        retract_read_path = homedir + "/container_data/OR_RETRACT.npz"
 
-    # if SAVE_POSES:
-    #     pose_saver.save()
+        OBJECTS[0, :] = np.array([p_tx, p_ty, p_tz, 0.0])       # note: p_tz is 0 for placing
+
+        Traj_reach = openrave.get_traj_from_openrave_container(
+            OBJECTS, Qretract_init, None, retract_save_path, retract_read_path
+        )
+
+        if Traj_reach is None or len(Traj_reach) == 0:
+            p.resetSimulation()
+            print("*******", success_count * 1.0 / (trial + 1))
+            continue  # TODO: retracting failed
+        else:
+            planning(Traj_reach, restore_fingers=True)
 
     t_pos, t_quat = p.getBasePositionAndOrientation(top_id)
     if t_pos[2] - p_tz > 0.05 and (t_pos[0] - p_tx)**2 + (t_pos[1] - p_ty)**2 < 0.1**2:
@@ -645,3 +660,9 @@ for trial in range(NUM_TRIALS):
 p.disconnect()
 print("*******total", success_count * 1.0 / NUM_TRIALS)
 print("*******total w/o OR", success_count * 1.0 / openrave_success_count)
+
+f = open("final_stats.txt", "a")
+f.write(f"*******total: {success_count * 1.0 / NUM_TRIALS:.3f})")
+f.write(f"*******total w/o OR: {success_count * 1.0 / openrave_success_count:.3f})")
+f.write("\n")
+f.close()
