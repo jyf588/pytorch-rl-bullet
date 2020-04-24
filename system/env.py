@@ -33,12 +33,13 @@ class DemoEnvironment:
         opt: argparse.Namespace,
         trial: int,
         scene: List[Dict],
+        task: str,
         command: str,
         observation_mode: str,
         visualize_bullet: bool,
         visualize_unity: bool,
         renderer: Optional[str] = None,
-        floor_mu: Optional[float] = 1.0,
+        place_dst_xy: Optional[List[float]] = None,
     ):
         """
         Args:
@@ -56,7 +57,10 @@ class DemoEnvironment:
                         "height": <height>,
                     },
                     ...
-                ]
+                ].
+                For placing, the first object in the scene is assumed to be the
+                source object.
+            task: The task to execute, either pick or place.
             command: The command that the robot should execute.
             observation_mode: Source of observation, which can either be from
                 ground truth (`gt`) or vision (`vision`).
@@ -66,15 +70,19 @@ class DemoEnvironment:
                 from unity to the current class in a live OpenCV window.
             renderer: The renderer to use to generate images, if 
                 `observation_mode` is `vision`.
+            place_dst_xy: The destination (x, y) location to place at. Used 
+                only if `task` is `place`.
         """
         self.opt = opt
         self.trial = trial
         self.scene = scene
+        self.task = task
         self.command = command
         self.observation_mode = observation_mode
         self.visualize_bullet = visualize_bullet
         self.visualize_unity = visualize_unity
         self.renderer = renderer
+        self.place_dst_xy = place_dst_xy
 
         print("**********DEMO ENVIRONMENT**********")
 
@@ -92,12 +100,16 @@ class DemoEnvironment:
             self.planning_vision_module = VisionModule(
                 load_checkpoint_path=self.opt.planning_checkpoint_path
             )
-            self.stacking_vision_module = VisionModule(
-                load_checkpoint_path=self.opt.stacking_checkpoint_path
-            )
-            # Initialize a class for tracking and computing metrics for the
-            # vision module's predictions.
-            # self.metrics = Metrics()
+            if task == "stack":
+                self.placing_vision_module = VisionModule(
+                    load_checkpoint_path=self.opt.stacking_checkpoint_path
+                )
+            elif task == "place":
+                self.placing_vision_module = VisionModule(
+                    load_checkpoint_path=self.opt.placing_checkpoint_path
+                )
+            else:
+                raise ValueError(f"Invalid task: {task}")
         if visualize_bullet:
             p.connect(p.GUI)
         else:
@@ -205,21 +217,27 @@ class DemoEnvironment:
             dst_idx: The index of the destination object.
             dst_xyz: The (x, y, z) location to end transport at / start placing.
         """
-        # Zero-pad the scene's position with fourth dimension because that's
-        # what the language module expects.
-        language_input = copy.deepcopy(observation)
-        print(f"scene:")
-        pprint.pprint(self.scene)
-        print(f"observation:")
-        pprint.pprint(observation)
-        for idx, odict in enumerate(language_input):
-            print(f'odict position: {odict["position"]}')
-            language_input[idx]["position"] = odict["position"] + [0.0]
+        # Language is only supported for stacking for now.
+        if self.task == "stack":
+            # Zero-pad the scene's position with fourth dimension because that's
+            # what the language module expects.
+            language_input = copy.deepcopy(observation)
+            for idx, odict in enumerate(language_input):
+                language_input[idx]["position"] = odict["position"] + [0.0]
 
-        # Feed through the language module.
-        src_idx, (dst_x, dst_y), dst_idx = NLPmod(
-            sentence=command, vision_output=language_input
-        )
+            # Feed through the language module.
+            src_idx, (dst_x, dst_y), dst_idx = NLPmod(
+                sentence=command, vision_output=language_input
+            )
+        elif self.task == "place":
+            # We assume that the first object in the scene is the source
+            # object.
+            src_idx = 0
+            dst_idx = None
+            assert self.place_dst_xy is not None
+            dst_x, dst_y = self.place_dst_xy
+        else:
+            raise ValueError(f"Invalid task: {self.task}.")
 
         # Compute the destination z based on whether there is a destination
         # object that we are placing on top of (stacking).
@@ -227,6 +245,7 @@ class DemoEnvironment:
             z = 0.0
         else:
             z = observation[dst_idx]["height"]
+
         dst_xyz = [dst_x, dst_y, z + utils.PLACE_START_CLEARANCE]
         return src_idx, dst_idx, dst_xyz
 
@@ -537,20 +556,28 @@ class DemoEnvironment:
 
         # Compute the observation vector from object poses and placing position.
         tdict = self.obs[self.src_idx]
-        bdict = self.obs[self.dst_idx]
         t_init_dict = self.scene[self.src_idx]
         x, y, z = t_init_dict["position"]
         is_box = t_init_dict["shape"] == "box"
+
+        if self.task == "stack":
+            bdict = self.obs[self.dst_idx]
+            b_pos = bdict["position"]
+            b_up = bdict["up_vector"]
+        elif self.task == "place":
+            b_pos = [0.0, 0.0, 0.0]
+            b_up = [0.0, 0.0, 1.0]
+
         p_obs = self.world.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
-            x,
-            y,
-            z,
-            tdict["height"] / 2,
-            is_box,
-            tdict["position"],
-            tdict["up_vector"],
-            bdict["position"],
-            bdict["up_vector"],
+            tx=x,
+            ty=y,
+            tz=z,
+            half_h=tdict["height"] / 2,
+            t_is_box=is_box,
+            t_pos=tdict["position"],
+            t_up=tdict["up_vector"],
+            b_pos=b_pos,
+            b_up=b_up,
         )
         return p_obs
 
@@ -632,7 +659,7 @@ class DemoEnvironment:
             vision_module = self.planning_vision_module
             camera_control = "center"
         elif stage == "place":
-            vision_module = self.stacking_vision_module
+            vision_module = self.placing_vision_module
             camera_control = "stack"
         else:
             raise ValueError(f"No vision module for stage: {stage}.")
@@ -669,14 +696,11 @@ class DemoEnvironment:
             # orientation. The predicted orientation will be the GT rotation
             # matrix, except with the last column overridden with the predicted
             # up vector.
-            # First, we extract the GT orientation. The observation currently
-            # holds the GT orientation.
-            gt_orientation = obs[idx]["orientation"]
-
-            # Convert the predicted up vector into an orientation, using the
-            # GT z rot.
+            # To do this, we convert the predicted up vector into an
+            # orientation, using the GT z rot.
             pred_orientation = util.up_to_orientation(
-                up=y_dict["up_vector"], gt_orientation=gt_orientation
+                up=y_dict["up_vector"],
+                gt_orientation=gt_odicts[idx]["orientation"],
             )
             obs[idx]["orientation"] = pred_orientation
 

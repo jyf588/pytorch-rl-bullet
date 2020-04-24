@@ -24,9 +24,10 @@ OPTIONS = argparse.Namespace(
     place_dir="./trained_models_0404_0_n_place_0404_0/ppo/",
     place_env_name="InmoovHandPlaceBulletEnv-v9",
     vision_delay=2,
-    planning_checkpoint_path="/home/michelle/mguo/outputs/planning_v003_20K/checkpoint_best.pt",
-    stacking_checkpoint_path="/home/michelle/mguo/outputs/stacking_v003_2K_20K/checkpoint_best.pt",
+    planning_checkpoint_path="/media/sdc3/mguo/outputs/planning_v003_20K/checkpoint_best.pt",
+    placing_checkpoint_path="/media/sdc3/mguo/outputs/placing_v003_2K_20K/checkpoint_best.pt",
+    stacking_checkpoint_path="/media/sdc3/mguo/outputs/stacking_v003_2K_20K/checkpoint_best.pt",
     coordinate_frame="unity_camera",
     save_predictions=True,
-    save_preds_dir="/home/michelle/mguo/outputs/system",
+    save_preds_dir="/media/sdc3/mguo/outputs/system/placing",
 )
