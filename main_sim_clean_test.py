@@ -15,7 +15,7 @@ import torch
 import math
 
 import my_pybullet_envs
-from demo import policy, openrave
+from system import policy, openrave
 import pybullet as p
 import time
 
@@ -49,6 +49,9 @@ homedir = os.path.expanduser("~")
 sys.path.append("a2c_ppo_acktr")
 parser = argparse.ArgumentParser(description="RL")
 parser.add_argument("--seed", type=int, default=101)    # only keep np.random
+parser.add_argument("--use_height", type=int, default=0)
+parser.add_argument("--test_placing", type=int, default=0)
+parser.add_argument("--long_move", type=int, default=0)
 parser.add_argument("--non-det", type=int, default=0)
 args = parser.parse_args()
 np.random.seed(args.seed)
@@ -59,12 +62,19 @@ args.det = not args.non_det
 USE_GV5 = False  # is false, use gv6
 DUMMY_SLEEP = False
 WITH_REACHING = True
-USE_HEIGHT_INFO = True
+WITH_RETRACT = True
+USE_HEIGHT_INFO = bool(args.use_height)
+TEST_PLACING = bool(args.test_placing)    # if false, test stacking
+ADD_SURROUNDING_OBJS = True
+LONG_MOVE = bool(args.long_move)
+SURROUNDING_OBJS_MAX_NUM = 4
 
-NUM_TRIALS = 400
+CLOSE_THRES = 0.25
+
+NUM_TRIALS = 1000
 
 GRASP_END_STEP = 35
-PLACE_END_STEP = 90
+PLACE_END_STEP = 75
 
 INIT_NOISE = True
 DET_CONTACT = 0  # 0 false, 1 true
@@ -119,7 +129,7 @@ PLACING_CONTROL_SKIP = 6
 GRASPING_CONTROL_SKIP = 6
 
 
-def planning(trajectory):
+def planning(trajectory, restore_fingers=False):
     last_tar_arm_q = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
     # env_core.robot.maxForce = 1000
     for idx in range(len(trajectory) + 50):
@@ -127,6 +137,12 @@ def planning(trajectory):
             tar_arm_q = trajectory[-1]
         else:
             tar_arm_q = trajectory[idx]
+
+        if restore_fingers and idx >= len(trajectory) * 0.1:   # TODO: hardcoded
+            blending = np.clip((idx - len(trajectory) * 0.1) / (len(trajectory) * 0.6), 0.0, 1.0)
+            cur_fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
+            tar_fin_q = env_core.robot.init_fin_q * blending + cur_fin_q * (1-blending)
+            env_core.robot.tar_fin_q = tar_fin_q
 
         # env_core.robot.tar_arm_q = tar_arm_q
         env_core.robot.apply_action([0.0] * 24)
@@ -142,17 +158,18 @@ def planning(trajectory):
             controlMode=p.POSITION_CONTROL,
             targetPositions=list(tar_arm_q),
             targetVelocities=list(tar_vel),
-            forces=[200. * 5] * len(env_core.robot.arm_dofs))  # TODO: wrist force limit?
+            forces=[200. * 5] * len(env_core.robot.arm_dofs))  # TODO: wrist force limit *3?
 
         # print("act", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
         diff = np.linalg.norm(env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
                               - tar_arm_q)
-        if diff > 1e-2:
-            print("diff", diff)
+        if idx == len(trajectory) - 1:
+            print("diff 0", diff)
+        if idx == len(trajectory) + 49:
+            print("diff 1", diff)
 
         for _ in range(1):
             p.stepSimulation()
-        # time.sleep(utils.TS * 1.0)
         if DUMMY_SLEEP:
             time.sleep(utils.TS / 2.0)
 
@@ -183,19 +200,29 @@ def get_relative_state_for_reset(oid):
     return relative_state
 
 
-def sample_obj_dict(is_thicker=False):
+def sample_obj_dict(is_thicker=False, whole_table_top=False):
     # a dict containing obj info
     # "shape", "radius", "height", "position", "orientation", "mass", "mu"
 
     min_r = utils.HALF_W_MIN_BTM if is_thicker else utils.HALF_W_MIN
+    if whole_table_top:
+        x_min = utils.X_MIN
+        x_max = utils.X_MAX
+        y_min = utils.Y_MIN
+        y_max = utils.Y_MAX
+    else:
+        x_min = utils.TX_MIN
+        x_max = utils.TX_MAX
+        y_min = utils.TY_MIN
+        y_max = utils.TY_MAX
 
     obj_dict = {
         "shape": utils.SHAPE_IND_TO_NAME_MAP[np.random.randint(2)],
         "radius": np.random.uniform(min_r, utils.HALF_W_MAX),
         "height": np.random.uniform(utils.H_MIN, utils.H_MAX),
         "position": [
-            np.random.uniform(utils.TX_MIN, utils.TX_MAX),
-            np.random.uniform(utils.TY_MIN, utils.TY_MAX),
+            np.random.uniform(x_min, x_max),
+            np.random.uniform(y_min, y_max),
             0.0
         ],
         "orientation": p.getQuaternionFromEuler(
@@ -211,6 +238,38 @@ def sample_obj_dict(is_thicker=False):
     obj_dict["position"][2] = obj_dict["height"] / 2.0
 
     return obj_dict
+
+
+def load_obj_and_construct_state(obj_dicts_list):
+    state = {}
+    # load surrounding first
+    for idx in range(2, len(obj_dicts_list)):
+        bullet_id = utils.create_sym_prim_shape_helper_new(obj_dicts_list[idx])
+        state[bullet_id] = obj_dicts_list[idx]
+
+    bottom_id = None
+    # ignore btm if placing on tabletop
+    if not TEST_PLACING:
+        obj_dicts_list[1]['color'] = 'green'
+        bottom_id = utils.create_sym_prim_shape_helper_new(obj_dicts_list[1])
+        state[bottom_id] = obj_dicts_list[1]
+
+    # TODO:tmp load grasp obj last
+    obj_dicts_list[0]['color'] = 'red'
+    topobj_id = utils.create_sym_prim_shape_helper_new(obj_dicts_list[0])
+    state[topobj_id] = obj_dicts_list[0]
+    return state, topobj_id, bottom_id
+
+
+def construct_obj_array_for_openrave(obj_dicts_list):
+    arr = []
+    for idx, obj_dict in enumerate(obj_dicts_list):
+        if idx == 1 and TEST_PLACING:
+            # ignore btm if placing on tabletop
+            continue
+        # grasp obj should be at first
+        arr.append(obj_dict["position"][:2] + [0., 0.])
+    return np.array(arr)
 
 
 def get_grasp_policy_obs_tensor(tx, ty, half_height, is_box):
@@ -239,33 +298,58 @@ def get_stack_policy_obs_tensor(tx, ty, tz, t_half_height, is_box, t_pos, t_up, 
     return obs
 
 
+def is_close(obj_dict_a, obj_dict_b, dist=CLOSE_THRES):
+    xa, ya = obj_dict_a["position"][0], obj_dict_a["position"][1]
+    xb, yb = obj_dict_b["position"][0], obj_dict_b["position"][1]
+    return (xa - xb)**2 + (ya - yb)**2 < dist**2
+
+
 def get_stacking_obs(
+    obj_state: dict,
     top_oid: int,
     btm_oid: int,
 ):
     """Retrieves stacking observations.
 
     Args:
+        obj_state: world obj state dict of dicts
         top_oid: The object ID of the top object.
         btm_oid: The object ID of the bottom object.
 
     Returns:
-        t_pos: The xyz position of the top object.
-        t_up: The up vector of the top object.
-        b_pos: The xyz position of the bottom object.
-        b_up: The up vector of the bottom object.
-        t_half_height: Half of the height of the top object.
+        top_pos: The xyz position of the top object.
+        top_up: The up vector of the top object.
+        btm_pos: The xyz position of the bottom object.
+        btm_up: The up vector of the bottom object.
+        top_half_height: Half of the height of the top object.
     """
 
-    t_pos, t_quat = p.getBasePositionAndOrientation(top_oid)
-    b_pos, b_quat = p.getBasePositionAndOrientation(btm_oid)
+    top_pos, top_quat = p.getBasePositionAndOrientation(top_oid)
+    if btm_oid is None:
+        btm_pos, btm_quat = [0.0, 0, 0], [0.0, 0, 0, 1]
+    else:
+        btm_pos, btm_quat = p.getBasePositionAndOrientation(btm_oid)
 
-    t_up = utils.quat_to_upv(t_quat)
-    b_up = utils.quat_to_upv(b_quat)
+    top_up = utils.quat_to_upv(top_quat)
+    btm_up = utils.quat_to_upv(btm_quat)
 
-    t_half_height = objs[top_id]["height"] / 2      # TODO: add noise to GT
+    top_half_height = obj_state[top_oid]["height"] / 2      # TODO: add noise to GT
 
-    return t_pos, t_up, b_pos, b_up, t_half_height
+    return top_pos, top_up, btm_pos, btm_up, top_half_height
+
+
+def gen_surrounding_objs(obj_dicts_list):
+    # gen objs and modifies obj_dicts_list accordingly
+    if ADD_SURROUNDING_OBJS:
+        num_obj = np.random.randint(SURROUNDING_OBJS_MAX_NUM) + 1  # 1,2,3,4
+        retries = 0
+        while len(obj_dicts_list) - 2 < num_obj and retries < 50:
+            new_obj_dict = sample_obj_dict(whole_table_top=True)
+            is_close_arr = [is_close(new_obj_dict, obj_dict) for obj_dict in obj_dicts_list]
+            if not any(is_close_arr):
+                obj_dicts_list.append(new_obj_dict)
+            retries += 1
+    return obj_dicts_list
 
 
 success_count = 0
@@ -288,20 +372,22 @@ p_pos_of_ave, p_quat_of_ave = p.invertTransform(
 
 """Start Bullet session."""
 
-p.connect(p.GUI)
+p.connect(p.DIRECT)
 
 for trial in range(NUM_TRIALS):
-    """Sample two objects"""
+    """Sample two/N objects"""
+
+    all_dicts = []
 
     while True:
         top_dict = sample_obj_dict()
         btm_dict = sample_obj_dict(is_thicker=True)
 
-        # TODO: add noise to GT
         g_tx, g_ty = top_dict["position"][0], top_dict["position"][1]
         p_tx, p_ty, p_tz = btm_dict["position"][0], btm_dict["position"][1], btm_dict["height"]
         t_half_height = top_dict["height"]/2
 
+        # TODO: add noise to GT
         g_tx += np.random.uniform(low=-0.01, high=0.01)
         g_ty += np.random.uniform(low=-0.01, high=0.01)
         t_half_height += np.random.uniform(low=-0.01, high=0.01)
@@ -309,11 +395,19 @@ for trial in range(NUM_TRIALS):
         p_ty += np.random.uniform(low=-0.01, high=0.01)
         p_tz += np.random.uniform(low=-0.01, high=0.01)
 
-        # required by OpenRave
-        OBJECTS = np.array([top_dict["position"][:2]+[0., 0.], btm_dict["position"][:2]+[0., 0.]])
+        if TEST_PLACING:
+            # overwrite ptz
+            p_tz = 0.0
+
         is_box = (top_dict["shape"] == "box")
 
-        if (g_tx - p_tx)**2 + (g_ty - p_ty)**2 > 0.2**2:
+        dist = CLOSE_THRES*2.0 if LONG_MOVE else CLOSE_THRES
+        if is_close(top_dict, btm_dict, dist=dist):
+            continue        # discard & re-sample
+        else:
+            all_dicts = [top_dict, btm_dict]
+            gen_surrounding_objs(all_dicts)
+            del top_dict, btm_dict
             break
 
     """Imaginary arm session to get q_reach"""
@@ -343,7 +437,10 @@ for trial in range(NUM_TRIALS):
     if USE_HEIGHT_INFO:
         desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + p_tz]
     else:
-        desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + utils.H_MAX]
+        if TEST_PLACING:
+            desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + 0.0]
+        else:
+            desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + utils.H_MAX]
 
     table_id = utils.create_table(FLOOR_MU)
 
@@ -357,6 +454,7 @@ for trial in range(NUM_TRIALS):
     Qdestin = utils.get_n_optimal_init_arm_qs(
         robot, p_pos_of_ave, p_quat_of_ave, desired_obj_pos, table_id
     )[0]
+    del table_id, robot, desired_obj_pos
     p.resetSimulation()
 
     """Clean up the simulation, since this is only imaginary."""
@@ -367,8 +465,6 @@ for trial in range(NUM_TRIALS):
     p.setPhysicsEngineParameter(deterministicOverlappingPairs=DET_CONTACT)
     p.setTimeStep(utils.TS)
     p.setGravity(0, 0, -utils.GRAVITY)
-
-    # top_id = utils.create_sym_prim_shape_helper_new(top_dict)
 
     table_id = utils.create_table(FLOOR_MU)
 
@@ -389,12 +485,8 @@ for trial in range(NUM_TRIALS):
     else:
         env_core.robot.reset_with_certain_arm_q(Qreach)
 
-    btm_id = utils.create_sym_prim_shape_helper_new(btm_dict)
-    top_id = utils.create_sym_prim_shape_helper_new(top_dict)
-    objs = {
-        btm_id: btm_dict,
-        top_id: top_dict,
-    }
+    objs, top_id, btm_id = load_obj_and_construct_state(all_dicts)
+    OBJECTS = construct_obj_array_for_openrave(all_dicts)
 
     """Prepare for grasping. Reach for the object."""
 
@@ -414,9 +506,6 @@ for trial in range(NUM_TRIALS):
 
         print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
         # input("press enter")
-
-    if not USE_GV5:
-        p.stepSimulation()
 
     g_obs = get_grasp_policy_obs_tensor(g_tx, g_ty, t_half_height, is_box)
 
@@ -443,10 +532,10 @@ for trial in range(NUM_TRIALS):
     final_g_obs = copy.copy(g_obs)
     del g_obs, g_tx, g_ty, t_half_height
 
-    state = get_relative_state_for_reset(top_id)
-    print("after grasping", state)
-    print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
-    # input("after grasping")
+    # state = get_relative_state_for_reset(top_id)
+    # print("after grasping", state)
+    # print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
+    # # input("after grasping")
 
     """Send move command to OpenRAVE"""
     Qmove_init = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
@@ -478,6 +567,7 @@ for trial in range(NUM_TRIALS):
     env_core.change_control_skip_scaling(c_skip=PLACING_CONTROL_SKIP)
 
     t_pos, t_up, b_pos, b_up, t_half_height = get_stacking_obs(
+        obj_state=objs,
         top_oid=top_id,
         btm_oid=btm_id,
     )
@@ -497,7 +587,7 @@ for trial in range(NUM_TRIALS):
     p_obs = get_stack_policy_obs_tensor(
         p_tx, p_ty, p_tz, t_half_height, is_box, t_pos, t_up, b_pos, b_up
     )
-    print("pobs", p_obs)
+    # print("pobs", p_obs)
     # input("ready to place")
 
     """Execute placing"""
@@ -519,6 +609,7 @@ for trial in range(NUM_TRIALS):
                 t_half_height,
             )
             t_pos, t_up, b_pos, b_up, t_half_height = get_stacking_obs(
+                obj_state=objs,
                 top_oid=top_id,
                 btm_oid=btm_id,
             )
@@ -537,19 +628,27 @@ for trial in range(NUM_TRIALS):
     # print(f"Pose after placing")
     # pprint.pprint(pose_saver.poses[-1])
 
-    print(f"Starting release trajectory")
-    # execute_release_traj()
-    for ind in range(0, 100):
-        p.stepSimulation()
-        if DUMMY_SLEEP:
-            time.sleep(utils.TS)
-        # pose_saver.get_poses()
+    if WITH_RETRACT:
+        print(f"Starting release trajectory")
+        Qretract_init = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
+        retract_save_path = homedir + "/container_data/PB_RETRACT.npz"
+        retract_read_path = homedir + "/container_data/OR_RETRACT.npz"
 
-    # if SAVE_POSES:
-    #     pose_saver.save()
+        OBJECTS[0, :] = np.array([p_tx, p_ty, p_tz, 0.0])       # note: p_tz is 0 for placing
+
+        Traj_reach = openrave.get_traj_from_openrave_container(
+            OBJECTS, Qretract_init, None, retract_save_path, retract_read_path
+        )
+
+        if Traj_reach is None or len(Traj_reach) == 0:
+            p.resetSimulation()
+            print("*******", success_count * 1.0 / (trial + 1))
+            continue  # TODO: retracting failed
+        else:
+            planning(Traj_reach, restore_fingers=True)
 
     t_pos, t_quat = p.getBasePositionAndOrientation(top_id)
-    if t_pos[2] > 0.15 and (t_pos[0] - p_tx)**2 + (t_pos[1] - p_ty)**2 < 0.1**2:
+    if t_pos[2] - p_tz > 0.05 and (t_pos[0] - p_tx)**2 + (t_pos[1] - p_ty)**2 < 0.1**2:
         # a very rough check
         success_count += 1
 
@@ -561,3 +660,9 @@ for trial in range(NUM_TRIALS):
 p.disconnect()
 print("*******total", success_count * 1.0 / NUM_TRIALS)
 print("*******total w/o OR", success_count * 1.0 / openrave_success_count)
+
+f = open("final_stats.txt", "a")
+f.write(f"*******total: {success_count * 1.0 / NUM_TRIALS:.3f})")
+f.write(f"*******total w/o OR: {success_count * 1.0 / openrave_success_count:.3f})")
+f.write("\n")
+f.close()

@@ -46,10 +46,16 @@ HALF_W_MIN_BTM = 0.045  # only stack on larger objects
 H_MIN = 0.13
 H_MAX = 0.18
 
+# manipulable range
 TX_MIN = -0.1
 TX_MAX = 0.25
 TY_MIN = -0.1
 TY_MAX = 0.5
+# whole table range
+X_MIN = -0.1
+X_MAX = 0.3
+Y_MIN = -0.3
+Y_MAX = 0.7
 
 TABLE_OFFSET = [0.1, 0.2, 0.0]
 # TODO: during training, make table a bit thicker/higher?
@@ -271,14 +277,15 @@ def from_bullet_dimension(shape, dim):
 
 
 def get_n_optimal_init_arm_qs(
-    robot, p_pos_of, p_quat_of, desired_obj_pos, table_id, n=2, wrist_gain=1.0
+    robot, p_pos_of, p_quat_of, desired_obj_pos, table_id, n=2, wrist_gain=1.0,
+    desired_obj_quat=(0.0, 0, 0, 1)
 ):
     # NOTE: robot is a InMoov object
     # NOTE: if table_id none, do not check init arm collision with table.
     arm_qs_costs = []
     ref = np.array([0.0] * 3 + [-1.57] + [0.0] * 3)
     for ind, cand_quat in enumerate(INIT_PALM_CANDIDATE_QUATS):
-        # p_pos_of_ave, p_quat_of_ave = p.invertTransform(o_pos_pf, o_quat_pf)
+        _, cand_quat = p.multiplyTransforms([0., 0, 0], list(cand_quat), [0., 0, 0], list(desired_obj_quat))
         p_pos, p_quat = p.multiplyTransforms(
             desired_obj_pos, cand_quat, p_pos_of, p_quat_of
         )

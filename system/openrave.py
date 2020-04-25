@@ -81,8 +81,8 @@ def compute_trajectory(
 
 def get_traj_from_openrave_container(
     object_positions: np.ndarray,
-    q_start: np.ndarray,
-    q_end: np.ndarray,
+    q_start: Union[np.ndarray, None],
+    q_end: Union[np.ndarray, None],
     save_path: str,
     load_path: str,
 ) -> np.ndarray:
@@ -106,10 +106,14 @@ def get_traj_from_openrave_container(
     print(f"q_start: {q_start}")
     print(f"q_end: {q_end}")
 
-    if q_start is not None:
+    if q_start is not None and q_end is not None:
         np.savez(save_path, object_positions, q_start, q_end)  # move
-    else:
+    elif q_end is not None:
         np.savez(save_path, object_positions, q_end)  # reach has q_start 0
+    elif q_start is not None:
+        np.savez(save_path, object_positions, q_start)  # retract always ends at zero
+    else:
+        assert False
 
     # Wait for command from OpenRave
 
@@ -127,8 +131,8 @@ def get_traj_from_openrave_container(
     if os.path.isfile(load_path):
         time.sleep(0.3)  # TODO: wait for networking
         loaded_data = np.load(load_path)
-        # traj_i = loaded_data["arr_0"]
-        # traj_s = loaded_data["arr_1"]
+        traj_i = loaded_data["arr_0"]
+        traj_s = loaded_data["arr_1"]
         print("loaded")
         # for k in range(7):
         #     plt.plot(range(400), traj_i[:,k])
@@ -145,4 +149,4 @@ def get_traj_from_openrave_container(
         raise ValueError("%s isn't a file!" % load_path)
     print("Trajectory obtained from OpenRave!")
     # input("press enter")
-    return loaded_data
+    return traj_s
