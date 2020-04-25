@@ -2,6 +2,7 @@
 
 import argparse
 import copy
+import pprint
 import sys
 from typing import *
 
@@ -43,8 +44,8 @@ async def send_to_client(websocket, path):
         src_shape = scene[1]["shape"]
         command = f"Put the green {src_shape} on top of the blue {dst_shape}"
 
-        # for task in ["stack", "place"]:
-        for task in ["place"]:
+        for task in ["stack", "place"]:
+            # for task in ["place"]:
             for obs_mode in ["gt", "vision"]:
                 # for obs_mode in ["vision"]:
                 # for obs_mode in ["gt"]:
@@ -53,8 +54,8 @@ async def send_to_client(websocket, path):
                 # now, and set the placing destination xy location to be the
                 # location of the original blue object (deleted).
                 if task == "place":
-                    task_scene = [copy.deepcopy(scene[1])]
-                    dest_object = copy.deepcopy(task_scene[0])
+                    task_scene = copy.deepcopy(scene[1:])
+                    dest_object = copy.deepcopy(scene[1])
                     place_dst_xy = scene[0]["position"][:2]
                     dest_object["position"][0] = place_dst_xy[0]
                     dest_object["position"][1] = place_dst_xy[1]
@@ -137,6 +138,7 @@ async def send_to_client(websocket, path):
                                     h_odicts=env.obs,
                                     color=None,
                                 )
+                                # input("x")
 
                             if render_hallucinations:
                                 if task == "place":
@@ -145,7 +147,7 @@ async def send_to_client(websocket, path):
                                         h_odicts=[dest_object],
                                         color="clear",
                                     )
-
+                                    # input("x")
                             if send_image:
                                 bullet_camera_targets = (
                                     last_bullet_camera_targets
@@ -206,8 +208,7 @@ def generate_scenes():
         mu_bounds=(OPTIONS.obj_mu, OPTIONS.obj_mu),
         position_mode="com",
     )
-    # Remaining objects.
-    generator_all = RandomObjectsGenerator(
+    generator_bottom = RandomObjectsGenerator(
         seed=OPTIONS.seed,
         n_objs_bounds=(1, 1),
         obj_dist_thresh=0.2,
@@ -223,13 +224,34 @@ def generate_scenes():
         mu_bounds=(OPTIONS.obj_mu, OPTIONS.obj_mu),
         position_mode="com",
     )
+    # Remaining objects.
+    generator_all = RandomObjectsGenerator(
+        seed=OPTIONS.seed,
+        n_objs_bounds=(2, 5),
+        obj_dist_thresh=0.2,
+        max_retries=50,
+        shapes=["box", "cylinder", "sphere"],
+        colors=["red", "yellow"],
+        radius_bounds=(utils.HALF_W_MIN, utils.HALF_W_MAX),
+        height_bounds=(utils.H_MIN, utils.H_MAX),
+        x_bounds=(utils.TX_MIN, utils.TX_MAX),
+        y_bounds=(utils.TY_MIN, utils.TY_MAX),
+        z_bounds=(0.0, 0.0),
+        mass_bounds=(utils.MASS_MIN, utils.MASS_MAX),
+        mu_bounds=(OPTIONS.obj_mu, OPTIONS.obj_mu),
+        position_mode="com",
+    )
     scenes = []
     for _ in range(100):
         top_scene = generator_top.generate_tabletop_objects()
-        all_scene = generator_all.generate_tabletop_objects(
+        bottom_scene = generator_bottom.generate_tabletop_objects(
             existing_odicts=top_scene
         )
-        scene = top_scene + all_scene
+        all_scene = generator_all.generate_tabletop_objects(
+            existing_odicts=top_scene + bottom_scene
+        )
+
+        scene = top_scene + bottom_scene + all_scene
         scenes.append(scene)
     return scenes
 
@@ -237,15 +259,21 @@ def generate_scenes():
 def add_hallucinations_to_state(state: Dict, h_odicts: Dict, color: str):
     state = copy.deepcopy(state)
     h_odicts = copy.deepcopy(h_odicts)
+    # print(f"h_odicts:")
+    # pprint.pprint(h_odicts)
     n_existing_objects = len(state["objects"])
-    if h_odicts is not None:
-        for oi, odict in enumerate(h_odicts):
-            # Set the color to be the clear version of the object color.
-            if color is None:
-                ocolor = odict["color"]
-                color = f"clear_{ocolor}"
-            odict["color"] = color
-            state["objects"][f"h_{n_existing_objects + oi}"] = odict
+    for oi, odict in enumerate(h_odicts):
+        # Set the color to be the clear version of the object color.
+        if color is None:
+            ocolor = odict["color"]
+            hallu_color = f"clear_{ocolor}"
+        else:
+            hallu_color = color
+        odict["color"] = hallu_color
+        state["objects"][f"h_{n_existing_objects + oi}"] = odict
+    # input("x")
+    # print("state:")
+    # pprint.pprint(state)
     return state
 
 

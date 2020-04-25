@@ -651,22 +651,29 @@ class DemoEnvironment:
         gt_odicts = copy.deepcopy(
             self.get_observation(observation_mode="gt", renderer=self.renderer)
         )
-        obs = copy.deepcopy(gt_odicts)
+        # obs = copy.deepcopy(gt_odicts)
 
         # Select the vision module based on the current stage.
         stage, _ = self.get_current_stage()
         if stage == "plan":
             vision_module = self.planning_vision_module
             camera_control = "center"
+            num_obs = len(gt_odicts)
         elif stage == "place":
             vision_module = self.placing_vision_module
             camera_control = "stack"
+            if self.task == "place":
+                num_obs = 1
+            elif self.task == "stack":
+                num_obs = 2
+
         else:
             raise ValueError(f"No vision module for stage: {stage}.")
 
         # Predict the object pose for the objects that we've "looked" at.
         pred_odicts = []
-        for idx in range(len(obs)):
+        pred_obs = []
+        for idx in range(num_obs):
             cam_tid = gen_dataset.get_camera_target_id(
                 oid=idx, camera_control=camera_control
             )
@@ -689,8 +696,8 @@ class DemoEnvironment:
             pred_odicts.append(y_dict)
 
             # Update the position and up vector with predicted values.
-            obs[idx]["position"] = y_dict["position"]
-            obs[idx]["up_vector"] = y_dict["up_vector"]
+            # obs[idx]["position"] = y_dict["position"]
+            # obs[idx]["up_vector"] = y_dict["up_vector"]
 
             # Important: override the GT orientation with the predicted
             # orientation. The predicted orientation will be the GT rotation
@@ -702,7 +709,13 @@ class DemoEnvironment:
                 up=y_dict["up_vector"],
                 gt_orientation=gt_odicts[idx]["orientation"],
             )
-            obs[idx]["orientation"] = pred_orientation
+            # obs[idx]["orientation"] = pred_orientation
+            gt_odict = gt_odicts[idx]
+            pred_odict = copy.deepcopy(gt_odict)
+            pred_odict["position"] = y_dict["position"]
+            pred_odict["up_vector"] = y_dict["up_vector"]
+            pred_odict["orientation"] = pred_orientation
+            pred_obs.append(pred_odict)
 
         # Save the predicted and ground truth object dictionaries.
         if self.opt.save_predictions:
@@ -715,7 +728,7 @@ class DemoEnvironment:
             util.save_pickle(
                 path=path, data={"gt": gt_odicts, "pred": pred_odicts}
             )
-        return obs
+        return pred_obs
 
     def get_images(self, oid: int, renderer: str, cam_tid: int):
         """Retrieves the images that are input to the vision module.
