@@ -135,14 +135,8 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         p.setGravity(0, 0, -10)
         self.timer = 0
 
-        # if self.cotrain_onstack_grasp:
-        #     self.grasp_floor = self.np_random.randint(10) > 5
-        if self.warm_start:
-            if self.cotrain_onstack_grasp:
-                self.grasp_floor = self.np_random.randint(10) >= 7  # 30%, TODO
-        else:
-            if self.cotrain_onstack_grasp:
-                self.grasp_floor = self.np_random.randint(10) >= 6  # 40%, TODO
+        if self.cotrain_onstack_grasp:
+            self.grasp_floor = self.np_random.randint(10) >= 6  # 40%
 
         mu_f = self.np_random.uniform(utils.MU_MIN, utils.MU_MAX)
         self.table_id = utils.create_table(mu_f)

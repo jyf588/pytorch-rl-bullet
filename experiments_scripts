@@ -1725,7 +1725,7 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --l
 
 python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --log-interval 10 --num-steps 300 --num-processes 16  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps 12000000 --use-linear-lr-decay --use-proper-time-limits --clip-param 0.2 --save-dir trained_models_0331_co_2_w_co_0331_0  --seed 8310 --random_top_shape 1 --cotrain_stack_place 1 --obs_noise 0 --exclude_hard 0 --n_best_cand 2
 # 79%
-# TODO: need to make grasp_pi_name option to work
+# need to make grasp_pi_name option to work
 
 4/2 23:58
 # run the whole crack again
@@ -1770,6 +1770,9 @@ python main.py --env-name "InmoovHandPlaceBulletEnv-v9" --algo ppo --use-gae --l
 4/10 00:18
 # train_0410.sh
 
+train_0422.sh
+# remove orientation from sphere placing.
+
 # train_0410_2.sh
 # try get rid of height during training/planning
 Floor v6 crank:
@@ -1780,13 +1783,13 @@ without height and from stack grasping (TB tested)
 0412
 
 # whole system issues:
-# TODO: large obj collide during transporting --> make a large BB, move up & move down
-# TODO: collide with other objs during grasping. --> increase dev pen, or make drop condition harsh
-# TODO: new issue, might need multiple candidate for placing. --> train placing on all (or several) wrists
-# TODO: sometimes go through bottom of table.. --> maybe lower table in OR is enough
+# large obj collide during transporting --> make a large BB, move up & move down
+# collide with other objs during grasping. --> increase dev pen, or make drop condition harsh
+# new issue, might need multiple candidate for placing. --> train placing on all (or several) wrists
+# sometimes go through bottom of table.. --> maybe lower table in OR is enough
 
 # TODO: slip in hand sometimes. What is the best way to avoid this
-# TODO: new issue, hand penetrate into obj, will slip during transporting.
+# new issue, hand penetrate into obj, will slip during transporting.
 
 # TODO: planning hacks:
 Now, if reaching planning fails, probably because:
@@ -1794,10 +1797,9 @@ Now, if reaching planning fails, probably because:
 Now, if transporting planning fails
 	- BB already in collision with other objects (mostly before transport) -> jitter helpful or not?
 # hand BB size different -> this is fine.
-# move make table lower than reach -> should be solvable by move up first, but not really necessary
+# move make table lower than reach -> should be solvable by move up first, but not really necessary --> done
 # ---> cannot make table top higher, unless when PB calculates Qreach, filter out using elevated table. & move up first
 # move table very large -> should also be fine if move up first.
-# TODO hack: making obstacles smaller (0.2->0.16)
 
 MISC TODO s:
 # TODO: does obj/robot order matter
@@ -1810,9 +1812,10 @@ MISC TODO s:
 # TODO: wrist gain of placing is too small maybe
 # TODO: Place ball should not use 6D!!! & test sphere
 # TODO: move table seems can be smaller
-# TODO: add torso
+# TODO: add torso, remove forarm if fails
 # TODO: add more white noise
-# sometimes obj blocked by floor during moving.
+# TODO: add one bit for placing floor/stacking since height is no longer used.
+ # should perturb all fin q and tar fin q as well
 
 
 # run the crack
