@@ -12,7 +12,7 @@ import inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 
 
-class InmoovShadowHandGraspEnvV6(gym.Env):
+class InmoovShadowHandReachGraspEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
@@ -20,16 +20,16 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
                  init_noise=True,
                  up=True,
 
-                 random_top_shape=True,
-                 det_top_shape_ind=1,  # if not random shape, 1 box, 0 cyl, -1 sphere,
+                 random_top_shape=False,
+                 det_top_shape_ind=0,  # if not random shape, 1 box, 0 cyl, -1 sphere,
 
-                 cotrain_onstack_grasp=True,
+                 cotrain_onstack_grasp=False,
                  grasp_floor=True,  # if not cotrain, is grasp from stack or grasp on table
 
                  control_skip=6,
                  obs_noise=True,
 
-                 n_best_cand=2,
+                 # n_best_cand=2,
 
                  has_test_phase=True,
                  warm_start_phase=False,
@@ -49,9 +49,9 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         self.obs_noise = obs_noise
 
         self.has_test_phase = has_test_phase
-        self.test_start = 50
+        self.test_start = 100        # 50 longer than grasping only
 
-        self.n_best_cand = int(n_best_cand)
+        # self.n_best_cand = int(n_best_cand)
 
         # dummy, to be overwritten
         self.top_obj = {'id': None,
@@ -83,7 +83,8 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
         self.control_skip = int(control_skip)
         # shadow hand is 22-5=17dof
-        self.action_scale = np.array([0.009 / self.control_skip] * 7 + [0.024 / self.control_skip] * 17)
+        self.init_act_scale = np.array([0.04 / self.control_skip] * 7 + [0.0 / self.control_skip] * 17)
+        self.action_scale = self.init_act_scale
 
         self.p_pos_of_init = utils.PALM_POS_OF_INIT
         self.p_quat_of_init = p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT)
@@ -113,20 +114,22 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
                 self.tx, self.ty, self.tz, self.tx_act, self.ty_act, self.tz_act = \
                     utils.sample_tx_ty_tz(self.np_random, self.up, self.grasp_floor, 0.0, 0.0)
 
-            # desired_obj_pos = [self.tx, self.ty, self.tz]    # used for planning
-            if self.grasp_floor:
-                desired_obj_pos = [self.tx, self.ty, self.np_random.uniform(-0.01, 0.01)]
-            else:
-                desired_obj_pos = [self.tx, self.ty, self.np_random.uniform(0.15, 0.17)]    # TODO: hardcoded
+            return
 
-            arm_qs = utils.get_n_optimal_init_arm_qs(self.robot, self.p_pos_of_init, self.p_quat_of_init,
-                                                     desired_obj_pos, self.table_id, n=self.n_best_cand,
-                                                     wrist_gain=3.0)    # TODO
-            if len(arm_qs) == 0:
-                continue
-            else:
-                arm_q = arm_qs[self.np_random.randint(len(arm_qs))]
-                return arm_q
+            # # desired_obj_pos = [self.tx, self.ty, self.tz]    # used for planning
+            # if self.grasp_floor:
+            #     desired_obj_pos = [self.tx, self.ty, self.np_random.uniform(-0.01, 0.01)]
+            # else:
+            #     desired_obj_pos = [self.tx, self.ty, self.np_random.uniform(0.15, 0.17)]
+            #
+            # arm_qs = utils.get_n_optimal_init_arm_qs(self.robot, self.p_pos_of_init, self.p_quat_of_init,
+            #                                          desired_obj_pos, self.table_id, n=self.n_best_cand,
+            #                                          wrist_gain=3.0)
+            # if len(arm_qs) == 0:
+            #     continue
+            # else:
+            #     arm_q = arm_qs[self.np_random.randint(len(arm_qs))]
+            #     return arm_q
 
     def reset(self):
         p.resetSimulation()
@@ -134,6 +137,8 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         p.setTimeStep(self._timeStep)
         p.setGravity(0, 0, -10)
         self.timer = 0
+
+        self.action_scale = self.init_act_scale
 
         if self.cotrain_onstack_grasp:
             self.grasp_floor = self.np_random.randint(10) >= 6  # 40%
@@ -143,8 +148,9 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
         self.robot = InmoovShadowNew(init_noise=self.init_noise, timestep=self._timeStep, np_random=self.np_random)
 
-        arm_q = self.sample_valid_arm_q()
-        self.robot.reset_with_certain_arm_q(arm_q)
+        self.sample_valid_arm_q()       # reset obj init position, bad naming
+        # arm_q = self.sample_valid_arm_q()
+        self.robot.reset_with_certain_arm_q([0.0]+[-1.9]+[0.0]*5)
 
         if not self.grasp_floor:
             bo = self.btm_obj       # reference for safety
@@ -202,17 +208,17 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         bottom_id = self.table_id if self.grasp_floor else self.btm_obj['id']
 
         if self.has_test_phase:
-            if self.timer == self.test_start * self.control_skip:
-                self.force_global = [self.np_random.uniform(-100, 100),
-                                     self.np_random.uniform(-100, 100),
-                                     -200.]
+            # if self.timer == self.test_start * self.control_skip:
+            #     self.force_global = [self.np_random.uniform(-100, 100),
+            #                          self.np_random.uniform(-100, 100),
+            #                          -200.]
 
             if self.timer > self.test_start * self.control_skip:
                 p.setCollisionFilterPair(self.top_obj['id'], bottom_id, -1, -1, enableCollision=0)
-                _, quat = p.getBasePositionAndOrientation(self.top_obj['id'])
-                _, quat_inv = p.invertTransform([0, 0, 0], quat)
-                force_local, _ = p.multiplyTransforms([0, 0, 0], quat_inv, self.force_global, [0, 0, 0, 1])
-                p.applyExternalForce(self.top_obj['id'], -1, force_local, [0, 0, 0], flags=p.LINK_FRAME)
+                # _, quat = p.getBasePositionAndOrientation(self.top_obj['id'])
+                # _, quat_inv = p.invertTransform([0, 0, 0], quat)
+                # force_local, _ = p.multiplyTransforms([0, 0, 0], quat_inv, self.force_global, [0, 0, 0, 1])
+                # p.applyExternalForce(self.top_obj['id'], -1, force_local, [0, 0, 0], flags=p.LINK_FRAME)
 
         for _ in range(self.control_skip):
             # action is in not -1,1
@@ -227,63 +233,71 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
                 time.sleep(self._timeStep * 0.5)
             self.timer += 1
 
-        reward = 0.0
-
-        # diff_norm = self.robot.get_norm_diff_tar_arm() * 10
-        # reward += np.maximum(2. - diff_norm, 0)
-        # # print(reward)
-
-        # rewards is height of target object
         top_pos, _ = p.getBasePositionAndOrientation(self.top_obj['id'])
 
-        top_xy_ideal = np.array([self.tx_act, self.ty_act])
-        xy_dist = np.linalg.norm(top_xy_ideal - np.array(top_pos[:2]))
-        reward += -np.minimum(xy_dist, 0.4) * 12.0
+        reward = 0.0
 
-        for i in self.robot.fin_tips[:4]:
-            tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
-            reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(top_pos)), 0.5)  # 4 finger tips
-        tip_pos = p.getLinkState(self.robot.arm_id, self.robot.fin_tips[4])[0]      # thumb tip
-        reward += -np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(top_pos)), 0.5) * 5.0
         palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
-        dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(top_pos)), 0.5)
-        reward += -dist * 2.0
+        dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(top_pos)), 1.5)
 
-        rot_metric = None
-        if self.warm_start:
-            # not used when grasp from floor
-            _, btm_quat = p.getBasePositionAndOrientation(bottom_id)
+        if dist > 0.3:
+            # only this for phase one
+            reward += -dist * 20.0
+        else:
+            # good enough, phase two, focus on other things
+            self.action_scale = np.array([0.009 / self.control_skip] * 7 + [0.024 / self.control_skip] * 17)
+            reward += -dist * 2.0
 
-            btm_vels = p.getBaseVelocity(bottom_id)
-            btm_linv = np.array(btm_vels[0])
-            btm_angv = np.array(btm_vels[1])
-            reward += np.maximum(-np.linalg.norm(btm_linv) * 4.0 - np.linalg.norm(btm_angv), -5.0)
+            # the following should just be phase two
+            # and always positive
+            # so it does not hurt to enter phase two
 
-            z_axis, _ = p.multiplyTransforms(
-                [0, 0, 0], btm_quat, [0, 0, 1], [0, 0, 0, 1]
-            )  # R_cl * unitz[0,0,1]
-            rot_metric = np.array(z_axis).dot(np.array([0, 0, 1]))
-            reward += np.maximum(rot_metric * 20 - 15, 0.0) * 2
+            # top_xy_ideal = np.array([self.tx_act, self.ty_act])
+            # xy_dist = np.linalg.norm(top_xy_ideal - np.array(top_pos[:2]))
+            # reward += 5.0 - np.minimum(xy_dist, 0.4) * 12.0     # make this always positive
 
-        cps = p.getContactPoints(self.top_obj['id'], self.robot.arm_id, -1, self.robot.ee_id)    # palm
-        if len(cps) > 0:
-            reward += 5.0
-        f_bp = [0, 3, 6, 9, 12, 17]     # 3*4+5
-        for ind_f in range(5):
-            con = False
-            # for dof in self.robot.fin_actdofs[f_bp[ind_f]:f_bp[ind_f+1]]:
-            # for dof in self.robot.fin_actdofs[(f_bp[ind_f + 1] - 2):f_bp[ind_f + 1]]:
-            for dof in self.robot.fin_actdofs[(f_bp[ind_f + 1] - 3):f_bp[ind_f + 1]]:
-                cps = p.getContactPoints(self.top_obj['id'], self.robot.arm_id, -1, dof)
-                if len(cps) > 0:
-                    con = True
-            if con:
+            for i in self.robot.fin_tips[:4]:
+                tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
+                reward += 0.5 - np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(top_pos)), 0.5)  # 4 finger tips
+            tip_pos = p.getLinkState(self.robot.arm_id, self.robot.fin_tips[4])[0]      # thumb tip
+            reward += 2.5 - np.minimum(np.linalg.norm(np.array(tip_pos) - np.array(top_pos)), 0.5) * 5.0
+
+            # rot_metric = None
+            # if self.warm_start:
+            #     # not used when grasp from floor
+            #     _, btm_quat = p.getBasePositionAndOrientation(bottom_id)
+            #
+            #     btm_vels = p.getBaseVelocity(bottom_id)
+            #     btm_linv = np.array(btm_vels[0])
+            #     btm_angv = np.array(btm_vels[1])
+            #     reward += np.maximum(-np.linalg.norm(btm_linv) * 4.0 - np.linalg.norm(btm_angv), -5.0)
+            #
+            #     z_axis, _ = p.multiplyTransforms(
+            #         [0, 0, 0], btm_quat, [0, 0, 1], [0, 0, 0, 1]
+            #     )  # R_cl * unitz[0,0,1]
+            #     rot_metric = np.array(z_axis).dot(np.array([0, 0, 1]))
+            #     reward += np.maximum(rot_metric * 20 - 15, 0.0) * 2
+
+            cps = p.getContactPoints(self.top_obj['id'], self.robot.arm_id, -1, self.robot.ee_id)    # palm
+            if len(cps) > 0:
                 reward += 5.0
-            if con and ind_f == 4:
-                reward += 20.0        # reward thumb even more
+            f_bp = [0, 3, 6, 9, 12, 17]     # 3*4+5
+            for ind_f in range(5):
+                con = False
+                # for dof in self.robot.fin_actdofs[f_bp[ind_f]:f_bp[ind_f+1]]:
+                # for dof in self.robot.fin_actdofs[(f_bp[ind_f + 1] - 2):f_bp[ind_f + 1]]:
+                for dof in self.robot.fin_actdofs[(f_bp[ind_f + 1] - 3):f_bp[ind_f + 1]]:
+                    cps = p.getContactPoints(self.top_obj['id'], self.robot.arm_id, -1, dof)
+                    if len(cps) > 0:
+                        con = True
+                if con:
+                    reward += 5.0
+                if con and ind_f == 4:
+                    reward += 20.0        # reward thumb even more
 
-        reward -= self.robot.get_4_finger_deviation() * 1.5
+            # reward += 15 - self.robot.get_4_finger_deviation() * 1.5
 
+        # "phase three", test phase, it is there no matter enter phase two or not
         # object dropped during testing
         if top_pos[2] < (self.tz_act + 0.04) and self.timer > self.test_start * self.control_skip:
             reward += -15.
@@ -291,6 +305,27 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         #     print(self.robot.get_q_dq(range(29, 34))[0])
 
         return self.getExtendedObservation(), reward, False, {}
+
+    def obj6DtoObs_UpVec(self, o_pos, o_orn, is_sph=False):
+        o_pos = np.array(o_pos)
+        if is_sph:
+            o_orn = [0.0, 0, 0, 1]
+        o_upv = utils.quat_to_upv(o_orn)
+
+        if self.obs_noise:
+            o_pos = utils.perturb(self.np_random, o_pos, r=0.02)
+            o_upv = utils.perturb(self.np_random, o_upv, r=0.03)
+            obj_obs = utils.obj_pos_and_upv_to_obs(
+                o_pos, o_upv, self.tx, self.ty
+            )
+        else:
+            o_pos = o_pos
+            o_upv = o_upv
+            obj_obs = utils.obj_pos_and_upv_to_obs(
+                o_pos, o_upv, self.tx_act, self.ty_act
+            )
+
+        return obj_obs
 
     def getExtendedObservation(self):
         self.observation = self.robot.get_robot_observation(diff_tar=True)
@@ -337,78 +372,12 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
             assert False
         self.observation.extend(shape_info)
 
+        top_pos, top_orn = p.getBasePositionAndOrientation(self.top_obj['id'])
+        self.observation.extend(
+            self.obj6DtoObs_UpVec(top_pos, top_orn)
+        )
+
         return self.observation
-
-    def append_final_state(self):
-        # output obj in palm frame (no need to output palm frame in world)
-        # output finger q's, finger tar q's.
-        # velocity will be assumed to be zero at the end of transporting phase
-        # return a dict.
-
-        assert not self.has_test_phase
-
-        obj_pos, obj_quat = p.getBasePositionAndOrientation(self.top_obj['id'])      # w2o
-        hand_pos, hand_quat = self.robot.get_link_pos_quat(self.robot.ee_id)    # w2p
-        inv_h_p, inv_h_q = p.invertTransform(hand_pos, hand_quat)       # p2w
-        o_p_hf, o_q_hf = p.multiplyTransforms(inv_h_p, inv_h_q, obj_pos, obj_quat)  # p2w*w2o
-
-        unitz_hf = p.multiplyTransforms([0, 0, 0], o_q_hf, [0, 0, 1], [0, 0, 0, 1])[0]
-        # TODO: a heuritics that if obj up_vec points outside palm, then probably holding bottom & bad
-        # ball does not care up vector pointing
-        if self.top_obj['shape'] != p.GEOM_SPHERE and unitz_hf[1] < -0.3:
-            return
-        else:
-            fin_q, _ = self.robot.get_q_dq(self.robot.all_findofs)
-            shape = self.top_obj['shape']
-            dim = utils.to_bullet_dimension(shape, self.top_obj['half_width'], self.top_obj['height'])
-
-            state = {'obj_pos_in_palm': o_p_hf, 'obj_quat_in_palm': o_q_hf,
-                     'all_fin_q': fin_q, 'fin_tar_q': self.robot.tar_fin_q,
-                     'obj_dim': dim, 'obj_shape': shape}
-            # print(state)
-            # print(self.robot.get_joints_last_tau(self.robot.all_findofs))
-            # self.robot.get_wrist_wrench()
-            self.final_states.append(state)
-
-    def clear_final_states(self):
-        self.final_states = []
-
-    def calc_average_obj_in_palm(self):
-        assert not self.has_test_phase
-        count = len(self.final_states)
-        o_pos_hf_sum = np.array([0., 0, 0])
-        o_quat_hf_sum = np.array([0., 0, 0, 0])
-        for state_dict in self.final_states:
-            o_pos_hf_sum += np.array(state_dict['obj_pos_in_palm'])
-            o_quat_hf_sum += np.array(state_dict['obj_quat_in_palm'])
-        o_pos_hf_sum /= count
-        o_quat_hf_sum /= count      # rough estimate of quat average
-        o_quat_hf_sum /= np.linalg.norm(o_quat_hf_sum)      # normalize quat
-        return list(o_pos_hf_sum), list(o_quat_hf_sum)
-
-    def calc_average_obj_in_palm_rot_invariant(self):
-        assert not self.has_test_phase
-        count = len(self.final_states)
-        o_pos_hf_sum = np.array([0., 0, 0])
-        o_unitz_hf_sum = np.array([0., 0, 0])
-        for state_dict in self.final_states:
-            o_pos_hf_sum += np.array(state_dict['obj_pos_in_palm'])
-            unitz_hf = p.multiplyTransforms([0, 0, 0], state_dict['obj_quat_in_palm'], [0, 0, 1], [0, 0, 0, 1])[0]
-            o_unitz_hf_sum += np.array(unitz_hf)
-        o_pos_hf_sum /= count
-        o_unitz_hf_sum /= count      # rough estimate of unit z average
-        o_unitz_hf_sum /= np.linalg.norm(o_unitz_hf_sum)      # normalize unit z vector
-
-        x, y, z = o_unitz_hf_sum
-        a1_solved = np.arcsin(-y)
-        a2_solved = np.arctan2(x, z)
-        # a3_solved is zero since equation has under-determined
-        quat_solved = p.getQuaternionFromEuler([a1_solved, a2_solved, 0])
-
-        uz_check = p.multiplyTransforms([0, 0, 0], quat_solved, [0, 0, 1], [0, 0, 0, 1])[0]
-        assert np.linalg.norm(np.array(o_unitz_hf_sum) - np.array(uz_check)) < 1e-3
-
-        return list(o_pos_hf_sum), list(quat_solved)
 
     def seed(self, seed=None):
         self.np_random, seed = gym.utils.seeding.np_random(seed)
