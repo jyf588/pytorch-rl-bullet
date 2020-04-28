@@ -69,12 +69,14 @@ ADD_SURROUNDING_OBJS = True
 LONG_MOVE = bool(args.long_move)
 SURROUNDING_OBJS_MAX_NUM = 4
 
+ADD_WHITE_NOISE = True
+
 CLOSE_THRES = 0.25
 
 NUM_TRIALS = 1000
 
 GRASP_END_STEP = 35
-PLACE_END_STEP = 75
+PLACE_END_STEP = 70
 
 INIT_NOISE = True
 DET_CONTACT = 0  # 0 false, 1 true
@@ -117,6 +119,12 @@ else:
 
         PLACE_PI = "0411_0_n_place_0411_0"
         PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
+
+        # GRASP_PI = "0425_0_n_25_45"
+        # GRASP_DIR = "./trained_models_%s/ppo/" % "0425_0_n"
+        #
+        # PLACE_PI = "0425_0_n_place_0425_0"
+        # PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
     GRASP_PI_ENV_NAME = "InmoovHandGraspBulletEnv-v6"
     PLACE_PI_ENV_NAME = "InmoovHandPlaceBulletEnv-v9"
@@ -294,6 +302,10 @@ def get_stack_policy_obs_tensor(tx, ty, tz, t_half_height, is_box, t_pos, t_up, 
         obs = env_core.get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
             tx, ty, is_box, t_pos, t_up, b_pos, b_up
         )
+        # if TEST_PLACING:
+        #     obs.extend([1.0])
+        # else:
+        #     obs.extend([-1.0])
     obs = policy.wrap_obs(obs, IS_CUDA)
     return obs
 
@@ -333,7 +345,14 @@ def get_stacking_obs(
     top_up = utils.quat_to_upv(top_quat)
     btm_up = utils.quat_to_upv(btm_quat)
 
-    top_half_height = obj_state[top_oid]["height"] / 2      # TODO: add noise to GT
+    top_half_height = obj_state[top_oid]["height"] / 2
+
+    if ADD_WHITE_NOISE:
+        top_pos = utils.perturb(np.random, top_pos, r=0.02)
+        btm_pos = utils.perturb(np.random, btm_pos, r=0.02)
+        top_up = utils.perturb(np.random, top_up, r=0.03)
+        btm_up = utils.perturb(np.random, btm_up, r=0.03)
+        top_half_height = utils.perturb_scalar(np.random, top_half_height, r=0.01)
 
     return top_pos, top_up, btm_pos, btm_up, top_half_height
 
@@ -387,13 +406,13 @@ for trial in range(NUM_TRIALS):
         p_tx, p_ty, p_tz = btm_dict["position"][0], btm_dict["position"][1], btm_dict["height"]
         t_half_height = top_dict["height"]/2
 
-        # TODO: add noise to GT
-        g_tx += np.random.uniform(low=-0.01, high=0.01)
-        g_ty += np.random.uniform(low=-0.01, high=0.01)
-        t_half_height += np.random.uniform(low=-0.01, high=0.01)
-        p_tx += np.random.uniform(low=-0.01, high=0.01)
-        p_ty += np.random.uniform(low=-0.01, high=0.01)
-        p_tz += np.random.uniform(low=-0.01, high=0.01)
+        if ADD_WHITE_NOISE:
+            g_tx += np.random.uniform(low=-0.015, high=0.015)
+            g_ty += np.random.uniform(low=-0.015, high=0.015)
+            t_half_height += np.random.uniform(low=-0.01, high=0.01)
+            p_tx += np.random.uniform(low=-0.015, high=0.015)
+            p_ty += np.random.uniform(low=-0.015, high=0.015)
+            p_tz += np.random.uniform(low=-0.015, high=0.015)
 
         if TEST_PLACING:
             # overwrite ptz
@@ -553,7 +572,8 @@ for trial in range(NUM_TRIALS):
         continue        # TODO: transporting failed
     else:
         planning(Traj_move)
-    print("after moving", get_relative_state_for_reset(top_id))
+    state = get_relative_state_for_reset(top_id)
+    print("after moving", state)
     print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
     # input("after moving")
 
@@ -562,6 +582,24 @@ for trial in range(NUM_TRIALS):
     # pose_saver.get_poses()
     # print(f"Pose before placing")
     # pprint.pprint(pose_saver.poses[-1])
+    #
+    # ##### fake: reset###
+    # o_pos_pf = state['obj_pos_in_palm']
+    # o_quat_pf = state['obj_quat_in_palm']
+    # all_fin_q_init = state['all_fin_q']
+    # tar_fin_q_init = state['fin_tar_q']
+    # env_core.robot.reset_with_certain_arm_q_finger_states(Qdestin, all_fin_q_init, tar_fin_q_init)
+    # p_pos, p_quat = env_core.robot.get_link_pos_quat(env_core.robot.ee_id)
+    # o_pos, o_quat = p.multiplyTransforms(p_pos, p_quat, o_pos_pf, o_quat_pf)
+    #
+    # # table_id = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/tabletop.urdf'), TABLE_OFFSET,
+    # #                       useFixedBase=1)
+    # # p.changeDynamics(table_id, -1, lateralFriction=FLOOR_MU)
+    # # oid1 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/cylinder_small.urdf'), o_pos, o_quat,
+    # #                   useFixedBase=0)
+    # # p.changeDynamics(oid1, -1, lateralFriction=OBJ_MU)
+    # p.resetBasePositionAndOrientation(top_id, o_pos, o_quat)
+    # #####
 
     """Prepare for placing"""
     env_core.change_control_skip_scaling(c_skip=PLACING_CONTROL_SKIP)
