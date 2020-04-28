@@ -29,6 +29,8 @@ from .inmoov_shadow_place_env_v7 import InmoovShadowHandPlaceEnvV7
 from .inmoov_shadow_place_env_v9 import InmoovShadowHandPlaceEnvV9
 from .inmoov_shadow_place_env_v6 import InmoovShadowHandPlaceEnvV6
 
+from .inmoov_shadow_reach_grasp_env import InmoovShadowHandReachGraspEnv
+
 # no_vision = False
 # try:
 #     from .inmoov_shadow_place_env_v8 import InmoovShadowHandPlaceEnvV8
@@ -195,6 +197,12 @@ register(
     id="InmoovHandPlaceBulletEnvDet-v4",
     entry_point="my_pybullet_envs:InmoovShadowHandPlaceEnvV4Det",
     max_episode_steps=100,  # large enough, controlled by done
+)
+
+register(
+    id="InmoovHandReachGraspBulletEnv-v1",
+    entry_point="my_pybullet_envs:InmoovShadowHandReachGraspEnv",
+    max_episode_steps=120,  # large enough, controlled by done
 )
 
 
