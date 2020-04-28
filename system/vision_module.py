@@ -5,6 +5,7 @@ import torch
 import torchvision.transforms as transforms
 from typing import *
 
+import ns_vqa_dart.bullet.seg
 from ns_vqa_dart.bullet import dash_object, gen_dataset
 from ns_vqa_dart.scene_parse.attr_net.model import get_model
 from ns_vqa_dart.scene_parse.attr_net.options import BaseOptions
@@ -41,7 +42,7 @@ class VisionModule:
         Returns:
             pred: The model predictions.
         """
-        seg = gen_dataset.seg_img_to_map(seg_img)
+        seg, _ = ns_vqa_dart.bullet.seg.seg_img_to_map(seg_img)
         data = dash_object.compute_X(
             oid=oid, img=rgb, seg=seg, keep_occluded=True
         )
