@@ -123,10 +123,10 @@ else:
         PLACE_PI = "0411_0_n_place_0411_0"
         PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
-        # GRASP_PI = "0425_0_n_25_45"
-        # GRASP_DIR = "./trained_models_%s/ppo/" % "0425_0_n"
+        # GRASP_PI = "0426_0_n_25_45"
+        # GRASP_DIR = "./trained_models_%s/ppo/" % "0426_0_n"
         #
-        # PLACE_PI = "0425_0_n_place_0425_0"
+        # PLACE_PI = "0426_0_n_place_0426_0"
         # PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
     GRASP_PI_ENV_NAME = "InmoovHandGraspBulletEnv-v6"
@@ -155,39 +155,13 @@ def planning(trajectory, restore_fingers=False):
             tar_fin_q = env_core.robot.init_fin_q * blending + cur_fin_q * (1-blending)
             env_core.robot.tar_fin_q = tar_fin_q
 
-        # env_core.robot.tar_arm_q = tar_arm_q
+        env_core.robot.tar_arm_q = tar_arm_q
         env_core.robot.apply_action([0.0] * 24)
-
-        # env_core.robot.reset_with_certain_arm_q(tar_arm_q)
-        # print(tar_arm_q)
-
-        tar_vel = (tar_arm_q - last_tar_arm_q) / utils.TS
-
-        p.setJointMotorControlArray(
-            bodyIndex=env_core.robot.arm_id,
-            jointIndices=env_core.robot.arm_dofs,
-            controlMode=p.POSITION_CONTROL,
-            targetPositions=list(tar_arm_q),
-            targetVelocities=list(tar_vel),
-            forces=[200. * 5] * len(env_core.robot.arm_dofs))  # TODO: wrist force limit *3?
-
-        # print("act", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
-        diff = np.linalg.norm(env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
-                              - tar_arm_q)
-        if idx == len(trajectory) - 1:
-            print("diff 0", diff)
-        if idx == len(trajectory) + 49:
-            print("diff 1", diff)
 
         for _ in range(1):
             p.stepSimulation()
         if DUMMY_SLEEP:
             time.sleep(utils.TS / 2.0)
-
-        last_tar_arm_q = tar_arm_q
-    # env_core.robot.maxForce = 200
-    env_core.robot.tar_arm_q = tar_arm_q    # reset?
-    # input("press enter")
 
 
 def get_relative_state_for_reset(oid):
