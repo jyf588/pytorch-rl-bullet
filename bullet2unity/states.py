@@ -57,7 +57,7 @@ def create_bullet_camera_targets(
     elif camera_control in ["center", "stack", "position"]:
         # Tell unity to look only once at the center of the object distribution.
         if camera_control == "center":
-            position = [-0.06, 0.3, 0.0]
+            raise NotImplementedError
         elif camera_control == "stack":
             raise NotImplementedError
             # Assumes that the first object in the object states corresponds to
@@ -85,7 +85,11 @@ def get_first_object_camera_target(bullet_odicts: List[Dict]):
     return position
 
 
-def bullet2unity_state(bullet_state: Dict, bullet_camera_targets):
+def bullet2unity_state(
+    bullet_state: Dict,
+    bullet_animation_target: List[float],
+    bullet_camera_targets: Dict,
+):
     """Converts a bullet state to a unity state.
 
     Args:
@@ -108,6 +112,8 @@ def bullet2unity_state(bullet_state: Dict, bullet_camera_targets):
                 }
             }. Note that if "robot" key is not present, the default robot pose will
             be used.
+        bullet_animation_target: The target position for the animation of the
+            head/neck.
         bullet_camera_targets: A dictionary of target positions that we want
             Unity to point the camera at, in the format:
             {
@@ -131,9 +137,11 @@ def bullet2unity_state(bullet_state: Dict, bullet_camera_targets):
                 objects[0].position,
                 objects[0].rotation,
                 ...
+                animation_target_position,
+                num_targets,
                 tids[0],
-                should_save,
-                should_send,
+                should_save[0],
+                should_send[0],
                 target_positions[0],
                 ...
             ]
@@ -148,21 +156,32 @@ def bullet2unity_state(bullet_state: Dict, bullet_camera_targets):
     # Convert object state from bullet to unity.
     unity_object_states = bullet2unity_objects(
         bullet_state=bullet_state["objects"],
-        bullet_shoulder_pos=const.BULLET_SHOULDER_POS,
     )
 
-    # Beginning is sid, and target camera start idx.
+    # Compute the target position in Unity coordinates.
+    if bullet_animation_target:
+        bullet_animation_target_shoulder = bullet_world2shoulder_position(
+            pos_world=bullet_animation_target
+        )
+        unity_animation_target_position_shoulder = bullet2unity_position(
+            bullet_position=bullet_animation_target_shoulder
+        )
+    else:
+        unity_animation_target_position_shoulder = [None, None, None]
+
+    # We offset by two because the first two elements of the unity message
+    # are sid and target camera start idx.
     targets_start_idx = 2 + len(unity_robot_state + unity_object_states)
-    unity_target_state = []
+    unity_cam_targets = []
     for tid, target_info in bullet_camera_targets.items():
         bullet_pos = target_info["position"]
-        bullet_rel_position = np.array(bullet_pos) - np.array(
-            const.BULLET_SHOULDER_POS
+        bullet_pos_shoulder = bullet_world2shoulder_position(
+            pos_world=bullet_pos
         )
         unity_rel_position = bullet2unity_position(
-            bullet_position=bullet_rel_position
+            bullet_position=bullet_pos_shoulder
         )
-        unity_target_state += [
+        unity_cam_targets += [
             tid,
             int(target_info["should_save"]),
             int(target_info["should_send"]),
@@ -173,8 +192,9 @@ def bullet2unity_state(bullet_state: Dict, bullet_camera_targets):
         [targets_start_idx]
         + unity_robot_state
         + unity_object_states
+        + unity_animation_target_position_shoulder
         + [len(bullet_camera_targets)]
-        + unity_target_state
+        + unity_cam_targets
     )
     return unity_state
 
@@ -294,9 +314,7 @@ def bullet2unity_robot(bullet_state: Dict[str, float]) -> List[float]:
     return unity_state
 
 
-def bullet2unity_objects(
-    bullet_state: Dict[int, Dict], bullet_shoulder_pos: List[float]
-):
+def bullet2unity_objects(bullet_state: Dict[int, Dict]):
     """Convert object states from bullet to unity.
     
     Args:
@@ -347,11 +365,11 @@ def bullet2unity_objects(
         unity_size = bullet2unity_size(bullet_size=[width, width, height])
 
         # Convert the object position.
-        bullet_rel_position = np.array(bullet_position) - np.array(
-            bullet_shoulder_pos
+        bullet_position_shoulder = bullet_world2shoulder_position(
+            pos_world=bullet_position
         )
         unity_rel_position = bullet2unity_position(
-            bullet_position=bullet_rel_position
+            bullet_position=bullet_position_shoulder
         )
 
         # Convert the object orientation.
@@ -385,6 +403,20 @@ def bullet2unity_size(bullet_size: List[float]) -> List[float]:
     unity_size[1] = bullet_size[2]
     unity_size[2] = bullet_size[1]
     return unity_size
+
+
+def bullet_world2shoulder_position(pos_world: List[float]) -> List[float]:
+    """ Converts from bullet absolution position to position in shoulder 
+    coordinates.
+
+    Args:
+        pos_world: The position in bullet world coordinates.
+
+    Returns:
+        pos_shoulder: The position bullet shoulder coordinates.
+    """
+    pos_shoulder = np.array(pos_world) - np.array(const.BULLET_SHOULDER_POS)
+    return pos_shoulder
 
 
 def bullet2unity_position(bullet_position: List[float]):

@@ -18,11 +18,20 @@ from ns_vqa_dart.bullet.random_objects import RandomObjectsGenerator
 global args
 
 
-STAGE2CAMERA_CONTROL = {
-    "plan": "center",
-    "place": "position",
-}
 ADD_SURROUNDING_OBJECTS = False
+PLAN_TARGET_POSITION = [-0.06, 0.3, 0.0]
+STAGE2ANIMATION_Z_OFFSET = {
+    "plan": 0.3,
+    "reach": 0.1,
+    "grasp": 0.1,
+    # "transport": 0.2,
+    "release": 0.2,
+    "retract": 0.3,
+}
+TASK2ANIMATION_Z_OFFSET = {
+    "place": 0.1,
+    "stack": 0.2,
+}
 
 
 async def send_to_client(websocket, path):
@@ -46,9 +55,8 @@ async def send_to_client(websocket, path):
 
         for task in ["stack", "place"]:
             # for task in ["place"]:
-            for obs_mode in ["gt", "vision"]:
-                # for obs_mode in ["vision"]:
-                # for obs_mode in ["gt"]:
+            # for obs_mode in ["gt", "vision"]:
+            for obs_mode in ["gt"]:
 
                 # Modify the scene for placing. We keep only the first object for
                 # now, and set the placing destination xy location to be the
@@ -95,7 +103,9 @@ async def send_to_client(websocket, path):
                         ]
                         # unity_options = [(False, True, True)]
 
-                        if stage == "place" and stage_ts == 0:
+                        if stage == "plan":
+                            cam_target = PLAN_TARGET_POSITION
+                        elif stage == "place" and stage_ts == 0:
                             if task == "place":
                                 cam_target = place_dst_xy + [
                                     env.initial_obs[0]["height"]
@@ -107,7 +117,7 @@ async def send_to_client(websocket, path):
 
                         # Turn on moving the camera each frame again.
                         last_bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
-                            camera_control=STAGE2CAMERA_CONTROL[stage],
+                            camera_control="position",
                             bullet_odicts=env.initial_obs,
                             use_oids=False,
                             should_save=False,
@@ -121,6 +131,30 @@ async def send_to_client(websocket, path):
                         elif obs_mode == "gt":
                             unity_options = [(False, True, False, True)]
 
+                    # Compute the animation target.
+                    if stage in ["plan", "retract"]:
+                        b_ani_tar = None
+                    else:
+                        if stage in ["reach", "grasp"]:
+                            b_ani_tar = env.scene[env.src_idx]["position"]
+                        elif stage in ["transport", "place", "release"]:
+                            if task == "place":
+                                b_ani_tar = place_dst_xy + [
+                                    env.scene[0]["height"]
+                                ]
+                            elif task == "stack":
+                                b_ani_tar = env.scene[env.dst_idx]["position"]
+                            else:
+                                raise ValueError(f"Unsupported task: {task}")
+                        else:
+                            raise ValueError(f"Unsupported stage: {stage}.")
+                        b_ani_tar = copy.deepcopy(b_ani_tar)
+                        if stage in STAGE2ANIMATION_Z_OFFSET:
+                            z_offset = STAGE2ANIMATION_Z_OFFSET[stage]
+                        elif task in TASK2ANIMATION_Z_OFFSET:
+                            z_offset = TASK2ANIMATION_Z_OFFSET[task]
+                        b_ani_tar[2] += z_offset
+                    # b_ani_tar = None
                     # Rendering block.
                     if i % render_frequency == 0:
                         for (
@@ -138,8 +172,6 @@ async def send_to_client(websocket, path):
                                     h_odicts=env.obs,
                                     color=None,
                                 )
-                                # input("x")
-
                             if render_hallucinations:
                                 if task == "place":
                                     render_state = add_hallucinations_to_state(
@@ -147,7 +179,6 @@ async def send_to_client(websocket, path):
                                         h_odicts=[dest_object],
                                         color="clear",
                                     )
-                                    # input("x")
                             if send_image:
                                 bullet_camera_targets = (
                                     last_bullet_camera_targets
@@ -161,6 +192,7 @@ async def send_to_client(websocket, path):
                             message = interface.encode(
                                 state_id=state_id,
                                 bullet_state=render_state,
+                                bullet_animation_target=b_ani_tar,
                                 bullet_camera_targets=bullet_camera_targets,
                             )
                             await websocket.send(message)
