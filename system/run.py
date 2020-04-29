@@ -28,10 +28,7 @@ STAGE2ANIMATION_Z_OFFSET = {
     "release": 0.2,
     "retract": 0.3,
 }
-TASK2ANIMATION_Z_OFFSET = {
-    "place": 0.1,
-    "stack": 0.2,
-}
+TASK2ANIMATION_Z_OFFSET = {"place": 0.1, "stack": 0.2}
 
 
 async def send_to_client(websocket, path):
@@ -174,9 +171,11 @@ async def send_to_client(websocket, path):
                                 )
                             if render_hallucinations:
                                 if task == "place":
+                                    place_target = copy.deepcopy(dest_object)
+                                    place_target["height"] = 0.01
                                     render_state = add_hallucinations_to_state(
                                         state=render_state,
-                                        h_odicts=[dest_object],
+                                        h_odicts=[place_target],
                                         color="clear",
                                     )
                             if send_image:
