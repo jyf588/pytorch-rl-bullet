@@ -53,6 +53,8 @@ parser.add_argument("--use_height", type=int, default=0)
 parser.add_argument("--test_placing", type=int, default=0)
 parser.add_argument("--long_move", type=int, default=0)
 parser.add_argument("--non-det", type=int, default=0)
+parser.add_argument("--render", type=int, default=0)
+parser.add_argument("--sleep", type=int, default=0)
 args = parser.parse_args()
 np.random.seed(args.seed)
 args.det = not args.non_det
@@ -60,7 +62,7 @@ args.det = not args.non_det
 """Configurations."""
 
 USE_GV5 = False  # is false, use gv6
-DUMMY_SLEEP = False
+DUMMY_SLEEP = bool(args.sleep)
 WITH_REACHING = True
 WITH_RETRACT = True
 USE_HEIGHT_INFO = bool(args.use_height)
@@ -70,6 +72,7 @@ LONG_MOVE = bool(args.long_move)
 SURROUNDING_OBJS_MAX_NUM = 4
 
 ADD_WHITE_NOISE = True
+RENDER = bool(args.render)
 
 CLOSE_THRES = 0.25
 
@@ -390,8 +393,10 @@ p_pos_of_ave, p_quat_of_ave = p.invertTransform(
 )
 
 """Start Bullet session."""
-
-p.connect(p.DIRECT)
+if RENDER:
+    p.connect(p.GUI)
+else:
+    p.connect(p.DIRECT)
 
 for trial in range(NUM_TRIALS):
     """Sample two/N objects"""
@@ -499,11 +504,6 @@ for trial in range(NUM_TRIALS):
     )
     env_core.change_init_fin_q(INIT_FIN_Q)
 
-    if WITH_REACHING:
-        env_core.robot.reset_with_certain_arm_q([0.0]*7)
-    else:
-        env_core.robot.reset_with_certain_arm_q(Qreach)
-
     objs, top_id, btm_id = load_obj_and_construct_state(all_dicts)
     OBJECTS = construct_obj_array_for_openrave(all_dicts)
 
@@ -512,6 +512,7 @@ for trial in range(NUM_TRIALS):
     print(f"Qreach: {Qreach}")
 
     if WITH_REACHING:
+        env_core.robot.reset_with_certain_arm_q([0.0] * 7)
         reach_save_path = homedir + "/container_data/PB_REACH.npz"
         reach_read_path = homedir + "/container_data/OR_REACH.npz"
         Traj_reach = openrave.get_traj_from_openrave_container(OBJECTS, None, Qreach, reach_save_path, reach_read_path)
@@ -524,6 +525,8 @@ for trial in range(NUM_TRIALS):
             planning(Traj_reach)
 
         print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
+    else:
+        env_core.robot.reset_with_certain_arm_q(Qreach)
         # input("press enter")
 
     g_obs = get_grasp_policy_obs_tensor(g_tx, g_ty, t_half_height, is_box)
@@ -551,6 +554,9 @@ for trial in range(NUM_TRIALS):
     final_g_obs = copy.copy(g_obs)
     del g_obs, g_tx, g_ty, t_half_height
 
+    state = get_relative_state_for_reset(top_id)
+    print("after grasping", state)
+
     # state = get_relative_state_for_reset(top_id)
     # print("after grasping", state)
     # print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
@@ -572,8 +578,7 @@ for trial in range(NUM_TRIALS):
         continue        # TODO: transporting failed
     else:
         planning(Traj_move)
-    state = get_relative_state_for_reset(top_id)
-    print("after moving", state)
+
     print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
     # input("after moving")
 
@@ -599,6 +604,10 @@ for trial in range(NUM_TRIALS):
     # #                   useFixedBase=0)
     # # p.changeDynamics(oid1, -1, lateralFriction=OBJ_MU)
     # p.resetBasePositionAndOrientation(top_id, o_pos, o_quat)
+    # p.stepSimulation()
+    # env_core.robot.reset_with_certain_arm_q_finger_states(Qdestin, all_fin_q_init, tar_fin_q_init)
+    # p.resetBasePositionAndOrientation(top_id, o_pos, o_quat)
+    # p.stepSimulation()
     # #####
 
     """Prepare for placing"""
