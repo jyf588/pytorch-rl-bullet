@@ -138,6 +138,8 @@ class DemoEnvironment:
         place_end = place_start + self.opt.n_place_steps
         release_start = place_end
         release_end = release_start + self.opt.n_release_steps
+        retract_start = release_end
+        retract_end = retract_start + self.opt.n_plan_steps
 
         stage2ts_bounds = {
             "reach": (reach_start, reach_end),
@@ -145,6 +147,7 @@ class DemoEnvironment:
             "transport": (transport_start, transport_end),
             "place": (place_start, place_end),
             "release": (release_start, release_end),
+            "retract": (retract_start, retract_end),
         }
 
         n_total_steps = 0
@@ -319,6 +322,8 @@ class DemoEnvironment:
                 self.place(stage_ts=stage_ts)
             elif stage == "release":
                 self.release()
+            elif stage == "retract":
+                self.retract(stage_ts=stage_ts)
             else:
                 raise ValueError(f"Invalid stage: {stage}")
             self.timestep += 1
@@ -419,7 +424,7 @@ class DemoEnvironment:
         """Computes the reaching trajectory.
         
         Returns:
-            trajectory: The reaching trajectory of shape (200, 7).
+            trajectory: The reaching trajectory of shape (n_steps, 7).
         """
         trajectory = openrave.compute_trajectory(
             odicts=self.initial_obs,
@@ -434,7 +439,7 @@ class DemoEnvironment:
         """Computes the transport trajectory.
         
         Returns:
-            trajectory: The transport trajectory of shape (200, 7).
+            trajectory: The transport trajectory of shape (n_steps, 7).
         """
         q_src = self.world.get_robot_arm_q()
         q_dst = self.q_transport_dst
@@ -445,6 +450,23 @@ class DemoEnvironment:
             q_start=q_src,
             q_end=q_dst,
             stage="transport",
+        )
+        return trajectory
+
+    def compute_retract_trajectory(self) -> np.ndarray:
+        """Computes the retract trajectory.
+        
+        Returns:
+            trajectory: The retract trajectory of shape (n_steps, 7).
+        """
+        q_src = self.world.get_robot_arm_q()
+
+        trajectory = openrave.compute_trajectory(
+            odicts=self.initial_obs,
+            target_idx=self.src_idx,
+            q_start=q_src,
+            q_end=None,
+            stage="retract",
         )
         return trajectory
 
@@ -524,6 +546,14 @@ class DemoEnvironment:
 
     def release(self):
         self.world.step()
+
+    def retract(self, stage_ts: int):
+        if stage_ts == 0:
+            self.retract_trajectory = self.compute_retract_trajectory()
+            if len(self.retract_trajectory) == 0:
+                return False
+        self.execute_plan(trajectory=self.retract_trajectory, idx=stage_ts)
+        return True
 
     def execute_plan(self, trajectory: np.ndarray, idx: int):
         if idx > len(trajectory) - 1:

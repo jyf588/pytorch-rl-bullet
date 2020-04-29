@@ -9,10 +9,7 @@ import matplotlib.pyplot as plt
 
 homedir = os.path.expanduser("~")
 CONTAINER_DIR = os.path.join(homedir, "container_data")
-STAGE2NAME = {
-    "reach": "REACH",
-    "transport": "MOVE",
-}
+STAGE2NAME = {"reach": "REACH", "transport": "MOVE", "retract": "RETRACT"}
 
 
 def compute_trajectory(

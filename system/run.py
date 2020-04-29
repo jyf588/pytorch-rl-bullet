@@ -22,6 +22,7 @@ STAGE2CAMERA_CONTROL = {
     "plan": "center",
     "place": "position",
 }
+ADD_SURROUNDING_OBJECTS = False
 
 
 async def send_to_client(websocket, path):
@@ -114,7 +115,7 @@ async def send_to_client(websocket, path):
                             position=cam_target,
                         )
                     else:
-                        render_frequency = 25
+                        render_frequency = 30
                         if obs_mode == "vision":
                             unity_options = [(True, True, False, True)]
                         elif obs_mode == "gt":
@@ -246,9 +247,11 @@ def generate_scenes():
         bottom_scene = generator_bottom.generate_tabletop_objects(
             existing_odicts=top_scene
         )
-        all_scene = generator_all.generate_tabletop_objects(
-            existing_odicts=top_scene + bottom_scene
-        )
+        all_scene = []
+        if ADD_SURROUNDING_OBJECTS:
+            all_scene = generator_all.generate_tabletop_objects(
+                existing_odicts=top_scene + bottom_scene
+            )
 
         scene = top_scene + bottom_scene + all_scene
         scenes.append(scene)
