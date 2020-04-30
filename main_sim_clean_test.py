@@ -40,7 +40,7 @@ homedir = os.path.expanduser("~")
 
 # TODO: main module depends on the following code/model:
 # demo env: especially observation  # change obs vec (note diffTar)
-# the settings of inmoov hand v2        # TODO: init thumb 0.0 vs 0.1
+# the settings of inmoov hand v2        # init thumb 0.0 vs 0.1
 # obj sizes & frame representation & friction & obj xy range
 # frame skip
 # vision delay
@@ -55,6 +55,7 @@ parser.add_argument("--long_move", type=int, default=0)
 parser.add_argument("--non-det", type=int, default=0)
 parser.add_argument("--render", type=int, default=0)
 parser.add_argument("--sleep", type=int, default=0)
+parser.add_argument("--flag_0428", type=int, default=0)
 args = parser.parse_args()
 np.random.seed(args.seed)
 args.det = not args.non_det
@@ -66,6 +67,7 @@ DUMMY_SLEEP = bool(args.sleep)
 WITH_REACHING = True
 WITH_RETRACT = True
 USE_HEIGHT_INFO = bool(args.use_height)
+FLAG_0428 = bool(args.flag_0428)
 TEST_PLACING = bool(args.test_placing)    # if false, test stacking
 ADD_SURROUNDING_OBJS = True
 LONG_MOVE = bool(args.long_move)
@@ -76,9 +78,9 @@ RENDER = bool(args.render)
 
 CLOSE_THRES = 0.25
 
-NUM_TRIALS = 1000
+NUM_TRIALS = 300
 
-GRASP_END_STEP = 35
+GRASP_END_STEP = 35     # TODO, some policies sensitive to this
 PLACE_END_STEP = 70
 
 INIT_NOISE = True
@@ -111,11 +113,12 @@ else:
         PLACE_PI = "0404_0_n_place_0404_0"
         PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
-        # GRASP_PI = "0410_0_n_25_45"
-        # GRASP_DIR = "./trained_models_%s/ppo/" % "0410_0_n"
-        #
-        # PLACE_PI = "0410_0_n_place_0410_0"
-        # PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
+        if FLAG_0428:
+            GRASP_PI = "0428_0_n_25_45"
+            GRASP_DIR = "./trained_models_%s/ppo/" % "0428_0_n"
+
+            PLACE_PI = "0428_0_n_place_0428_0"
+            PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
     else:
         GRASP_PI = "0411_0_n_25_45"
         GRASP_DIR = "./trained_models_%s/ppo/" % "0411_0_n"
@@ -141,8 +144,7 @@ GRASPING_CONTROL_SKIP = 6
 
 
 def planning(trajectory, restore_fingers=False):
-    last_tar_arm_q = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
-    # env_core.robot.maxForce = 1000
+    # TODO: traj length 300 now.
     for idx in range(len(trajectory) + 50):
         if idx > len(trajectory) - 1:
             tar_arm_q = trajectory[-1]
@@ -227,10 +229,10 @@ def sample_obj_dict(is_thicker=False, whole_table_top=False):
 
 def load_obj_and_construct_state(obj_dicts_list):
     state = {}
-    # load surrounding first
-    for idx in range(2, len(obj_dicts_list)):
-        bullet_id = utils.create_sym_prim_shape_helper_new(obj_dicts_list[idx])
-        state[bullet_id] = obj_dicts_list[idx]
+    # # load surrounding first
+    # for idx in range(2, len(obj_dicts_list)):
+    #     bullet_id = utils.create_sym_prim_shape_helper_new(obj_dicts_list[idx])
+    #     state[bullet_id] = obj_dicts_list[idx]
 
     bottom_id = None
     # ignore btm if placing on tabletop
@@ -279,6 +281,7 @@ def get_stack_policy_obs_tensor(tx, ty, tz, t_half_height, is_box, t_pos, t_up, 
         obs = env_core.get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
             tx, ty, is_box, t_pos, t_up, b_pos, b_up
         )
+        # # for 0426
         # if TEST_PLACING:
         #     obs.extend([1.0])
         # else:
@@ -415,7 +418,7 @@ for trial in range(NUM_TRIALS):
         Qreach = np.array(sess.get_most_comfortable_q_and_refangle(g_tx, g_ty)[0])
         del sess
     else:
-        # maybe not necessary to create table and robot twice. Decide later TODO
+        # maybe not necessary to create table and robot twice. Decide later
         desired_obj_pos = [g_tx, g_ty, 0.0]
 
         table_id = utils.create_table(FLOOR_MU)
@@ -425,14 +428,13 @@ for trial in range(NUM_TRIALS):
             timestep=utils.TS,
             np_random=np.random,
         )
-        # TODO: [1] is the 2nd candidate
         Qreach = utils.get_n_optimal_init_arm_qs(robot, utils.PALM_POS_OF_INIT,
                                                  p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
                                                  desired_obj_pos, table_id, wrist_gain=3.0)[0]
 
         p.resetSimulation()
 
-    if USE_HEIGHT_INFO:
+    if USE_HEIGHT_INFO and not FLAG_0428:       # TODO: 0428 only uses height info for obs space, not planning
         desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + p_tz]
     else:
         if TEST_PLACING:
@@ -448,7 +450,6 @@ for trial in range(NUM_TRIALS):
         np_random=np.random,
     )
 
-    # TODO: [1] is the 2nd candidate
     Qdestin = utils.get_n_optimal_init_arm_qs(
         robot, p_pos_of_ave, p_quat_of_ave, desired_obj_pos, table_id
     )[0]
@@ -494,7 +495,7 @@ for trial in range(NUM_TRIALS):
         if Traj_reach is None or len(Traj_reach) == 0:
             p.resetSimulation()
             print("*******", success_count * 1.0 / (trial + 1))
-            continue  # TODO: reaching failed
+            continue  # reaching failed
         else:
             planning(Traj_reach)
 
@@ -549,7 +550,7 @@ for trial in range(NUM_TRIALS):
     if Traj_move is None or len(Traj_move) == 0:
         p.resetSimulation()
         print("*******", success_count * 1.0 / (trial + 1))
-        continue        # TODO: transporting failed
+        continue        # transporting failed
     else:
         planning(Traj_move)
 
@@ -601,7 +602,7 @@ for trial in range(NUM_TRIALS):
         t_half_height,
     )
 
-    # TODO: an unly hack to force Bullet compute forward kinematics
+    # an ugly hack to force Bullet compute forward kinematics
     _ = get_stack_policy_obs_tensor(
         p_tx, p_ty, p_tz, t_half_height, is_box, t_pos, t_up, b_pos, b_up
     )
@@ -664,7 +665,7 @@ for trial in range(NUM_TRIALS):
         if Traj_reach is None or len(Traj_reach) == 0:
             p.resetSimulation()
             print("*******", success_count * 1.0 / (trial + 1))
-            continue  # TODO: retracting failed
+            continue  # retracting failed
         else:
             planning(Traj_reach, restore_fingers=True)
 
