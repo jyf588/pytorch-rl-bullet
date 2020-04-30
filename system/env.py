@@ -1,30 +1,33 @@
-import argparse
-import copy
-import cv2
-import numpy as np
 import os
-import pprint
-import pybullet as p
+import cv2
 import sys
+import copy
 import time
 import torch
+import pprint
+import argparse
+import numpy as np
+import pybullet as p
 from typing import *
 
+import system.policy
 from system import openrave
 from system.bullet_world import BulletWorld
-import system.policy
 from system.vision_module import VisionModule
+from system.seg_module import SegmentationModule
+from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
 from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import (
     ImaginaryArmObjSession,
 )
-from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
 from my_pybullet_envs.inmoov_shadow_place_env_v9 import (
     InmoovShadowHandPlaceEnvV9,
 )
-import my_pybullet_envs.utils as utils
 from NLP_module import NLPmod
-from ns_vqa_dart.bullet import dash_object, gen_dataset, util
+
+import ns_vqa_dart.bullet.seg
+import my_pybullet_envs.utils as utils
 from ns_vqa_dart.bullet.metrics import Metrics
+from ns_vqa_dart.bullet import dash_object, gen_dataset, util
 
 
 class DemoEnvironment:
@@ -110,6 +113,13 @@ class DemoEnvironment:
                 )
             else:
                 raise ValueError(f"Invalid task: {task}")
+
+        # Initialize the segmentation module if requested.
+        if self.opt.use_segmentation_module:
+            self.segmentation_module = SegmentationModule(
+                load_checkpoint_path=self.opt.segmentation_checkpoint_path
+            )
+
         if visualize_bullet:
             p.connect(p.GUI)
         else:
@@ -687,39 +697,32 @@ class DemoEnvironment:
         stage, _ = self.get_current_stage()
         if stage == "plan":
             vision_module = self.planning_vision_module
-            camera_control = "center"
             num_obs = len(gt_odicts)
         elif stage == "place":
             vision_module = self.placing_vision_module
-            camera_control = "stack"
             if self.task == "place":
                 num_obs = 1
             elif self.task == "stack":
                 num_obs = 2
-
         else:
             raise ValueError(f"No vision module for stage: {stage}.")
 
+        rgb, seg = self.get_images()
+
         # Predict the object pose for the objects that we've "looked" at.
         pred_odicts = []
-        pred_obs = []
+        pred_obs = [None] * num_obs
+        assigned_idxs = []
         for idx in range(num_obs):
-            cam_tid = gen_dataset.get_camera_target_id(
-                oid=idx, camera_control=camera_control
-            )
-
-            rgb, seg_img = self.get_images(
-                oid=idx, renderer=renderer, cam_tid=cam_tid
-            )
-            pred = vision_module.predict(oid=idx, rgb=rgb, seg_img=seg_img)
+            pred = vision_module.predict(oid=idx, rgb=rgb, seg=seg)
 
             # Convert vectorized predictions to dictionary form using camera
             # information.
             y_dict = dash_object.y_vec_to_dict(
                 y=list(pred[0]),
                 coordinate_frame=self.opt.coordinate_frame,
-                cam_position=self.unity_data[cam_tid]["camera_position"],
-                cam_orientation=self.unity_data[cam_tid]["camera_orientation"],
+                cam_position=self.unity_data[0]["camera_position"],
+                cam_orientation=self.unity_data[0]["camera_orientation"],
             )
 
             # self.metrics.add_example(gt_dict=gt_odicts[idx], pred_dict=y_dict)
@@ -735,17 +738,23 @@ class DemoEnvironment:
             # up vector.
             # To do this, we convert the predicted up vector into an
             # orientation, using the GT z rot.
-            pred_orientation = util.up_to_orientation(
-                up=y_dict["up_vector"],
-                gt_orientation=gt_odicts[idx]["orientation"],
-            )
             # obs[idx]["orientation"] = pred_orientation
-            gt_odict = gt_odicts[idx]
+            nearest_neighbor_idx = self.find_nearest_neighbor(
+                src_odict=y_dict,
+                ref_odicts=gt_odicts,
+                assigned_idxs=assigned_idxs,
+            )
+            assert nearest_neighbor_idx is not None
+            assigned_idxs.append(nearest_neighbor_idx)
+            gt_odict = gt_odicts[nearest_neighbor_idx]
+            pred_orientation = util.up_to_orientation(
+                up=y_dict["up_vector"], gt_orientation=gt_odict["orientation"],
+            )
             pred_odict = copy.deepcopy(gt_odict)
             pred_odict["position"] = y_dict["position"]
             pred_odict["up_vector"] = y_dict["up_vector"]
             pred_odict["orientation"] = pred_orientation
-            pred_obs.append(pred_odict)
+            pred_obs[nearest_neighbor_idx] = pred_odict
 
         # Save the predicted and ground truth object dictionaries.
         if self.opt.save_predictions:
@@ -760,7 +769,45 @@ class DemoEnvironment:
             )
         return pred_obs
 
-    def get_images(self, oid: int, renderer: str, cam_tid: int):
+    def find_nearest_neighbor(
+        self, src_odict: Dict, ref_odicts: List[Dict], assigned_idxs: List[int]
+    ):
+        """Finds the index of the nearest neighboring ground truth object when
+        compared to a single object.
+
+        TODO: Change to hungarian matching algorithm.
+
+        Args:
+            src_odict: The object that we want to find the nearest neighboring
+                object for.
+            ref_odicts: The reference objects that we want to select the 
+                nearest neighbor from.
+            assigned_idxs: A list of assigned indexes.
+        
+        Returns:
+            nearest_neighbor_idx: The index corresponding to the nearest
+                neighbor.
+        """
+        nearest_neighbor_idx = None
+        max_score = None
+        for idx, ref_odict in enumerate(ref_odicts):
+            # Skip over objects that have already been assigned.
+            if idx in assigned_idxs:
+                continue
+            score = 0
+            for attr in ["shape", "color"]:
+                if src_odict[attr] == ref_odict[attr]:
+                    score += 1
+                if max_score is None or score > max_score:
+                    nearest_neighbor_idx = idx
+                    max_score = score
+        print(f"src_odict: {src_odict}")
+        print(f"ref_odicts: {ref_odicts}")
+        print(f"max_score: {max_score}")
+        print(f"nearest_neighbor_idx: {nearest_neighbor_idx}")
+        return nearest_neighbor_idx
+
+    def get_images(self):
         """Retrieves the images that are input to the vision module.
 
         Args:
@@ -771,25 +818,33 @@ class DemoEnvironment:
             rgb: The RGB image of the object.
             seg_rgb: The RGB segmentation image of the object.
         """
-        if renderer == "opengl":
+        if self.renderer == "opengl":
             raise NotImplementedError
-        elif renderer == "tiny_renderer":
+        elif self.renderer == "tiny_renderer":
             raise NotImplementedError
-        elif renderer == "unity":
+        elif self.renderer == "unity":
             # Unity should have already called set_unity_data before this.
-            rgb = self.unity_data[cam_tid]["rgb"]
-            seg_rgb = self.unity_data[cam_tid]["seg_img"]
+            rgb = self.unity_data[0]["rgb"]
+            seg_img = self.unity_data[0]["seg_img"]
 
             # Optionally we can visualize unity images using OpenCV.
             if self.visualize_unity:
                 bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-                seg_bgr = cv2.cvtColor(seg_rgb, cv2.COLOR_RGB2BGR)
+                seg_bgr = cv2.cvtColor(seg_img, cv2.COLOR_RGB2BGR)
                 cv2.imshow("rgb", bgr)
                 cv2.imshow("seg", seg_bgr)
                 cv2.waitKey(5)
         else:
-            raise ValueError(f"Invalid renderer: {renderer}")
-        return rgb, seg_rgb
+            raise ValueError(f"Invalid renderer: {self.renderer}")
+
+        # Either predict segmentations or use ground truth.
+        if self.opt.use_segmentation_module:
+            seg = self.segmentation_module.predict(img=rgb)
+        else:
+            # If using ground truth, convert the segmentation image into a
+            # segmentation map.
+            seg, _ = ns_vqa_dart.bullet.seg.seg_img_to_map(seg_img)
+        return rgb, seg
 
     def set_unity_data(self, data: Dict):
         """Sets the data received from Unity.

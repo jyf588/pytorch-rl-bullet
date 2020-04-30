@@ -1,9 +1,11 @@
-from argparse import Namespace
 import cv2
+import imageio
 import numpy as np
+from typing import *
+from argparse import Namespace
+
 import torch
 import torchvision.transforms as transforms
-from typing import *
 
 import ns_vqa_dart.bullet.seg
 from ns_vqa_dart.bullet import dash_object, gen_dataset
@@ -31,7 +33,7 @@ class VisionModule:
         return options
 
     def predict(
-        self, oid: int, rgb: np.ndarray, seg_img: np.ndarray
+        self, oid: int, rgb: np.ndarray, seg: np.ndarray
     ) -> np.ndarray:
         """Runs inference on an image to get vision predictions.
 
@@ -42,18 +44,17 @@ class VisionModule:
         Returns:
             pred: The model predictions.
         """
-        seg, _ = ns_vqa_dart.bullet.seg.seg_img_to_map(seg_img)
         data = dash_object.compute_X(
             oid=oid, img=rgb, seg=seg, keep_occluded=True
         )
 
         # Debugging
-        # debug_seg = cv2.cvtColor(data[:, :, :3], cv2.COLOR_BGR2RGB)
-        # debug_rgb = cv2.cvtColor(data[:, :, 3:6], cv2.COLOR_BGR2RGB)
-        # input_debug = np.hstack([debug_seg, debug_rgb])
-        # cv2.imwrite(f"/home/michelle/test_{oid}.png", input_debug)
-        # cv2.imshow("input debug", input_debug)
-        # cv2.waitKey(0)
+        debug_seg = data[:, :, :3]
+        debug_rgb = data[:, :, 3:6]
+        input_debug = np.hstack([debug_seg, debug_rgb])
+        path = f"/home/michelle/tmp/vision_input_{oid}.png"
+        imageio.imwrite(path, input_debug)
+        print(f"Wrote debug image to: {path}")
         pred = self.predict_from_data(data=data)
         return pred
 

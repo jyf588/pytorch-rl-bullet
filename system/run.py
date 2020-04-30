@@ -38,7 +38,7 @@ async def send_to_client(websocket, path):
     """
     scenes = generate_scenes()
 
-    for scene_idx in range(1, len(scenes)):
+    for scene_idx in range(0, len(scenes)):
         scene = scenes[scene_idx]
 
         # Hard code top object to be green, and bottom object to be blue.
@@ -48,12 +48,13 @@ async def send_to_client(websocket, path):
         src_shape = scene[1]["shape"]
         command = f"Put the green {src_shape} on top of the blue {dst_shape}"
 
-        if scene_idx % 2 == 0:
-            task = "stack"
-        else:
-            task = "place"
+        # if scene_idx % 2 == 0:
+        #     task = "stack"
+        # else:
+        #     task = "place"
+        task = "stack"
         # for obs_mode in ["gt", "vision"]:
-        for obs_mode in ["gt"]:
+        for obs_mode in ["vision"]:
 
             # Modify the scene for placing. We keep only the first object for
             # now, and set the placing destination xy location to be the
@@ -122,7 +123,7 @@ async def send_to_client(websocket, path):
                         position=cam_target,
                     )
                 else:
-                    render_frequency = 1
+                    render_frequency = 50
                     if obs_mode == "vision":
                         unity_options = [(True, True, False, True)]
                     elif obs_mode == "gt":
