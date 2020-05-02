@@ -9,9 +9,14 @@ def main(args: argparse.Namespace):
     # paths = sorted(paths)
 
     # Run the ffmpeg command to generate the video.
-    fps = 20
-    command = f"ffmpeg -r {fps} -i {args.src_dir}/%06d.png -vb 20M -vcodec mpeg4 -y {args.dst_path}"
-    # command = f"ffmpeg -framerate {fps} -i {args.src_dir}/%06d.png -codec copy {args.dst_path}"
+    fps = 25
+    # command = f"ffmpeg -r {fps} -i {args.src_dir}/%06d.png -vb 20M -vcodec mpeg4 -y {args.temp_path}"
+    # os.system(command)
+    # command = f'ffmpeg -i {args.temp_path} -filter:v "setpts=0.05*PTS" -y {args.dst_path}'
+    # os.system(command)
+
+    # command = f'ffmpeg -i {args.src_dir}/%06d.png -filter:v "setpts=PTS/8,fps=30" -vb 20M -vcodec mpeg4 -y {args.dst_path}'
+    command = f'ffmpeg -i {args.src_dir}/%06d.png -filter:v "setpts=PTS/1,fps=20" -vb 20M -vcodec mpeg4 -y {args.dst_path}'
     os.system(command)
 
 
@@ -22,6 +27,12 @@ if __name__ == "__main__":
         type=str,
         default="/Users/michelleguo/workspace/lucas/unity/Captures/temp/third/rgb",
         help="The directory containing the png images to convert into video format.",
+    )
+    parser.add_argument(
+        "--temp_path",
+        type=str,
+        default="/Users/michelleguo/Desktop/tmp.mp4",
+        help="The destination path to write the mp4 video to.",
     )
     parser.add_argument(
         "--dst_path",
