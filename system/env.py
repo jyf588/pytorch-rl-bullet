@@ -257,7 +257,10 @@ class DemoEnvironment:
         if dst_idx is None:
             z = 0.0
         else:
-            z = observation[dst_idx]["height"]
+            if self.opt.use_height:
+                z = observation[dst_idx]["height"]
+            else:
+                z = utils.H_MAX
 
         dst_xyz = [dst_x, dst_y, z + utils.PLACE_START_CLEARANCE]
         return src_idx, dst_idx, dst_xyz
@@ -502,7 +505,7 @@ class DemoEnvironment:
                 is_cuda=self.opt.is_cuda,
             )
         obs = system.policy.wrap_obs(
-            self.get_grasping_observation(), is_cuda=self.opt.is_cuda
+            self.get_grasp_observation(), is_cuda=self.opt.is_cuda
         )
         with torch.no_grad():
             _, action, _, self.hidden_states = self.policy.act(
@@ -541,7 +544,7 @@ class DemoEnvironment:
 
         # Get the current observation.
         obs = system.policy.wrap_obs(
-            self.get_placing_observation(), is_cuda=self.opt.is_cuda
+            self.get_place_observation(), is_cuda=self.opt.is_cuda
         )
         with torch.no_grad():
             _, action, _, self.hidden_states = self.policy.act(
@@ -571,23 +574,43 @@ class DemoEnvironment:
         else:
             tar_arm_q = trajectory[idx]
         self.world.robot_env.robot.tar_arm_q = tar_arm_q
+
+        # Restore fingers.
+        if self.opt.restore_fingers and idx >= len(trajectory) * 0.1:
+            blending = np.clip(
+                (idx - len(trajectory) * 0.1) / (len(trajectory) * 0.6),
+                0.0,
+                1.0,
+            )
+            cur_fin_q = self.world.robot_env.robot.get_q_dq(
+                self.world.robot_env.robot.fin_actdofs
+            )[0]
+            tar_fin_q = (
+                self.world.robot_env.robot.init_fin_q * blending
+                + cur_fin_q * (1 - blending)
+            )
+            self.world.robot_env.robot.tar_fin_q = tar_fin_q
+
         self.world.robot_env.robot.apply_action([0.0] * 24)
         self.world.step()
 
-    def get_grasping_observation(self) -> torch.Tensor:
+    def get_grasp_observation(self) -> torch.Tensor:
         odict = self.initial_obs[self.src_idx]
         position = odict["position"]
         half_height = odict["height"] / 2
         x, y = position[0], position[1]
-        # obs = self.world.robot_env.get_robot_contact_txty_halfh_obs_nodup(
-        #     x, y, half_height
-        # )
-        obs = self.world.robot_env.get_robot_contact_txtytz_halfh_shape_obs_no_dup(
-            x, y, 0.0, half_height, odict["shape"] == "box"
-        )
+        is_box = odict["shape"] == "box"
+        if self.opt.use_height:
+            obs = self.world.robot_env.get_robot_contact_txtytz_halfh_shape_obs_no_dup(
+                x, y, 0.0, half_height, is_box
+            )
+        else:
+            obs = self.world.robot_env.get_robot_contact_txty_shape_obs_no_dup(
+                x, y, is_box
+            )
         return obs
 
-    def get_placing_observation(self):
+    def get_place_observation(self):
         # Update the observation only every `vision_delay` steps.
         if self.timestep % self.opt.vision_delay == 0:
             self.obs = self.get_observation(
@@ -595,10 +618,13 @@ class DemoEnvironment:
             )
 
         # Compute the observation vector from object poses and placing position.
-        tdict = self.obs[self.src_idx]
         t_init_dict = self.scene[self.src_idx]
         x, y, z = t_init_dict["position"]
         is_box = t_init_dict["shape"] == "box"
+
+        tdict = self.obs[self.src_idx]
+        t_pos = tdict["position"]
+        t_up = tdict["up_vector"]
 
         if self.task == "stack":
             bdict = self.obs[self.dst_idx]
@@ -608,17 +634,28 @@ class DemoEnvironment:
             b_pos = [0.0, 0.0, 0.0]
             b_up = [0.0, 0.0, 1.0]
 
-        p_obs = self.world.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
-            tx=x,
-            ty=y,
-            tz=z,
-            half_h=tdict["height"] / 2,
-            t_is_box=is_box,
-            t_pos=tdict["position"],
-            t_up=tdict["up_vector"],
-            b_pos=b_pos,
-            b_up=b_up,
-        )
+        if self.opt.use_height:
+            p_obs = self.world.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
+                tx=x,
+                ty=y,
+                tz=z,
+                half_h=tdict["height"] / 2,
+                t_is_box=is_box,
+                t_pos=t_pos,
+                t_up=t_up,
+                b_pos=b_pos,
+                b_up=b_up,
+            )
+        else:
+            p_obs = self.world.robot_env.get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
+                tx=x,
+                ty=y,
+                t_is_box=is_box,
+                t_pos=t_pos,
+                t_up=t_up,
+                b_pos=b_pos,
+                b_up=b_up,
+            )
         return p_obs
 
     def get_observation(self, observation_mode: str, renderer: str):

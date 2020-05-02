@@ -321,4 +321,11 @@ class BulletWorld:
         time.sleep(self.opt.ts)
 
     def step_robot(self, action: np.ndarray):
-        self.robot_env.step(action=action)
+        """Applies the robot action and steps a single simulation step.
+
+        Args:
+            action: The robot action to apply.
+        """
+        # Note that we call `step_sim` instead of `step` because we want the
+        # frames at each simulation step, instead of each control step.
+        self.robot_env.step_sim(action=action)

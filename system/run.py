@@ -54,7 +54,7 @@ async def send_to_client(websocket, path):
         #     task = "place"
         task = "stack"
         # for obs_mode in ["gt", "vision"]:
-        for obs_mode in ["vision"]:
+        for obs_mode in ["gt"]:
 
             # Modify the scene for placing. We keep only the first object for
             # now, and set the placing destination xy location to be the
@@ -123,7 +123,7 @@ async def send_to_client(websocket, path):
                         position=cam_target,
                     )
                 else:
-                    render_frequency = 50
+                    render_frequency = 70
                     if obs_mode == "vision":
                         unity_options = [(True, True, False, True)]
                     elif obs_mode == "gt":

@@ -1,5 +1,22 @@
 import argparse
 
+GRASP_CONTROL_SKIP = 6
+PLACE_CONTROL_SKIP = 6
+USE_HEIGHT = False
+
+# Models with height:
+if USE_HEIGHT:
+    GRASP_PI = "0404_0_n_20_40"
+    GRASP_DIR = "./trained_models_0404_0_n/ppo/"
+    PLACE_DIR = "./trained_models_0404_0_n_place_0404_0/ppo/"
+else:
+    GRASP_PI = "0411_0_n_25_45"
+    GRASP_DIR = "./trained_models_0411_0_n/ppo/"
+    PLACE_DIR = "./trained_models_0411_0_n_place_0411_0/ppo/"
+
+# Baseline model, w/o height:
+# PLACE_DIR = "./trained_models_0411_0_n_place_0411_0_np_0/ppo/"
+
 OPTIONS = argparse.Namespace(
     seed=101,
     det=True,
@@ -12,17 +29,19 @@ OPTIONS = argparse.Namespace(
     hand_mu=1.0,
     floor_mu=1.0,
     disable_reaching=False,
-    grasping_control_skip=6,
+    restore_fingers=True,
+    use_height=USE_HEIGHT,
     n_plan_steps=450,
-    n_grasp_steps=30,
-    n_place_steps=50,
+    n_grasp_steps=30 * GRASP_CONTROL_SKIP,
+    n_place_steps=50 * PLACE_CONTROL_SKIP,
     n_release_steps=100,
-    grasp_pi="0404_0_n_20_40",
-    grasp_dir="./trained_models_0404_0_n/ppo/",
+    grasp_pi=GRASP_PI,
+    grasp_dir=GRASP_DIR,
     grasp_env_name="InmoovHandGraspBulletEnv-v6",
-    placing_control_skip=6,
-    place_dir="./trained_models_0404_0_n_place_0404_0/ppo/",
+    place_dir=PLACE_DIR,
     place_env_name="InmoovHandPlaceBulletEnv-v9",
+    grasping_control_skip=GRASP_CONTROL_SKIP,
+    placing_control_skip=PLACE_CONTROL_SKIP,
     vision_delay=2,
     segmentation_checkpoint_path="/media/sdc3/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
     planning_checkpoint_path="/media/sdc3/mguo/outputs/planning_v003_20K/checkpoint_best.pt",
