@@ -56,6 +56,7 @@ parser.add_argument("--non-det", type=int, default=0)
 parser.add_argument("--render", type=int, default=0)
 parser.add_argument("--sleep", type=int, default=0)
 parser.add_argument("--flag_0428", type=int, default=0)
+parser.add_argument("--flag_0426", type=int, default=0)
 args = parser.parse_args()
 np.random.seed(args.seed)
 args.det = not args.non_det
@@ -68,6 +69,7 @@ WITH_REACHING = True
 WITH_RETRACT = True
 USE_HEIGHT_INFO = bool(args.use_height)
 FLAG_0428 = bool(args.flag_0428)
+FLAG_0426 = bool(args.flag_0426)
 TEST_PLACING = bool(args.test_placing)    # if false, test stacking
 ADD_SURROUNDING_OBJS = True
 LONG_MOVE = bool(args.long_move)
@@ -81,7 +83,7 @@ CLOSE_THRES = 0.25
 NUM_TRIALS = 300
 
 GRASP_END_STEP = 35     # TODO, some policies sensitive to this
-PLACE_END_STEP = 70
+PLACE_END_STEP = 75
 
 INIT_NOISE = True
 DET_CONTACT = 0  # 0 false, 1 true
@@ -126,11 +128,12 @@ else:
         PLACE_PI = "0411_0_n_place_0411_0"
         PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
-        # GRASP_PI = "0426_0_n_25_45"
-        # GRASP_DIR = "./trained_models_%s/ppo/" % "0426_0_n"
-        #
-        # PLACE_PI = "0426_0_n_place_0426_0"
-        # PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
+        if FLAG_0426:
+            GRASP_PI = "0426_0_n_25_45"
+            GRASP_DIR = "./trained_models_%s/ppo/" % "0426_0_n"
+
+            PLACE_PI = "0426_0_n_place_0426_0"
+            PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
     GRASP_PI_ENV_NAME = "InmoovHandGraspBulletEnv-v6"
     PLACE_PI_ENV_NAME = "InmoovHandPlaceBulletEnv-v9"
@@ -144,8 +147,17 @@ GRASPING_CONTROL_SKIP = 6
 
 
 def planning(trajectory, restore_fingers=False):
-    # TODO: traj length 300 now.
-    for idx in range(len(trajectory) + 50):
+    last_tar_arm_q = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
+
+    pi_tar_fin_q = env_core.robot.tar_fin_q     # TODO
+    pi_init_fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
+
+    print("pi_tar_fin_q")
+    print(["{0:0.3f}".format(n) for n in pi_tar_fin_q])
+    print("pi_init_fin_q")
+    print(["{0:0.3f}".format(n) for n in pi_init_fin_q])
+
+    for idx in range(len(trajectory) + 5):
         if idx > len(trajectory) - 1:
             tar_arm_q = trajectory[-1]
         else:
@@ -155,15 +167,133 @@ def planning(trajectory, restore_fingers=False):
             blending = np.clip((idx - len(trajectory) * 0.1) / (len(trajectory) * 0.6), 0.0, 1.0)
             cur_fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
             tar_fin_q = env_core.robot.init_fin_q * blending + cur_fin_q * (1-blending)
-            env_core.robot.tar_fin_q = tar_fin_q
+        else:
+            # try to keep fin q close to pi_init_fin_q
+            # try to keep tar_fin_q close to pi_tar_fin_q when fin q close to pi_init_fin_q
+            # fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
+            # #
+            # # # signs = np.sign(pi_tar_fin_q - pi_init_fin_q)
+            # # #
+            # # # tar_fin_q = (pi_init_fin_q - pi_tar_fin_q) / 0.05 * signs * (fin_q - pi_init_fin_q) \
+            # # #                 + pi_tar_fin_q
+            # # tar_fin_q = -1.0 * (fin_q - pi_init_fin_q) + pi_tar_fin_q       # TODO:tmp
+            # # mins = np.minimum(pi_tar_fin_q, pi_init_fin_q)
+            # # maxs = np.maximum(pi_tar_fin_q, pi_init_fin_q)
+            # # tar_fin_q = np.clip(tar_fin_q, mins, maxs)
+            # #
+            # # tar_fin_q = pi_tar_fin_q
+            # #
+            # # signs = np.sign(pi_tar_fin_q - pi_init_fin_q)
+            # w = 0.1 * np.clip(1 - (fin_q - pi_init_fin_q) / 0.1, 0.0, 2.0)
+            tar_fin_q = np.clip(pi_tar_fin_q, pi_init_fin_q - 0.05, pi_init_fin_q + 0.05)
 
-        env_core.robot.tar_arm_q = tar_arm_q
-        env_core.robot.apply_action([0.0] * 24)
+            # tar_fin_q = pi_init_fin_q + 0.1 * signs * np.clip(1 - np.abs(fin_q - pi_init_fin_q) / 0.1, 0.0, 1.0)
+
+        env_core.robot.tar_fin_q = tar_fin_q
+        # ############
+        env_core.robot.tar_fin_q = np.clip(env_core.robot.tar_fin_q,
+                                           env_core.robot.ll[env_core.robot.fin_actdofs],
+                                           env_core.robot.ul[env_core.robot.fin_actdofs])
+        #
+        # if idx > len(trajectory) - 1:
+        #     env_core.robot.tar_fin_q = pi_tar_fin_q
+        # ############
+
+        # env_core.robot.tar_fin_q = pi_tar_fin_q
+        # env_core.robot.tar_arm_q = tar_arm_q
+        # env_core.robot.apply_action([0.0] * 24)       # TODO
+
+        p.setJointMotorControlArray(
+            bodyIndex=env_core.robot.arm_id,
+            jointIndices=env_core.robot.fin_actdofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=list(env_core.robot.tar_fin_q),
+            forces=[200.0] * len(env_core.robot.tar_fin_q))
+        p.setJointMotorControlArray(
+            bodyIndex=env_core.robot.arm_id,
+            jointIndices=env_core.robot.fin_zerodofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=[0.0]*len(env_core.robot.fin_zerodofs),
+            forces=[200 / 4.0] * len(env_core.robot.fin_zerodofs))
+
+        # if idx > len(trajectory) + 1:   # TODO
+        #     tar_vel = [0.0] * len(env_core.robot.arm_dofs)  # TODO
+        # else:
+        #     cur_arm_q = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
+        #     # tar_vel = (tar_arm_q - last_tar_arm_q) / utils.TS * 0.0
+        #     # tar_vel = (tar_arm_q - last_tar_arm_q) / utils.TS
+        #     tar_vel = (tar_arm_q - cur_arm_q) / utils.TS       # TODO
+
+        tar_vel = (tar_arm_q - last_tar_arm_q) / utils.TS
+
+        # if idx > len(trajectory) - 1:
+        #     print(tar_vel)
+
+        p.setJointMotorControlArray(
+            bodyIndex=env_core.robot.arm_id,
+            jointIndices=env_core.robot.arm_dofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=list(tar_arm_q),
+            targetVelocities=list(tar_vel),
+            forces=[200. * 5] * len(env_core.robot.arm_dofs))
+
+        # p.setJointMotorControlArray(
+        #     bodyIndex=env_core.robot.arm_id,
+        #     jointIndices=env_core.robot.arm_dofs,
+        #     controlMode=p.VELOCITY_CONTROL,
+        #     targetVelocities=list(tar_vel),
+        #     forces=[600.0] * len(env_core.robot.arm_dofs))
+
+        # p.setJointMotorControlArray(
+        #     bodyIndex=env_core.robot.arm_id,
+        #     jointIndices=env_core.robot.arm_dofs,
+        #     controlMode=p.VELOCITY_CONTROL,
+        #     targetVelocities=list(tar_vel),
+        #     forces=[0.0] * len(env_core.robot.arm_dofs))
+        #
+        # # print(env_core.robot.arm_dofs)
+        # tar_arm_q_tmp = tar_arm_q[:, np.newaxis].tolist()
+        # tar_vel_tmp = tar_vel[:, np.newaxis].tolist()
+        # # print(tar_arm_q_tmp)
+        # # print(tar_vel_tmp)
+        #
+        # p.setJointMotorControlMultiDofArray(
+        #     env_core.robot.arm_id,
+        #     env_core.robot.arm_dofs,
+        #     p.STABLE_PD_CONTROL,
+        #     targetPositions=tar_arm_q_tmp,
+        #     targetVelocities=tar_vel_tmp,
+        #     forces=[[0.0]] * 7,
+        #     positionGains=[30.] * 7,
+        #     velocityGains=[3.] * 7,
+        # )
+
+        # print("act", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
+        diff = np.linalg.norm(env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
+                              - tar_arm_q)
+        # if idx > len(trajectory) - 1:
+        #     print("diff", diff)
+        #     print("tar_vel", tar_vel)
+        #     print("act vel", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[1])
+        #     # if idx == len(trajectory) - 1:
+
+        if idx == len(trajectory) + 4:
+            print("diff final", diff)
+            print("vel final", np.linalg.norm(env_core.robot.get_q_dq(env_core.robot.arm_dofs)[1]))
+            print("fin dofs")
+            print(["{0:0.3f}".format(n) for n in env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]])
+            print("cur_fin_tar_q")
+            print(["{0:0.3f}".format(n) for n in env_core.robot.tar_fin_q])
 
         for _ in range(1):
             p.stepSimulation()
         if DUMMY_SLEEP:
-            time.sleep(utils.TS / 2.0)
+            time.sleep(utils.TS * 0.6)
+
+        last_tar_arm_q = tar_arm_q
+    env_core.robot.tar_arm_q = tar_arm_q    # reset?
+    env_core.robot.tar_fin_q = pi_tar_fin_q  # reset?
+    # input("press enter")
 
 
 def get_relative_state_for_reset(oid):
@@ -245,6 +375,14 @@ def load_obj_and_construct_state(obj_dicts_list):
     obj_dicts_list[0]['color'] = 'red'
     topobj_id = utils.create_sym_prim_shape_helper_new(obj_dicts_list[0])
     state[topobj_id] = obj_dicts_list[0]
+    # # TODO:tmp
+    # obj_pos = obj_dicts_list[0]['position']
+    # obj_pos[2] = 0.0
+    # topobj_id = p.loadURDF("my_pybullet_envs/assets/cone.urdf", basePosition=obj_pos,
+    #                        baseOrientation=obj_dicts_list[0]['orientation'])
+    # p.changeDynamics(topobj_id, -1, lateralFriction=OBJ_MU)
+    # state[topobj_id] = obj_dicts_list[0]
+
     return state, topobj_id, bottom_id
 
 
@@ -281,11 +419,11 @@ def get_stack_policy_obs_tensor(tx, ty, tz, t_half_height, is_box, t_pos, t_up, 
         obs = env_core.get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
             tx, ty, is_box, t_pos, t_up, b_pos, b_up
         )
-        # # for 0426
-        # if TEST_PLACING:
-        #     obs.extend([1.0])
-        # else:
-        #     obs.extend([-1.0])
+        if FLAG_0426:
+            if TEST_PLACING:
+                obs.extend([1.0])
+            else:
+                obs.extend([-1.0])
     obs = policy.wrap_obs(obs, IS_CUDA)
     return obs
 
@@ -317,6 +455,9 @@ def get_stacking_obs(
     """
 
     top_pos, top_quat = p.getBasePositionAndOrientation(top_oid)
+    # # TODO: hack
+    # top_pos = list(top_pos)
+    # top_pos[2] += 0.07
     if btm_oid is None:
         btm_pos, btm_quat = [0.0, 0, 0], [0.0, 0, 0, 1]
     else:
@@ -400,7 +541,7 @@ for trial in range(NUM_TRIALS):
             # overwrite ptz
             p_tz = 0.0
 
-        is_box = (top_dict["shape"] == "box")
+        is_box = int(top_dict["shape"] == "box")
 
         dist = CLOSE_THRES*2.0 if LONG_MOVE else CLOSE_THRES
         if is_close(top_dict, btm_dict, dist=dist):
@@ -563,27 +704,36 @@ for trial in range(NUM_TRIALS):
     # print(f"Pose before placing")
     # pprint.pprint(pose_saver.poses[-1])
     #
+    # input("ready to place")
     # ##### fake: reset###
+    # # reset only arm but not obj/finger
+    # # reset obj/finger but not arm
+    # # reset finger vel/obj vel only
+    # # reset obj but not arm/finger -- good
+    # # reset obj vel but not pos -- somewhat good
+    # # reset obj but not arm/finger
+    #
+    # # # TODO:tmp
+    # # state = get_relative_state_for_reset(top_id)
+    # # print("after grasping", state)
+    #
     # o_pos_pf = state['obj_pos_in_palm']
     # o_quat_pf = state['obj_quat_in_palm']
     # all_fin_q_init = state['all_fin_q']
     # tar_fin_q_init = state['fin_tar_q']
-    # env_core.robot.reset_with_certain_arm_q_finger_states(Qdestin, all_fin_q_init, tar_fin_q_init)
+    # # env_core.robot.reset_with_certain_arm_q_finger_states(Qdestin, all_fin_q_init, tar_fin_q_init)
+    # # env_core.robot.reset_only_certain_finger_states(all_fin_q_init, tar_fin_q_init)
+    #
     # p_pos, p_quat = env_core.robot.get_link_pos_quat(env_core.robot.ee_id)
     # o_pos, o_quat = p.multiplyTransforms(p_pos, p_quat, o_pos_pf, o_quat_pf)
-    #
-    # # table_id = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/tabletop.urdf'), TABLE_OFFSET,
-    # #                       useFixedBase=1)
-    # # p.changeDynamics(table_id, -1, lateralFriction=FLOOR_MU)
-    # # oid1 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/cylinder_small.urdf'), o_pos, o_quat,
-    # #                   useFixedBase=0)
-    # # p.changeDynamics(oid1, -1, lateralFriction=OBJ_MU)
     # p.resetBasePositionAndOrientation(top_id, o_pos, o_quat)
     # p.stepSimulation()
-    # env_core.robot.reset_with_certain_arm_q_finger_states(Qdestin, all_fin_q_init, tar_fin_q_init)
+    # # env_core.robot.reset_with_certain_arm_q_finger_states(Qdestin, all_fin_q_init, tar_fin_q_init)
+    # # env_core.robot.reset_only_certain_finger_states(all_fin_q_init, tar_fin_q_init)
     # p.resetBasePositionAndOrientation(top_id, o_pos, o_quat)
     # p.stepSimulation()
     # #####
+    # # input("reset")
 
     """Prepare for placing"""
     env_core.change_control_skip_scaling(c_skip=PLACING_CONTROL_SKIP)
@@ -671,7 +821,7 @@ for trial in range(NUM_TRIALS):
 
     t_pos, t_quat = p.getBasePositionAndOrientation(top_id)
     if t_pos[2] - p_tz > 0.05 and (t_pos[0] - p_tx)**2 + (t_pos[1] - p_ty)**2 < 0.1**2:
-        # a very rough check
+        # TODO: ptz noisy a very rough check
         success_count += 1
 
     openrave_success_count += 1

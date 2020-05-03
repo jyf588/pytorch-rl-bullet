@@ -135,8 +135,8 @@ def get_traj_from_openrave_container(
         traj_s = loaded_data["arr_1"]
         print("loaded")
         # for k in range(7):
-        #     plt.plot(range(400), traj_i[:,k])
-        #     plt.plot(range(400), traj_s[:,k])
+        #     plt.plot(range(300), traj_i[:,k])
+        #     plt.plot(range(300), traj_s[:,k])
         #     plt.show()
         try:
             os.remove(load_path)
