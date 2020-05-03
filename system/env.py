@@ -473,10 +473,16 @@ class DemoEnvironment:
         Returns:
             trajectory: The retract trajectory of shape (n_steps, 7).
         """
+        if self.observation_mode == "gt":
+            odicts = self.get_observation(
+                observation_mode=self.observation_mode, renderer=self.renderer
+            )
+        elif self.observation_mode == "vision":
+            odicts = self.last_pred_obs
         q_src = self.world.get_robot_arm_q()
 
         trajectory = openrave.compute_trajectory(
-            odicts=self.initial_obs,
+            odicts=odicts,
             target_idx=self.src_idx,
             q_start=q_src,
             q_end=None,
@@ -620,8 +626,14 @@ class DemoEnvironment:
 
         # Compute the observation vector from object poses and placing position.
         t_init_dict = self.scene[self.src_idx]
-        x, y, z = t_init_dict["position"]
+        x, y, _ = t_init_dict["position"]
         is_box = t_init_dict["shape"] == "box"
+
+        if self.task == "stack":
+            b_init_dict = self.scene[self.dst_idx]
+            tz = b_init_dict["height"]
+        else:
+            tz = 0.0
 
         tdict = self.obs[self.src_idx]
         t_pos = tdict["position"]
@@ -639,7 +651,7 @@ class DemoEnvironment:
             p_obs = self.world.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
                 tx=x,
                 ty=y,
-                tz=z,
+                tz=tz,
                 half_h=tdict["height"] / 2,
                 t_is_box=is_box,
                 t_pos=t_pos,
@@ -819,44 +831,6 @@ class DemoEnvironment:
         for src_idx, dst_idx in zip(src_idxs, dst_idxs):
             pred_obs[src_idx] = pred_odicts[dst_idx]
         return pred_obs
-
-    def find_nearest_neighbor(
-        self, src_odict: Dict, ref_odicts: List[Dict], assigned_idxs: List[int]
-    ):
-        """Finds the index of the nearest neighboring ground truth object when
-        compared to a single object.
-
-        TODO: Change to hungarian matching algorithm.
-
-        Args:
-            src_odict: The object that we want to find the nearest neighboring
-                object for.
-            ref_odicts: The reference objects that we want to select the 
-                nearest neighbor from.
-            assigned_idxs: A list of assigned indexes.
-        
-        Returns:
-            nearest_neighbor_idx: The index corresponding to the nearest
-                neighbor.
-        """
-        nearest_neighbor_idx = None
-        max_score = None
-        for idx, ref_odict in enumerate(ref_odicts):
-            # Skip over objects that have already been assigned.
-            if idx in assigned_idxs:
-                continue
-            score = 0
-            for attr in ["shape", "color"]:
-                if src_odict[attr] == ref_odict[attr]:
-                    score += 1
-                if max_score is None or score > max_score:
-                    nearest_neighbor_idx = idx
-                    max_score = score
-        print(f"src_odict: {src_odict}")
-        print(f"ref_odicts: {ref_odicts}")
-        print(f"max_score: {max_score}")
-        print(f"nearest_neighbor_idx: {nearest_neighbor_idx}")
-        return nearest_neighbor_idx
 
     def get_images(self) -> Tuple:
         """Retrieves the images that are input to the vision module.
