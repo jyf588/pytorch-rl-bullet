@@ -21,8 +21,13 @@ class SegmentationModule:
         cfg.MODEL.WEIGHTS = load_checkpoint_path
         self.predictor = DefaultPredictor(cfg)
 
-    def predict(self, img):
-        """
+    def predict(self, img) -> np.ndarray:
+        """Predicts binary instance segmentations of objects vs. background for
+        a given image.
+
+        Args:
+            img: The RGB image to predict segmentations on.
+            
         Returns:
             masks: A numpy array of shape (N, H, W) of instance masks.
         """
@@ -35,12 +40,12 @@ class SegmentationModule:
         # masks.
         # print(outputs["instances"])
         masks = outputs["instances"].to("cpu")._fields["pred_masks"].numpy()
-        print(masks.shape)
-        seg = np.full((320, 480), -1, dtype=np.uint8)
-        for idx, mask in enumerate(masks):
-            seg[mask] = idx
-            mask_img = mask.astype(np.uint8) * 255
-            path = f"/home/michelle/tmp/seg_mask_{idx}.png"
-            imageio.imwrite(path, mask_img)
-            print(f"Wrote mask image to: {path}")
-        return seg
+        # print(masks.shape)
+        # seg = np.full((320, 480), -1, dtype=np.uint8)
+        # for idx, mask in enumerate(masks):
+        #     seg[mask] = idx
+        #     mask_img = mask.astype(np.uint8) * 255
+        #     path = f"/home/michelle/tmp/seg_mask_{idx}.png"
+        #     imageio.imwrite(path, mask_img)
+        #     print(f"Wrote mask image to: {path}")
+        return masks

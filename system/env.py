@@ -9,6 +9,7 @@ import argparse
 import numpy as np
 import pybullet as p
 from typing import *
+from scipy.optimize import linear_sum_assignment
 
 import system.policy
 from system import openrave
@@ -703,107 +704,120 @@ class DemoEnvironment:
             renderer: The renderer of the input images to the vision module.
         
         Returns:
-            obs: The observation, in the format: 
-                {
-                    "objects": {
-                        "<oid>": {
-                            "shape": shape,
-                            "color": color,
-                            "radius": radius,
-                            "height": height,
-                            "position": [x, y, z],
-                            "orientation": [x, y, z, w],
-                        },
-                        ...
+            obs: The vision observation, in the format:
+                [
+                    {
+                        "shape": shape,  # First prediction
+                        "color": color,  # First prediction
+                        "radius": radius,  # First prediction
+                        "height": height,  # First prediction
+                        "position": [x, y, z],  # Current prediction
+                        "up_vector": [u1, u2, u3],  # Current prediction
                     },
-                    "robot": {
-                        "<joint_name>": <joint_angle>,
-                        ...
-                    }
-                }.
+                    ...
+                ], 
         """
-        # The final visual observation, for now, is the same as the ground
-        # truth state except with the source object's pose predicted. So, we
-        # initialize the observation with the true state as a starting point.
-        gt_odicts = copy.deepcopy(
-            self.get_observation(observation_mode="gt", renderer=self.renderer)
-        )
-        # obs = copy.deepcopy(gt_odicts)
-
         # Select the vision module based on the current stage.
         stage, _ = self.get_current_stage()
         if stage == "plan":
             vision_module = self.planning_vision_module
-            num_obs = len(gt_odicts)
         elif stage == "place":
             vision_module = self.placing_vision_module
-            if self.task == "place":
-                num_obs = 1
-            elif self.task == "stack":
-                num_obs = 2
         else:
             raise ValueError(f"No vision module for stage: {stage}.")
 
-        rgb, seg = self.get_images()
+        # Retrieves the image, camera pose, and object segmentation masks.
+        rgb, masks, cam_position, cam_orientation = self.get_images()
 
-        # Predict the object pose for the objects that we've "looked" at.
+        # Predict the pose for each segmentation mask.
         pred_odicts = []
-        pred_obs = [None] * num_obs
-        assigned_idxs = []
-        for idx in range(num_obs):
-            pred = vision_module.predict(oid=idx, rgb=rgb, seg=seg)
+        for mask in masks:
+            # Predict attributes for a single object.
+            pred = vision_module.predict(rgb=rgb, mask=mask)
 
             # Convert vectorized predictions to dictionary form using camera
             # information.
             y_dict = dash_object.y_vec_to_dict(
-                y=list(pred[0]),
+                y=list(pred),
                 coordinate_frame=self.opt.coordinate_frame,
-                cam_position=self.unity_data[0]["camera_position"],
-                cam_orientation=self.unity_data[0]["camera_orientation"],
+                cam_position=cam_position,
+                cam_orientation=cam_orientation,
             )
 
-            # self.metrics.add_example(gt_dict=gt_odicts[idx], pred_dict=y_dict)
+            # Store the predicted object dictionary.
             pred_odicts.append(y_dict)
 
-            # Update the position and up vector with predicted values.
-            # obs[idx]["position"] = y_dict["position"]
-            # obs[idx]["up_vector"] = y_dict["up_vector"]
-
-            # Important: override the GT orientation with the predicted
-            # orientation. The predicted orientation will be the GT rotation
-            # matrix, except with the last column overridden with the predicted
-            # up vector.
-            # To do this, we convert the predicted up vector into an
-            # orientation, using the GT z rot.
-            # obs[idx]["orientation"] = pred_orientation
-            nearest_neighbor_idx = self.find_nearest_neighbor(
-                src_odict=y_dict,
-                ref_odicts=gt_odicts,
-                assigned_idxs=assigned_idxs,
+        # We track predicted objects throughout time by matching the attributes
+        # predicted at the current timestep with the object attributes from the
+        # initial observation.
+        if self.initial_obs is None:
+            pred_obs = pred_odicts
+        else:
+            pred_obs = self.match_predictions_with_initial_obs(
+                pred_odicts=pred_odicts
             )
-            assert nearest_neighbor_idx is not None
-            assigned_idxs.append(nearest_neighbor_idx)
-            gt_odict = gt_odicts[nearest_neighbor_idx]
-            pred_orientation = util.up_to_orientation(
-                up=y_dict["up_vector"], gt_orientation=gt_odict["orientation"],
-            )
-            pred_odict = copy.deepcopy(gt_odict)
-            pred_odict["position"] = y_dict["position"]
-            pred_odict["up_vector"] = y_dict["up_vector"]
-            pred_odict["orientation"] = pred_orientation
-            pred_obs[nearest_neighbor_idx] = pred_odict
+        # Store the computed observation for future computation.
+        self.last_pred_obs = copy.deepcopy(pred_obs)
 
         # Save the predicted and ground truth object dictionaries.
-        if self.opt.save_predictions:
-            path = os.path.join(
-                self.opt.save_preds_dir,
-                f"{self.trial:02}",
-                f"{self.timestep:04}.p",
-            )
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            util.save_pickle(
-                path=path, data={"gt": gt_odicts, "pred": pred_odicts}
-            )
+        # if self.opt.save_predictions:
+        #     path = os.path.join(
+        #         self.opt.save_preds_dir,
+        #         f"{self.trial:02}",
+        #         f"{self.timestep:04}.p",
+        #     )
+        #     os.makedirs(os.path.dirname(path), exist_ok=True)
+        #     util.save_pickle(
+        #         path=path, data={"gt": gt_odicts, "pred": pred_odicts}
+        #     )
+        return pred_obs
+
+    def match_predictions_with_initial_obs(
+        self, pred_odicts: List[Dict]
+    ) -> List:
+        """Matches predictions with `self.initial_obs`.
+
+        Args:
+            pred_odicts: A list of predicted object dictionaries to match with
+                `self.initial_obs`.
+
+        Returns:
+            pred_obs: A list of predicted object observations that is same 
+                length as `self.initial_obs`. Each element in `pred_obs` 
+                corresponds to the object predicted in `self.initial_obs`, and
+                contains either:
+                (1) The assigned object prediction from the current timestep based
+                    on matching with the corresponding object from 
+                    `self.initial_obs`, or
+                (2) The most recent matched prediction.
+        """
+        # Verify that `self.initial_obs` is defined.
+        assert self.initial_obs is not None
+
+        # Construct the cost matrix.
+        cost = np.zeros((len(self.initial_obs), len(pred_odicts)))
+        for src_idx, src_y in enumerate(self.initial_obs):
+            for dst_idx, dst_y in enumerate(pred_odicts):
+                cell = 0
+                for attr in ["color", "shape"]:
+                    if src_y[attr] != dst_y[attr]:
+                        cell += 1
+                cost[src_idx][dst_idx] = cell
+
+        # Compute assignments.
+        src_idxs, dst_idxs = linear_sum_assignment(cost)
+
+        # If `self.initial_obs` has more elements than `pred_odicts`, then
+        # there will be unassigned elements in `self.initial_obs`. We assign
+        # unassigned elements with the last observation. To do this, we
+        # initialize the `pred_obs` which will be returned with
+        # `self.last_pred_obs`. Since we only override assigned elements, each
+        # unassigned element will by default hold the last prediction.
+        pred_obs = copy.deepcopy(self.last_pred_obs)
+
+        # Override assigned elements in `pred_obs` with current predictions.
+        for src_idx, dst_idx in zip(src_idxs, dst_idxs):
+            pred_obs[src_idx] = pred_odicts[dst_idx]
         return pred_obs
 
     def find_nearest_neighbor(
@@ -844,7 +858,7 @@ class DemoEnvironment:
         print(f"nearest_neighbor_idx: {nearest_neighbor_idx}")
         return nearest_neighbor_idx
 
-    def get_images(self):
+    def get_images(self) -> Tuple:
         """Retrieves the images that are input to the vision module.
 
         Args:
@@ -853,7 +867,11 @@ class DemoEnvironment:
         
         Returns:
             rgb: The RGB image of the object.
-            seg_rgb: The RGB segmentation image of the object.
+            masks: A numpy array of shape (N, H, W) of instance masks.
+            camera_position: The position of the camera used to capture the
+                image.
+            camera_orientation: The orientation of the camera used to capture 
+                the image.
         """
         if self.renderer == "opengl":
             raise NotImplementedError
@@ -863,6 +881,9 @@ class DemoEnvironment:
             # Unity should have already called set_unity_data before this.
             rgb = self.unity_data[0]["rgb"]
             seg_img = self.unity_data[0]["seg_img"]
+
+            camera_position = self.unity_data[0]["camera_position"]
+            camera_orientation = self.unity_data[0]["camera_orientation"]
 
             # Optionally we can visualize unity images using OpenCV.
             if self.visualize_unity:
@@ -876,12 +897,13 @@ class DemoEnvironment:
 
         # Either predict segmentations or use ground truth.
         if self.opt.use_segmentation_module:
-            seg = self.segmentation_module.predict(img=rgb)
+            masks = self.segmentation_module.predict(img=rgb)
         else:
             # If using ground truth, convert the segmentation image into a
             # segmentation map.
-            seg, _ = ns_vqa_dart.bullet.seg.seg_img_to_map(seg_img)
-        return rgb, seg
+            raise NotImplementedError
+            masks, _ = ns_vqa_dart.bullet.seg.seg_img_to_map(seg_img)
+        return rgb, masks, camera_position, camera_orientation
 
     def set_unity_data(self, data: Dict):
         """Sets the data received from Unity.

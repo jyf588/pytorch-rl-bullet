@@ -32,30 +32,30 @@ class VisionModule:
         options = BaseOptions().parse(opt=options, save_options=False)
         return options
 
-    def predict(
-        self, oid: int, rgb: np.ndarray, seg: np.ndarray
-    ) -> np.ndarray:
+    def predict(self, rgb: np.ndarray, mask: np.ndarray) -> np.ndarray:
         """Runs inference on an image to get vision predictions.
 
         Args:
             rgb: The RGB image of the scene.
-            seg: The segmentation of the scene.
+            mask: The segmentation mask of the object to predict.
         
         Returns:
-            pred: The model predictions.
+            pred: The model prediction for the object.
         """
-        data = dash_object.compute_X(
-            oid=oid, img=rgb, seg=seg, keep_occluded=True
-        )
+        # Create the input X data to the model. We create the data tensor even
+        # if the mask is empty (i.e., object is completely occluded)
+        data = dash_object.compute_X(img=rgb, mask=mask, keep_occluded=True)
 
         # Debugging
-        debug_seg = data[:, :, :3]
-        debug_rgb = data[:, :, 3:6]
-        input_debug = np.hstack([debug_seg, debug_rgb])
-        path = f"/home/michelle/tmp/vision_input_{oid}.png"
-        imageio.imwrite(path, input_debug)
-        print(f"Wrote debug image to: {path}")
-        pred = self.predict_from_data(data=data)
+        # debug_seg = data[:, :, :3]
+        # debug_rgb = data[:, :, 3:6]
+        # input_debug = np.hstack([debug_seg, debug_rgb])
+        # path = f"/home/michelle/tmp/vision_input_{oid}.png"
+        # imageio.imwrite(path, input_debug)
+        # print(f"Wrote debug image to: {path}")
+
+        # Predict.
+        pred = self.predict_from_data(data=data)[0]
         return pred
 
     def predict_from_data(self, data: np.ndarray):

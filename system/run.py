@@ -18,7 +18,7 @@ from ns_vqa_dart.bullet.random_objects import RandomObjectsGenerator
 global args
 
 
-ADD_SURROUNDING_OBJECTS = False
+ADD_SURROUNDING_OBJECTS = True
 PLAN_TARGET_POSITION = [-0.06, 0.3, 0.0]
 STAGE2ANIMATION_Z_OFFSET = {
     "plan": 0.3,
@@ -38,7 +38,7 @@ async def send_to_client(websocket, path):
     """
     scenes = generate_scenes()
 
-    for scene_idx in range(0, len(scenes)):
+    for scene_idx in range(7, len(scenes)):
         scene = scenes[scene_idx]
 
         # Hard code top object to be green, and bottom object to be blue.
@@ -54,7 +54,7 @@ async def send_to_client(websocket, path):
         #     task = "place"
         task = "stack"
         # for obs_mode in ["gt", "vision"]:
-        for obs_mode in ["gt"]:
+        for obs_mode in ["vision"]:
 
             # Modify the scene for placing. We keep only the first object for
             # now, and set the placing destination xy location to be the
@@ -86,6 +86,12 @@ async def send_to_client(websocket, path):
             i = 0
             while 1:
                 stage, stage_ts = env.get_current_stage()
+
+                if stage_ts == 0 and stage == "place":
+                    response = input("Continue? [Y/N] ")
+                    if response == "N":
+                        break
+
                 state = env.get_state()
 
                 # Temporarily remove robot state.
@@ -109,11 +115,15 @@ async def send_to_client(websocket, path):
                                 env.initial_obs[0]["height"]
                             ]
                         elif task == "stack":
-                            cam_target = bullet2unity.states.get_first_object_camera_target(
-                                bullet_odicts=env.initial_obs
+                            print(f"env.dst_idx: {env.dst_idx}")
+                            pprint.pprint(env.initial_obs)
+                            cam_target = bullet2unity.states.get_object_camera_target(
+                                bullet_odicts=env.initial_obs, oidx=env.dst_idx
                             )
+                            print(f"cam_target: {cam_target}")
+                            input("enter")
 
-                    # Turn on moving the camera each frame again.
+                    # Set the camera target.
                     last_bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
                         camera_control="position",
                         bullet_odicts=env.initial_obs,
@@ -216,7 +226,9 @@ async def send_to_client(websocket, path):
 
                 if stage != "plan":
                     i += 1
-
+            print(f"end of scene:")
+            pprint.pprint(scene)
+            input("Press enter to continue")
             del env
     sys.exit(0)
 
@@ -258,7 +270,7 @@ def generate_scenes():
     # Remaining objects.
     generator_all = RandomObjectsGenerator(
         seed=OPTIONS.seed,
-        n_objs_bounds=(2, 5),
+        n_objs_bounds=(2, 4),  # Maximum number of objects allowed by OR is 6.
         obj_dist_thresh=0.2,
         max_retries=50,
         shapes=["box", "cylinder", "sphere"],

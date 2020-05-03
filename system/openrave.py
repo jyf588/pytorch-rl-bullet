@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 homedir = os.path.expanduser("~")
 CONTAINER_DIR = os.path.join(homedir, "container_data")
 STAGE2NAME = {"reach": "REACH", "transport": "MOVE", "retract": "RETRACT"}
+MAX_OBJECTS = 6
 
 
 def compute_trajectory(
@@ -39,6 +40,10 @@ def compute_trajectory(
             None if OpenRAVE failed to give us a result.
     """
     name = STAGE2NAME[stage]
+
+    # Clip the number of objects at the maximum allowed by OpenRAVE.
+    if len(odicts) > MAX_OBJECTS:
+        odicts = copy.deepcopy(odicts[:MAX_OBJECTS])
 
     # Extract object positions from the state. Destination object needs to come
     # first.

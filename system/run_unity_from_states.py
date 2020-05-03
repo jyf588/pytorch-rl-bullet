@@ -52,8 +52,8 @@ async def send_to_client(websocket, path):
         first_frame = trial != last_trial
 
         if first_frame:
-            first_object_cam_target = bullet2unity.states.get_first_object_camera_target(
-                bullet_odicts=list(bullet_state["objects"].values())
+            first_object_cam_target = bullet2unity.states.get_object_camera_target(
+                bullet_odicts=list(bullet_state["objects"].values()), oidx=0
             )
         # print(f"first_frame: {first_frame}")
         # print(f"first_object_cam_target: {first_object_cam_target}")
