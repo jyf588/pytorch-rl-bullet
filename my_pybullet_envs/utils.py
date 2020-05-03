@@ -18,6 +18,7 @@ PALM_EULER_OF_INIT = [1.8, -1.57, 0]
 
 SHAPE_IND_MAP = {-1: p.GEOM_SPHERE, 0: p.GEOM_CYLINDER, 1: p.GEOM_BOX}
 SHAPE_IND_TO_NAME_MAP = {-1: "sphere", 0: "cylinder", 1: "box"}
+NAME_TO_SHAPE_IND_MAP = {name: shape_ind for shape_ind, name in SHAPE_IND_TO_NAME_MAP.items()}
 SHAPE_NAME_MAP = {
     "sphere": p.GEOM_SPHERE,
     "cylinder": p.GEOM_CYLINDER,

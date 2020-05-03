@@ -573,7 +573,7 @@ class DemoEnvironment:
             ty=y,
             tz=z,
             half_h=tdict["height"] / 2,
-            t_is_box=is_box,
+            shape=is_box,
             t_pos=tdict["position"],
             t_up=tdict["up_vector"],
             b_pos=b_pos,
