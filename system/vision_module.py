@@ -1,10 +1,13 @@
-from argparse import Namespace
 import cv2
+import imageio
 import numpy as np
+from typing import *
+from argparse import Namespace
+
 import torch
 import torchvision.transforms as transforms
-from typing import *
 
+import ns_vqa_dart.bullet.seg
 from ns_vqa_dart.bullet import dash_object, gen_dataset
 from ns_vqa_dart.scene_parse.attr_net.model import get_model
 from ns_vqa_dart.scene_parse.attr_net.options import BaseOptions
@@ -29,31 +32,30 @@ class VisionModule:
         options = BaseOptions().parse(opt=options, save_options=False)
         return options
 
-    def predict(
-        self, oid: int, rgb: np.ndarray, seg_img: np.ndarray
-    ) -> np.ndarray:
+    def predict(self, rgb: np.ndarray, mask: np.ndarray) -> np.ndarray:
         """Runs inference on an image to get vision predictions.
 
         Args:
             rgb: The RGB image of the scene.
-            seg: The segmentation of the scene.
+            mask: The segmentation mask of the object to predict.
         
         Returns:
-            pred: The model predictions.
+            pred: The model prediction for the object.
         """
-        seg = gen_dataset.seg_img_to_map(seg_img)
-        data = dash_object.compute_X(
-            oid=oid, img=rgb, seg=seg, keep_occluded=True
-        )
+        # Create the input X data to the model. We create the data tensor even
+        # if the mask is empty (i.e., object is completely occluded)
+        data = dash_object.compute_X(img=rgb, mask=mask, keep_occluded=True)
 
         # Debugging
-        debug_seg = cv2.cvtColor(data[:, :, :3], cv2.COLOR_BGR2RGB)
-        debug_rgb = cv2.cvtColor(data[:, :, 3:6], cv2.COLOR_BGR2RGB)
-        input_debug = np.hstack([debug_seg, debug_rgb])
-        cv2.imwrite(f"/home/michelle/test_{oid}.png", input_debug)
-        # cv2.imshow("input debug", input_debug)
-        # cv2.waitKey(0)
-        pred = self.predict_from_data(data=data)
+        # debug_seg = data[:, :, :3]
+        # debug_rgb = data[:, :, 3:6]
+        # input_debug = np.hstack([debug_seg, debug_rgb])
+        # path = f"/home/michelle/tmp/vision_input_{oid}.png"
+        # imageio.imwrite(path, input_debug)
+        # print(f"Wrote debug image to: {path}")
+
+        # Predict.
+        pred = self.predict_from_data(data=data)[0]
         return pred
 
     def predict_from_data(self, data: np.ndarray):

@@ -1,30 +1,34 @@
-import argparse
-import copy
-import cv2
-import numpy as np
 import os
-import pprint
-import pybullet as p
+import cv2
 import sys
+import copy
 import time
 import torch
+import pprint
+import argparse
+import numpy as np
+import pybullet as p
 from typing import *
+from scipy.optimize import linear_sum_assignment
 
+import system.policy
 from system import openrave
 from system.bullet_world import BulletWorld
-import system.policy
 from system.vision_module import VisionModule
+from system.seg_module import SegmentationModule
+from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
 from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import (
     ImaginaryArmObjSession,
 )
-from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
 from my_pybullet_envs.inmoov_shadow_place_env_v9 import (
     InmoovShadowHandPlaceEnvV9,
 )
-import my_pybullet_envs.utils as utils
 from NLP_module import NLPmod
-from ns_vqa_dart.bullet import dash_object, gen_dataset, util
+
+import ns_vqa_dart.bullet.seg
+import my_pybullet_envs.utils as utils
 from ns_vqa_dart.bullet.metrics import Metrics
+from ns_vqa_dart.bullet import dash_object, gen_dataset, util
 
 
 class DemoEnvironment:
@@ -110,6 +114,13 @@ class DemoEnvironment:
                 )
             else:
                 raise ValueError(f"Invalid task: {task}")
+
+        # Initialize the segmentation module if requested.
+        if self.opt.use_segmentation_module:
+            self.segmentation_module = SegmentationModule(
+                load_checkpoint_path=self.opt.segmentation_checkpoint_path
+            )
+
         if visualize_bullet:
             p.connect(p.GUI)
         else:
@@ -138,6 +149,8 @@ class DemoEnvironment:
         place_end = place_start + self.opt.n_place_steps
         release_start = place_end
         release_end = release_start + self.opt.n_release_steps
+        retract_start = release_end
+        retract_end = retract_start + self.opt.n_plan_steps
 
         stage2ts_bounds = {
             "reach": (reach_start, reach_end),
@@ -145,6 +158,7 @@ class DemoEnvironment:
             "transport": (transport_start, transport_end),
             "place": (place_start, place_end),
             "release": (release_start, release_end),
+            "retract": (retract_start, retract_end),
         }
 
         n_total_steps = 0
@@ -244,7 +258,10 @@ class DemoEnvironment:
         if dst_idx is None:
             z = 0.0
         else:
-            z = observation[dst_idx]["height"]
+            if self.opt.use_height:
+                z = observation[dst_idx]["height"]
+            else:
+                z = utils.H_MAX
 
         dst_xyz = [dst_x, dst_y, z + utils.PLACE_START_CLEARANCE]
         return src_idx, dst_idx, dst_xyz
@@ -319,6 +336,8 @@ class DemoEnvironment:
                 self.place(stage_ts=stage_ts)
             elif stage == "release":
                 self.release()
+            elif stage == "retract":
+                self.retract(stage_ts=stage_ts)
             else:
                 raise ValueError(f"Invalid stage: {stage}")
             self.timestep += 1
@@ -419,7 +438,7 @@ class DemoEnvironment:
         """Computes the reaching trajectory.
         
         Returns:
-            trajectory: The reaching trajectory of shape (200, 7).
+            trajectory: The reaching trajectory of shape (n_steps, 7).
         """
         trajectory = openrave.compute_trajectory(
             odicts=self.initial_obs,
@@ -434,7 +453,7 @@ class DemoEnvironment:
         """Computes the transport trajectory.
         
         Returns:
-            trajectory: The transport trajectory of shape (200, 7).
+            trajectory: The transport trajectory of shape (n_steps, 7).
         """
         q_src = self.world.get_robot_arm_q()
         q_dst = self.q_transport_dst
@@ -445,6 +464,29 @@ class DemoEnvironment:
             q_start=q_src,
             q_end=q_dst,
             stage="transport",
+        )
+        return trajectory
+
+    def compute_retract_trajectory(self) -> np.ndarray:
+        """Computes the retract trajectory.
+        
+        Returns:
+            trajectory: The retract trajectory of shape (n_steps, 7).
+        """
+        if self.observation_mode == "gt":
+            odicts = self.get_observation(
+                observation_mode=self.observation_mode, renderer=self.renderer
+            )
+        elif self.observation_mode == "vision":
+            odicts = self.last_pred_obs
+        q_src = self.world.get_robot_arm_q()
+
+        trajectory = openrave.compute_trajectory(
+            odicts=odicts,
+            target_idx=self.src_idx,
+            q_start=q_src,
+            q_end=None,
+            stage="retract",
         )
         return trajectory
 
@@ -470,7 +512,7 @@ class DemoEnvironment:
                 is_cuda=self.opt.is_cuda,
             )
         obs = system.policy.wrap_obs(
-            self.get_grasping_observation(), is_cuda=self.opt.is_cuda
+            self.get_grasp_observation(), is_cuda=self.opt.is_cuda
         )
         with torch.no_grad():
             _, action, _, self.hidden_states = self.policy.act(
@@ -509,7 +551,7 @@ class DemoEnvironment:
 
         # Get the current observation.
         obs = system.policy.wrap_obs(
-            self.get_placing_observation(), is_cuda=self.opt.is_cuda
+            self.get_place_observation(), is_cuda=self.opt.is_cuda
         )
         with torch.no_grad():
             _, action, _, self.hidden_states = self.policy.act(
@@ -525,29 +567,57 @@ class DemoEnvironment:
     def release(self):
         self.world.step()
 
+    def retract(self, stage_ts: int):
+        if stage_ts == 0:
+            self.retract_trajectory = self.compute_retract_trajectory()
+            if len(self.retract_trajectory) == 0:
+                return False
+        self.execute_plan(trajectory=self.retract_trajectory, idx=stage_ts)
+        return True
+
     def execute_plan(self, trajectory: np.ndarray, idx: int):
         if idx > len(trajectory) - 1:
             tar_arm_q = trajectory[-1]
         else:
             tar_arm_q = trajectory[idx]
         self.world.robot_env.robot.tar_arm_q = tar_arm_q
+
+        # Restore fingers.
+        if self.opt.restore_fingers and idx >= len(trajectory) * 0.1:
+            blending = np.clip(
+                (idx - len(trajectory) * 0.1) / (len(trajectory) * 0.6),
+                0.0,
+                1.0,
+            )
+            cur_fin_q = self.world.robot_env.robot.get_q_dq(
+                self.world.robot_env.robot.fin_actdofs
+            )[0]
+            tar_fin_q = (
+                self.world.robot_env.robot.init_fin_q * blending
+                + cur_fin_q * (1 - blending)
+            )
+            self.world.robot_env.robot.tar_fin_q = tar_fin_q
+
         self.world.robot_env.robot.apply_action([0.0] * 24)
         self.world.step()
 
-    def get_grasping_observation(self) -> torch.Tensor:
+    def get_grasp_observation(self) -> torch.Tensor:
         odict = self.initial_obs[self.src_idx]
         position = odict["position"]
         half_height = odict["height"] / 2
         x, y = position[0], position[1]
-        # obs = self.world.robot_env.get_robot_contact_txty_halfh_obs_nodup(
-        #     x, y, half_height
-        # )
-        obs = self.world.robot_env.get_robot_contact_txtytz_halfh_shape_obs_no_dup(
-            x, y, 0.0, half_height, odict["shape"] == "box"
-        )
+        is_box = odict["shape"] == "box"
+        if self.opt.use_height:
+            obs = self.world.robot_env.get_robot_contact_txtytz_halfh_shape_obs_no_dup(
+                x, y, 0.0, half_height, is_box
+            )
+        else:
+            obs = self.world.robot_env.get_robot_contact_txty_shape_obs_no_dup(
+                x, y, is_box
+            )
         return obs
 
-    def get_placing_observation(self):
+    def get_place_observation(self):
         # Update the observation only every `vision_delay` steps.
         if self.timestep % self.opt.vision_delay == 0:
             self.obs = self.get_observation(
@@ -555,10 +625,19 @@ class DemoEnvironment:
             )
 
         # Compute the observation vector from object poses and placing position.
-        tdict = self.obs[self.src_idx]
         t_init_dict = self.scene[self.src_idx]
-        x, y, z = t_init_dict["position"]
+        x, y, _ = t_init_dict["position"]
         is_box = t_init_dict["shape"] == "box"
+
+        if self.task == "stack":
+            b_init_dict = self.scene[self.dst_idx]
+            tz = b_init_dict["height"]
+        else:
+            tz = 0.0
+
+        tdict = self.obs[self.src_idx]
+        t_pos = tdict["position"]
+        t_up = tdict["up_vector"]
 
         if self.task == "stack":
             bdict = self.obs[self.dst_idx]
@@ -568,17 +647,28 @@ class DemoEnvironment:
             b_pos = [0.0, 0.0, 0.0]
             b_up = [0.0, 0.0, 1.0]
 
-        p_obs = self.world.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
-            tx=x,
-            ty=y,
-            tz=z,
-            half_h=tdict["height"] / 2,
-            shape=is_box,
-            t_pos=tdict["position"],
-            t_up=tdict["up_vector"],
-            b_pos=b_pos,
-            b_up=b_up,
-        )
+        if self.opt.use_height:
+            p_obs = self.world.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
+                tx=x,
+                ty=y,
+                tz=tz,
+                half_h=tdict["height"] / 2,
+                shape=is_box,
+                t_pos=t_pos,
+                t_up=t_up,
+                b_pos=b_pos,
+                b_up=b_up,
+            )
+        else:
+            p_obs = self.world.robot_env.get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
+                tx=x,
+                ty=y,
+                shape=is_box,
+                t_pos=t_pos,
+                t_up=t_up,
+                b_pos=b_pos,
+                b_up=b_up,
+            )
         return p_obs
 
     def get_observation(self, observation_mode: str, renderer: str):
@@ -626,98 +716,123 @@ class DemoEnvironment:
             renderer: The renderer of the input images to the vision module.
         
         Returns:
-            obs: The observation, in the format: 
-                {
-                    "objects": {
-                        "<oid>": {
-                            "shape": shape,
-                            "color": color,
-                            "radius": radius,
-                            "height": height,
-                            "position": [x, y, z],
-                            "orientation": [x, y, z, w],
-                        },
-                        ...
+            obs: The vision observation, in the format:
+                [
+                    {
+                        "shape": shape,  # First prediction
+                        "color": color,  # First prediction
+                        "radius": radius,  # First prediction
+                        "height": height,  # First prediction
+                        "position": [x, y, z],  # Current prediction
+                        "up_vector": [u1, u2, u3],  # Current prediction
                     },
-                    "robot": {
-                        "<joint_name>": <joint_angle>,
-                        ...
-                    }
-                }.
+                    ...
+                ], 
         """
-        # The final visual observation, for now, is the same as the ground
-        # truth state except with the source object's pose predicted. So, we
-        # initialize the observation with the true state as a starting point.
-        gt_odicts = copy.deepcopy(
-            self.get_observation(observation_mode="gt", renderer=self.renderer)
-        )
-        obs = copy.deepcopy(gt_odicts)
-
         # Select the vision module based on the current stage.
         stage, _ = self.get_current_stage()
         if stage == "plan":
             vision_module = self.planning_vision_module
-            camera_control = "center"
         elif stage == "place":
             vision_module = self.placing_vision_module
-            camera_control = "stack"
         else:
             raise ValueError(f"No vision module for stage: {stage}.")
 
-        # Predict the object pose for the objects that we've "looked" at.
-        pred_odicts = []
-        for idx in range(len(obs)):
-            cam_tid = gen_dataset.get_camera_target_id(
-                oid=idx, camera_control=camera_control
-            )
+        # Retrieves the image, camera pose, and object segmentation masks.
+        rgb, masks, cam_position, cam_orientation = self.get_images()
 
-            rgb, seg_img = self.get_images(
-                oid=idx, renderer=renderer, cam_tid=cam_tid
-            )
-            pred = vision_module.predict(oid=idx, rgb=rgb, seg_img=seg_img)
+        # Predict the pose for each segmentation mask.
+        pred_odicts = []
+        for mask in masks:
+            # Predict attributes for a single object.
+            pred = vision_module.predict(rgb=rgb, mask=mask)
 
             # Convert vectorized predictions to dictionary form using camera
             # information.
             y_dict = dash_object.y_vec_to_dict(
-                y=list(pred[0]),
+                y=list(pred),
                 coordinate_frame=self.opt.coordinate_frame,
-                cam_position=self.unity_data[cam_tid]["camera_position"],
-                cam_orientation=self.unity_data[cam_tid]["camera_orientation"],
+                cam_position=cam_position,
+                cam_orientation=cam_orientation,
             )
 
-            # self.metrics.add_example(gt_dict=gt_odicts[idx], pred_dict=y_dict)
+            # Store the predicted object dictionary.
             pred_odicts.append(y_dict)
 
-            # Update the position and up vector with predicted values.
-            obs[idx]["position"] = y_dict["position"]
-            obs[idx]["up_vector"] = y_dict["up_vector"]
-
-            # Important: override the GT orientation with the predicted
-            # orientation. The predicted orientation will be the GT rotation
-            # matrix, except with the last column overridden with the predicted
-            # up vector.
-            # To do this, we convert the predicted up vector into an
-            # orientation, using the GT z rot.
-            pred_orientation = util.up_to_orientation(
-                up=y_dict["up_vector"],
-                gt_orientation=gt_odicts[idx]["orientation"],
+        # We track predicted objects throughout time by matching the attributes
+        # predicted at the current timestep with the object attributes from the
+        # initial observation.
+        if self.initial_obs is None:
+            pred_obs = pred_odicts
+        else:
+            pred_obs = self.match_predictions_with_initial_obs(
+                pred_odicts=pred_odicts
             )
-            obs[idx]["orientation"] = pred_orientation
+        # Store the computed observation for future computation.
+        self.last_pred_obs = copy.deepcopy(pred_obs)
 
         # Save the predicted and ground truth object dictionaries.
-        if self.opt.save_predictions:
-            path = os.path.join(
-                self.opt.save_preds_dir,
-                f"{self.trial:02}",
-                f"{self.timestep:04}.p",
-            )
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            util.save_pickle(
-                path=path, data={"gt": gt_odicts, "pred": pred_odicts}
-            )
-        return obs
+        # if self.opt.save_predictions:
+        #     path = os.path.join(
+        #         self.opt.save_preds_dir,
+        #         f"{self.trial:02}",
+        #         f"{self.timestep:04}.p",
+        #     )
+        #     os.makedirs(os.path.dirname(path), exist_ok=True)
+        #     util.save_pickle(
+        #         path=path, data={"gt": gt_odicts, "pred": pred_odicts}
+        #     )
+        return pred_obs
 
-    def get_images(self, oid: int, renderer: str, cam_tid: int):
+    def match_predictions_with_initial_obs(
+        self, pred_odicts: List[Dict]
+    ) -> List:
+        """Matches predictions with `self.initial_obs`.
+
+        Args:
+            pred_odicts: A list of predicted object dictionaries to match with
+                `self.initial_obs`.
+
+        Returns:
+            pred_obs: A list of predicted object observations that is same 
+                length as `self.initial_obs`. Each element in `pred_obs` 
+                corresponds to the object predicted in `self.initial_obs`, and
+                contains either:
+                (1) The assigned object prediction from the current timestep based
+                    on matching with the corresponding object from 
+                    `self.initial_obs`, or
+                (2) The most recent matched prediction.
+        """
+        # Verify that `self.initial_obs` is defined.
+        assert self.initial_obs is not None
+
+        # Construct the cost matrix.
+        cost = np.zeros((len(self.initial_obs), len(pred_odicts)))
+        for src_idx, src_y in enumerate(self.initial_obs):
+            for dst_idx, dst_y in enumerate(pred_odicts):
+                cell = 0
+                for attr in ["color", "shape"]:
+                    if src_y[attr] != dst_y[attr]:
+                        cell += 1
+                cost[src_idx][dst_idx] = cell
+
+        # Compute assignments.
+        src_idxs, dst_idxs = linear_sum_assignment(cost)
+
+        # If `self.initial_obs` has more elements than `pred_odicts`, then
+        # there will be unassigned elements in `self.initial_obs`. We assign
+        # unassigned elements with the last observation. To do this, we
+        # initialize the `pred_obs` which will be returned with
+        # `self.last_pred_obs`. Since we only override assigned elements, each
+        # unassigned element will by default hold the last prediction.
+        pred_obs = copy.deepcopy(self.last_pred_obs)
+
+        # Override assigned elements in `pred_obs` with current predictions.
+        for src_idx, dst_idx in zip(src_idxs, dst_idxs):
+            pred_obs[src_idx] = pred_odicts[dst_idx]
+        return pred_obs
+
+    def get_images(self) -> Tuple:
         """Retrieves the images that are input to the vision module.
 
         Args:
@@ -726,27 +841,43 @@ class DemoEnvironment:
         
         Returns:
             rgb: The RGB image of the object.
-            seg_rgb: The RGB segmentation image of the object.
+            masks: A numpy array of shape (N, H, W) of instance masks.
+            camera_position: The position of the camera used to capture the
+                image.
+            camera_orientation: The orientation of the camera used to capture 
+                the image.
         """
-        if renderer == "opengl":
+        if self.renderer == "opengl":
             raise NotImplementedError
-        elif renderer == "tiny_renderer":
+        elif self.renderer == "tiny_renderer":
             raise NotImplementedError
-        elif renderer == "unity":
+        elif self.renderer == "unity":
             # Unity should have already called set_unity_data before this.
-            rgb = self.unity_data[cam_tid]["rgb"]
-            seg_rgb = self.unity_data[cam_tid]["seg_img"]
+            rgb = self.unity_data[0]["rgb"]
+            seg_img = self.unity_data[0]["seg_img"]
+
+            camera_position = self.unity_data[0]["camera_position"]
+            camera_orientation = self.unity_data[0]["camera_orientation"]
 
             # Optionally we can visualize unity images using OpenCV.
             if self.visualize_unity:
                 bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-                seg_bgr = cv2.cvtColor(seg_rgb, cv2.COLOR_RGB2BGR)
+                seg_bgr = cv2.cvtColor(seg_img, cv2.COLOR_RGB2BGR)
                 cv2.imshow("rgb", bgr)
                 cv2.imshow("seg", seg_bgr)
                 cv2.waitKey(5)
         else:
-            raise ValueError(f"Invalid renderer: {renderer}")
-        return rgb, seg_rgb
+            raise ValueError(f"Invalid renderer: {self.renderer}")
+
+        # Either predict segmentations or use ground truth.
+        if self.opt.use_segmentation_module:
+            masks = self.segmentation_module.predict(img=rgb)
+        else:
+            # If using ground truth, convert the segmentation image into a
+            # segmentation map.
+            raise NotImplementedError
+            masks, _ = ns_vqa_dart.bullet.seg.seg_img_to_map(seg_img)
+        return rgb, masks, camera_position, camera_orientation
 
     def set_unity_data(self, data: Dict):
         """Sets the data received from Unity.

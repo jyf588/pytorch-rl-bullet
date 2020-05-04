@@ -35,7 +35,10 @@ def run_server(hostname: str, port: int, handler: Callable):
 
 
 def encode(
-    state_id: str, bullet_state: List[Any], bullet_camera_targets
+    state_id: str,
+    bullet_state: List[Any],
+    bullet_animation_target: List[float],
+    bullet_camera_targets: Dict,
 ) -> str:
     """Converts the provided bullet state into a Unity state, and encodes the
     message for sending to Unity.
@@ -61,6 +64,8 @@ def encode(
                 }
             }. Note that if "robot" key is not provided, the default robot pose 
             will be used.
+        bullet_animation_target: The target position for the animation of the
+            head/neck.
         bullet_camera_targets: A dictionary of target positions that we want
             Unity to point the camera at, in the format:
             {
@@ -75,7 +80,9 @@ def encode(
         message: The message to send to unity.
     """
     unity_state = bullet2unity.states.bullet2unity_state(
-        bullet_state=bullet_state, bullet_camera_targets=bullet_camera_targets
+        bullet_state=bullet_state,
+        bullet_animation_target=bullet_animation_target,
+        bullet_camera_targets=bullet_camera_targets,
     )
 
     # Combine the id and state, and stringify into a msg.

@@ -9,10 +9,8 @@ import matplotlib.pyplot as plt
 
 homedir = os.path.expanduser("~")
 CONTAINER_DIR = os.path.join(homedir, "container_data")
-STAGE2NAME = {
-    "reach": "REACH",
-    "transport": "MOVE",
-}
+STAGE2NAME = {"reach": "REACH", "transport": "MOVE", "retract": "RETRACT"}
+MAX_OBJECTS = 6
 
 
 def compute_trajectory(
@@ -42,6 +40,10 @@ def compute_trajectory(
             None if OpenRAVE failed to give us a result.
     """
     name = STAGE2NAME[stage]
+
+    # Clip the number of objects at the maximum allowed by OpenRAVE.
+    if len(odicts) > MAX_OBJECTS:
+        odicts = copy.deepcopy(odicts[:MAX_OBJECTS])
 
     # Extract object positions from the state. Destination object needs to come
     # first.
@@ -74,7 +76,7 @@ def compute_trajectory(
         q_start=q_start,
         q_end=q_end,
         save_path=os.path.join(CONTAINER_DIR, f"PB_{name}.npz"),
-        load_path=os.path.join(CONTAINER_DIR, f"OR_{name}.npy"),
+        load_path=os.path.join(CONTAINER_DIR, f"OR_{name}.npz"),
     )
     return trajectory
 
@@ -111,7 +113,9 @@ def get_traj_from_openrave_container(
     elif q_end is not None:
         np.savez(save_path, object_positions, q_end)  # reach has q_start 0
     elif q_start is not None:
-        np.savez(save_path, object_positions, q_start)  # retract always ends at zero
+        np.savez(
+            save_path, object_positions, q_start
+        )  # retract always ends at zero
     else:
         assert False
 
@@ -127,6 +131,7 @@ def get_traj_from_openrave_container(
 
         # If longer than 5 seconds, return failure code.
         if time_elapsed > 5:
+            print(f"Could not find OpenRAVE-generated file: {load_path}")
             return None
     if os.path.isfile(load_path):
         time.sleep(0.3)  # TODO: wait for file write
