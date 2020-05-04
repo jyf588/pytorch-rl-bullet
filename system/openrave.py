@@ -129,7 +129,7 @@ def get_traj_from_openrave_container(
         if time_elapsed > 5:
             return None
     if os.path.isfile(load_path):
-        time.sleep(0.3)  # TODO: wait for networking
+        time.sleep(0.3)  # TODO: wait for file write
         loaded_data = np.load(load_path)
         traj_i = loaded_data["arr_0"]
         traj_s = loaded_data["arr_1"]

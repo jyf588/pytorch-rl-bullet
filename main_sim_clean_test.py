@@ -129,6 +129,11 @@ else:
         PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
         if FLAG_0426:
+            # GRASP_PI = "0502_1_n_25_45"
+            # GRASP_DIR = "./trained_models_%s/ppo/" % "0502_1_n"
+            #
+            # PLACE_PI = "0502_1_n_place_0502_1"
+            # PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
             GRASP_PI = "0426_0_n_25_45"
             GRASP_DIR = "./trained_models_%s/ppo/" % "0426_0_n"
 
@@ -147,15 +152,19 @@ GRASPING_CONTROL_SKIP = 6
 
 
 def planning(trajectory, restore_fingers=False):
+    # TODO: total traj length 300+5 now
+
+    max_force = env_core.robot.maxForce
+
     last_tar_arm_q = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
 
-    pi_tar_fin_q = env_core.robot.tar_fin_q     # TODO
-    pi_init_fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
+    init_tar_fin_q = env_core.robot.tar_fin_q
+    init_fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
 
-    print("pi_tar_fin_q")
-    print(["{0:0.3f}".format(n) for n in pi_tar_fin_q])
-    print("pi_init_fin_q")
-    print(["{0:0.3f}".format(n) for n in pi_init_fin_q])
+    print("init_tar_fin_q")
+    print(["{0:0.3f}".format(n) for n in init_tar_fin_q])
+    print("init_fin_q")
+    print(["{0:0.3f}".format(n) for n in init_fin_q])
 
     for idx in range(len(trajectory) + 5):
         if idx > len(trajectory) - 1:
@@ -163,119 +172,45 @@ def planning(trajectory, restore_fingers=False):
         else:
             tar_arm_q = trajectory[idx]
 
-        if restore_fingers and idx >= len(trajectory) * 0.1:   # TODO: hardcoded
-            blending = np.clip((idx - len(trajectory) * 0.1) / (len(trajectory) * 0.6), 0.0, 1.0)
-            cur_fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
-            tar_fin_q = env_core.robot.init_fin_q * blending + cur_fin_q * (1-blending)
-        else:
-            # try to keep fin q close to pi_init_fin_q
-            # try to keep tar_fin_q close to pi_tar_fin_q when fin q close to pi_init_fin_q
-            # fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
-            # #
-            # # # signs = np.sign(pi_tar_fin_q - pi_init_fin_q)
-            # # #
-            # # # tar_fin_q = (pi_init_fin_q - pi_tar_fin_q) / 0.05 * signs * (fin_q - pi_init_fin_q) \
-            # # #                 + pi_tar_fin_q
-            # # tar_fin_q = -1.0 * (fin_q - pi_init_fin_q) + pi_tar_fin_q       # TODO:tmp
-            # # mins = np.minimum(pi_tar_fin_q, pi_init_fin_q)
-            # # maxs = np.maximum(pi_tar_fin_q, pi_init_fin_q)
-            # # tar_fin_q = np.clip(tar_fin_q, mins, maxs)
-            # #
-            # # tar_fin_q = pi_tar_fin_q
-            # #
-            # # signs = np.sign(pi_tar_fin_q - pi_init_fin_q)
-            # w = 0.1 * np.clip(1 - (fin_q - pi_init_fin_q) / 0.1, 0.0, 2.0)
-            tar_fin_q = np.clip(pi_tar_fin_q, pi_init_fin_q - 0.05, pi_init_fin_q + 0.05)
-
-            # tar_fin_q = pi_init_fin_q + 0.1 * signs * np.clip(1 - np.abs(fin_q - pi_init_fin_q) / 0.1, 0.0, 1.0)
-
-        env_core.robot.tar_fin_q = tar_fin_q
-        # ############
-        env_core.robot.tar_fin_q = np.clip(env_core.robot.tar_fin_q,
-                                           env_core.robot.ll[env_core.robot.fin_actdofs],
-                                           env_core.robot.ul[env_core.robot.fin_actdofs])
-        #
-        # if idx > len(trajectory) - 1:
-        #     env_core.robot.tar_fin_q = pi_tar_fin_q
-        # ############
-
-        # env_core.robot.tar_fin_q = pi_tar_fin_q
-        # env_core.robot.tar_arm_q = tar_arm_q
-        # env_core.robot.apply_action([0.0] * 24)       # TODO
-
-        p.setJointMotorControlArray(
-            bodyIndex=env_core.robot.arm_id,
-            jointIndices=env_core.robot.fin_actdofs,
-            controlMode=p.POSITION_CONTROL,
-            targetPositions=list(env_core.robot.tar_fin_q),
-            forces=[200.0] * len(env_core.robot.tar_fin_q))
-        p.setJointMotorControlArray(
-            bodyIndex=env_core.robot.arm_id,
-            jointIndices=env_core.robot.fin_zerodofs,
-            controlMode=p.POSITION_CONTROL,
-            targetPositions=[0.0]*len(env_core.robot.fin_zerodofs),
-            forces=[200 / 4.0] * len(env_core.robot.fin_zerodofs))
-
-        # if idx > len(trajectory) + 1:   # TODO
-        #     tar_vel = [0.0] * len(env_core.robot.arm_dofs)  # TODO
-        # else:
-        #     cur_arm_q = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
-        #     # tar_vel = (tar_arm_q - last_tar_arm_q) / utils.TS * 0.0
-        #     # tar_vel = (tar_arm_q - last_tar_arm_q) / utils.TS
-        #     tar_vel = (tar_arm_q - cur_arm_q) / utils.TS       # TODO
-
-        tar_vel = (tar_arm_q - last_tar_arm_q) / utils.TS
-
-        # if idx > len(trajectory) - 1:
-        #     print(tar_vel)
+        tar_arm_vel = (tar_arm_q - last_tar_arm_q) / utils.TS
 
         p.setJointMotorControlArray(
             bodyIndex=env_core.robot.arm_id,
             jointIndices=env_core.robot.arm_dofs,
             controlMode=p.POSITION_CONTROL,
             targetPositions=list(tar_arm_q),
-            targetVelocities=list(tar_vel),
-            forces=[200. * 5] * len(env_core.robot.arm_dofs))
+            targetVelocities=list(tar_arm_vel),
+            forces=[max_force * 5] * len(env_core.robot.arm_dofs))
 
-        # p.setJointMotorControlArray(
-        #     bodyIndex=env_core.robot.arm_id,
-        #     jointIndices=env_core.robot.arm_dofs,
-        #     controlMode=p.VELOCITY_CONTROL,
-        #     targetVelocities=list(tar_vel),
-        #     forces=[600.0] * len(env_core.robot.arm_dofs))
+        if restore_fingers and idx >= len(trajectory) * 0.1:   # TODO: hardcoded
+            blending = np.clip((idx - len(trajectory) * 0.1) / (len(trajectory) * 0.6), 0.0, 1.0)
+            cur_fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
+            tar_fin_q = env_core.robot.init_fin_q * blending + cur_fin_q * (1-blending)
+        else:
+            # try to keep fin q close to init_fin_q (keep finger pose)
+            # add at most offset 0.05 in init_tar_fin_q direction so that grasp is tight
+            tar_fin_q = np.clip(init_tar_fin_q, init_fin_q - 0.05, init_fin_q + 0.05)
 
-        # p.setJointMotorControlArray(
-        #     bodyIndex=env_core.robot.arm_id,
-        #     jointIndices=env_core.robot.arm_dofs,
-        #     controlMode=p.VELOCITY_CONTROL,
-        #     targetVelocities=list(tar_vel),
-        #     forces=[0.0] * len(env_core.robot.arm_dofs))
-        #
-        # # print(env_core.robot.arm_dofs)
-        # tar_arm_q_tmp = tar_arm_q[:, np.newaxis].tolist()
-        # tar_vel_tmp = tar_vel[:, np.newaxis].tolist()
-        # # print(tar_arm_q_tmp)
-        # # print(tar_vel_tmp)
-        #
-        # p.setJointMotorControlMultiDofArray(
-        #     env_core.robot.arm_id,
-        #     env_core.robot.arm_dofs,
-        #     p.STABLE_PD_CONTROL,
-        #     targetPositions=tar_arm_q_tmp,
-        #     targetVelocities=tar_vel_tmp,
-        #     forces=[[0.0]] * 7,
-        #     positionGains=[30.] * 7,
-        #     velocityGains=[3.] * 7,
-        # )
+        # clip to joint limit
+        tar_fin_q = np.clip(tar_fin_q,
+                            env_core.robot.ll[env_core.robot.fin_actdofs],
+                            env_core.robot.ul[env_core.robot.fin_actdofs])
 
-        # print("act", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
+        p.setJointMotorControlArray(
+            bodyIndex=env_core.robot.arm_id,
+            jointIndices=env_core.robot.fin_actdofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=list(tar_fin_q),
+            forces=[max_force] * len(env_core.robot.fin_actdofs))
+        p.setJointMotorControlArray(
+            bodyIndex=env_core.robot.arm_id,
+            jointIndices=env_core.robot.fin_zerodofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=[0.0]*len(env_core.robot.fin_zerodofs),
+            forces=[max_force / 4.0] * len(env_core.robot.fin_zerodofs))
+
         diff = np.linalg.norm(env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
                               - tar_arm_q)
-        # if idx > len(trajectory) - 1:
-        #     print("diff", diff)
-        #     print("tar_vel", tar_vel)
-        #     print("act vel", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[1])
-        #     # if idx == len(trajectory) - 1:
 
         if idx == len(trajectory) + 4:
             print("diff final", diff)
@@ -291,9 +226,6 @@ def planning(trajectory, restore_fingers=False):
             time.sleep(utils.TS * 0.6)
 
         last_tar_arm_q = tar_arm_q
-    env_core.robot.tar_arm_q = tar_arm_q    # reset?
-    env_core.robot.tar_fin_q = pi_tar_fin_q  # reset?
-    # input("press enter")
 
 
 def get_relative_state_for_reset(oid):
@@ -575,7 +507,7 @@ for trial in range(NUM_TRIALS):
 
         p.resetSimulation()
 
-    if USE_HEIGHT_INFO and not FLAG_0428:       # TODO: 0428 only uses height info for obs space, not planning
+    if USE_HEIGHT_INFO and not FLAG_0428:       # 0428 only uses height info for obs space, not planning
         desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + p_tz]
     else:
         if TEST_PLACING:
