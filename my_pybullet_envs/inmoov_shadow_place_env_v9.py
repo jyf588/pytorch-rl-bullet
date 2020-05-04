@@ -268,7 +268,9 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                         self.tx,
                         self.ty,
                         utils.perturb_scalar(
-                            self.np_random, self.start_clearance + 0.0, 0.01
+                            self.np_random,
+                            self.start_clearance + 0.0,
+                            0.01
                         ),
                     ]  # used for planning
                 else:
@@ -442,6 +444,8 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                 hand_r += 0.5
         reward += hand_r - 7
         # print("no contact", hand_r - 7.0)
+
+        reward -= self.robot.get_4_finger_deviation() * 0.4
 
         #
         # if self.timer == 99 * self.control_skip:
