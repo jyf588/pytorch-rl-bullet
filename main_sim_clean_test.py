@@ -161,6 +161,8 @@ def planning(trajectory, restore_fingers=False):
     init_tar_fin_q = env_core.robot.tar_fin_q
     init_fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
 
+    env_core.robot.tar_arm_q = trajectory[-1]  # TODO: important!
+
     print("init_tar_fin_q")
     print(["{0:0.3f}".format(n) for n in init_tar_fin_q])
     print("init_fin_q")
