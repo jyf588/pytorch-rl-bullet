@@ -57,7 +57,7 @@ async def send_to_client(websocket, path):
         #     task = "place"
         task = "stack"
         # for obs_mode in ["gt", "vision"]:
-        for obs_mode in ["vision"]:
+        for obs_mode in ["gt"]:
             # Modify the scene for placing. We keep only the first object for
             # now, and set the placing destination xy location to be the
             # location of the original blue object (deleted).
@@ -89,10 +89,10 @@ async def send_to_client(websocket, path):
             while 1:
                 stage, stage_ts = env.get_current_stage()
 
-                if stage_ts == 0 and stage == "place":
-                    response = input("Continue? [Y/N] ")
-                    if response == "N":
-                        break
+                # if stage_ts == 0 and stage == "place":
+                #     response = input("Continue? [Y/N] ")
+                #     if response == "N":
+                #         break
 
                 state = env.get_state()
 

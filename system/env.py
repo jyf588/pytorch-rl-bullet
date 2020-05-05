@@ -339,7 +339,9 @@ class DemoEnvironment:
             elif stage == "release":
                 self.release()
             elif stage == "retract":
-                self.retract(stage_ts=stage_ts)
+                success = self.retract(stage_ts=stage_ts)
+                if not success:
+                    return True
             else:
                 raise ValueError(f"Invalid stage: {stage}")
             self.timestep += 1
@@ -607,8 +609,8 @@ class DemoEnvironment:
         # Get initial robot pose.
         if idx == 0:
             self.world.robot_env.robot.tar_arm_q = trajectory[-1]
-            init_tar_fin_q = self.world.robot_env.robot.tar_fin_q
-            init_fin_q = self.world.robot_env.robot.get_q_dq(
+            self.init_tar_fin_q = self.world.robot_env.robot.tar_fin_q
+            self.init_fin_q = self.world.robot_env.robot.get_q_dq(
                 self.world.robot_env.robot.fin_actdofs
             )[0]
             self.last_tar_arm_q = self.world.robot_env.robot.get_q_dq(
@@ -649,7 +651,9 @@ class DemoEnvironment:
             # try to keep fin q close to init_fin_q (keep finger pose)
             # add at most offset 0.05 in init_tar_fin_q direction so that grasp is tight
             tar_fin_q = np.clip(
-                init_tar_fin_q, init_fin_q - 0.05, init_fin_q + 0.05
+                self.init_tar_fin_q,
+                self.init_fin_q - 0.05,
+                self.init_fin_q + 0.05,
             )
 
         # clip to joint limit

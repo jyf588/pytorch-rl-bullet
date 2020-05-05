@@ -36,8 +36,10 @@ def compute_trajectory(
         stage: The stage we are computing the trajectory for.
         
     Returns:
-        traj: The trajectory computed by OpenRAVE of shape (200, 7). Returns
-            None if OpenRAVE failed to give us a result.
+        traj: The trajectory computed by OpenRAVE of shape (T, 7).
+            If we did not find the file from OpenRAVE, we return None.
+            If we found the file but no solution was found, we return an empty
+                array.
     """
     name = STAGE2NAME[stage]
 
@@ -100,8 +102,10 @@ def get_traj_from_openrave_container(
         load_path: The path to load OpenRAVE's output trajectory from.
     
     Returns:
-        traj: The trajectory computed by OpenRAVE of shape (200, 7). Returns
-            None if OpenRAVE failed to give us a result.    # TODO
+        traj: The trajectory computed by OpenRAVE of shape (T, 7).
+            If we did not find the file from OpenRAVE, we return None.
+            If we found the file but no solution was found, we return an empty
+                array.
     """
     print("Printing inputs to computing trajectory")
     print(f"object_positions: {object_positions}")

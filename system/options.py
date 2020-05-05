@@ -1,6 +1,7 @@
 import argparse
-import main_sim_clean_test
 
+GRASP_CONTROL_STEPS = 35
+PLACE_CONTROL_STEPS = 75
 GRASP_CONTROL_SKIP = 6
 PLACE_CONTROL_SKIP = 6
 USE_HEIGHT = False
@@ -33,16 +34,16 @@ OPTIONS = argparse.Namespace(
     restore_fingers=True,
     use_height=USE_HEIGHT,
     n_plan_steps=305,
-    n_grasp_steps=main_sim_clean_test.GRASP_END_STEP * GRASP_CONTROL_SKIP,
-    n_place_steps=main_sim_clean_test.PLACE_END_STEP * PLACE_CONTROL_SKIP,
+    n_grasp_steps=GRASP_CONTROL_STEPS * GRASP_CONTROL_SKIP,
+    n_place_steps=PLACE_CONTROL_STEPS * PLACE_CONTROL_SKIP,
     n_release_steps=100,
     grasp_pi=GRASP_PI,
     grasp_dir=GRASP_DIR,
     place_dir=PLACE_DIR,
     grasp_env_name="InmoovHandGraspBulletEnv-v6",
     place_env_name="InmoovHandPlaceBulletEnv-v9",
-    # grasping_control_skip=GRASP_CONTROL_SKIP,
-    # placing_control_skip=PLACE_CONTROL_SKIP,
+    grasping_control_skip=GRASP_CONTROL_SKIP,
+    placing_control_skip=PLACE_CONTROL_SKIP,
     vision_delay=2,
     segmentation_checkpoint_path="/media/sdc3/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
     planning_checkpoint_path="/media/sdc3/mguo/outputs/planning_v003_20K/checkpoint_best.pt",
