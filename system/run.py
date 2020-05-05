@@ -78,7 +78,7 @@ async def send_to_client(websocket, path):
                 command=command,
                 observation_mode=obs_mode,
                 renderer="unity",
-                visualize_bullet=False,
+                visualize_bullet=True,
                 visualize_unity=False,
                 place_dst_xy=place_dst_xy,
             )
@@ -135,7 +135,7 @@ async def send_to_client(websocket, path):
                         position=cam_target,
                     )
                 else:
-                    render_frequency = 70
+                    render_frequency = None  # 70
                     if obs_mode == "vision":
                         unity_options = [(True, True, False, True)]
                     elif obs_mode == "gt":
@@ -164,7 +164,7 @@ async def send_to_client(websocket, path):
                     b_ani_tar[2] += z_offset
                 # b_ani_tar = None
                 # Rendering block.
-                if i % render_frequency == 0:
+                if render_frequency is not None and i % render_frequency == 0:
                     for (
                         render_obs,
                         render_hallucinations,
@@ -231,9 +231,9 @@ async def send_to_client(websocket, path):
 
                 if stage != "plan":
                     i += 1
-            print(f"end of scene:")
-            pprint.pprint(scene)
-            input("Press enter to continue")
+            # print(f"end of scene:")
+            # pprint.pprint(scene)
+            # input("Press enter to continue")
             del env
     sys.exit(0)
 
@@ -337,7 +337,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--hostname",
         type=str,
-        default="172.27.76.64",
+        # default="172.27.76.64",
+        default="localhost",
         help="The hostname of the server.",
     )
     parser.add_argument(
