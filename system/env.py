@@ -149,9 +149,7 @@ class DemoEnvironment:
         transport_end = transport_start + self.opt.n_plan_steps
         place_start = transport_end
         place_end = place_start + self.opt.n_place_steps
-        release_start = place_end
-        release_end = release_start + self.opt.n_release_steps
-        retract_start = release_end
+        retract_start = place_end
         retract_end = retract_start + self.opt.n_plan_steps
 
         stage2ts_bounds = {
@@ -159,7 +157,6 @@ class DemoEnvironment:
             "grasp": (grasp_start, grasp_end),
             "transport": (transport_start, transport_end),
             "place": (place_start, place_end),
-            "release": (release_start, release_end),
             "retract": (retract_start, retract_end),
         }
 
@@ -326,17 +323,23 @@ class DemoEnvironment:
             self.plan()
         else:
             if stage == "reach":
-                step_succeeded = self.reach(stage_ts=stage_ts)
+                step_succeeded = self.execute_plan(
+                    stage=stage, stage_ts=stage_ts
+                )
             elif stage == "grasp":
                 self.grasp(stage_ts=stage_ts)
             elif stage == "transport":
-                step_succeeded = self.transport(stage_ts=stage_ts)
+                step_succeeded = self.execute_plan(
+                    stage=stage, stage_ts=stage_ts
+                )
             elif stage == "place":
                 self.place(stage_ts=stage_ts)
-            elif stage == "release":
-                self.release()
             elif stage == "retract":
-                step_succeeded = self.retract(stage_ts=stage_ts)
+                step_succeeded = self.execute_plan(
+                    stage=stage,
+                    stage_ts=stage_ts,
+                    restore_fingers=self.opt.restore_fingers,
+                )
             else:
                 raise ValueError(f"Invalid stage: {stage}")
             self.timestep += 1
@@ -434,69 +437,41 @@ class DemoEnvironment:
         p.resetSimulation()
         return q_reach_dst, q_transport_dst
 
-    def compute_reach_trajectory(self) -> np.ndarray:
-        """Computes the reaching trajectory.
-        
-        Returns:
-            trajectory: The reaching trajectory of shape (n_steps, 7).
-        """
-        trajectory = openrave.compute_trajectory(
-            odicts=self.initial_obs,
-            target_idx=self.src_idx,
-            q_start=None,
-            q_end=self.q_reach_dst,
-            stage="reach",
-        )
-        return trajectory
+    def compute_trajectory(self, stage: str) -> np.ndarray:
+        q_start, q_end = None, None
+        odicts = self.initial_obs
 
-    def compute_transport_trajectory(self) -> np.ndarray:
-        """Computes the transport trajectory.
-        
-        Returns:
-            trajectory: The transport trajectory of shape (n_steps, 7).
-        """
-        q_src = self.world.get_robot_arm_q()
-        q_dst = self.q_transport_dst
+        if stage == "reach":
+            q_end = self.q_reach_dst
+        elif stage == "transport":
+            q_start = self.world.get_robot_arm_q()
+            q_end = self.q_transport_dst
+        elif stage == "retract":
+            q_start = self.world.get_robot_arm_q()
 
-        trajectory = openrave.compute_trajectory(
-            odicts=self.initial_obs,
-            target_idx=self.src_idx,
-            q_start=q_src,
-            q_end=q_dst,
-            stage="transport",
-        )
-        return trajectory
-
-    def compute_retract_trajectory(self) -> np.ndarray:
-        """Computes the retract trajectory.
-        
-        Returns:
-            trajectory: The retract trajectory of shape (n_steps, 7).
-        """
-        if self.observation_mode == "gt":
-            odicts = self.get_observation(
-                observation_mode=self.observation_mode, renderer=self.renderer
-            )
-        elif self.observation_mode == "vision":
-            odicts = self.last_pred_obs
-        q_src = self.world.get_robot_arm_q()
-
+            # Instead of using the initial observation, we use the latest
+            # observation.
+            if self.observation_mode == "gt":
+                odicts = self.get_observation(
+                    observation_mode=self.observation_mode,
+                    renderer=self.renderer,
+                )
+            elif self.observation_mode == "vision":
+                odicts = self.last_pred_obs
+            else:
+                raise ValueError(
+                    f"Invalid observation mode: {self.observation_mode}."
+                )
+        else:
+            raise ValueError(f"Invalid stage: {stage}.")
         trajectory = openrave.compute_trajectory(
             odicts=odicts,
             target_idx=self.src_idx,
-            q_start=q_src,
-            q_end=None,
-            stage="retract",
+            q_start=q_start,
+            q_end=q_end,
+            stage=stage,
         )
         return trajectory
-
-    def reach(self, stage_ts: int):
-        if stage_ts == 0:
-            self.reach_trajectory = self.compute_reach_trajectory()
-            if len(self.reach_trajectory) == 0:
-                return False
-        self.execute_plan(trajectory=self.reach_trajectory, idx=stage_ts)
-        return True
 
     def grasp(self, stage_ts: int):
         # Load the grasping actor critic model.
@@ -524,14 +499,6 @@ class DemoEnvironment:
             )
         )
         self.masks.fill_(1.0)
-
-    def transport(self, stage_ts: int):
-        if stage_ts == 0:
-            self.transport_trajectory = self.compute_transport_trajectory()
-            if len(self.transport_trajectory) == 0:
-                return False
-        self.execute_plan(trajectory=self.transport_trajectory, idx=stage_ts)
-        return True
 
     def place(self, stage_ts: int):
         if stage_ts == 0:
@@ -564,47 +531,22 @@ class DemoEnvironment:
             )
         )
 
-    def release(self):
-        self.world.step()
-
-    def retract(self, stage_ts: int):
-        if stage_ts == 0:
-            self.retract_trajectory = self.compute_retract_trajectory()
-            if len(self.retract_trajectory) == 0:
-                return False
-        self.execute_plan(trajectory=self.retract_trajectory, idx=stage_ts)
-        return True
-
-    def execute_plan_original(self, trajectory: np.ndarray, idx: int):
-        if idx > len(trajectory) - 1:
-            tar_arm_q = trajectory[-1]
-        else:
-            tar_arm_q = trajectory[idx]
-        self.world.robot_env.robot.tar_arm_q = tar_arm_q
-
-        # Restore fingers.
-        if self.opt.restore_fingers and idx >= len(trajectory) * 0.1:
-            blending = np.clip(
-                (idx - len(trajectory) * 0.1) / (len(trajectory) * 0.6),
-                0.0,
-                1.0,
-            )
-            cur_fin_q = self.world.robot_env.robot.get_q_dq(
-                self.world.robot_env.robot.fin_actdofs
-            )[0]
-            tar_fin_q = (
-                self.world.robot_env.robot.init_fin_q * blending
-                + cur_fin_q * (1 - blending)
-            )
-            self.world.robot_env.robot.tar_fin_q = tar_fin_q
-
-        self.world.robot_env.robot.apply_action([0.0] * 24)
-        self.world.step()
-
-    def execute_plan(self, trajectory: np.ndarray, idx: int):
+    def execute_plan(
+        self,
+        stage: str,
+        stage_ts: int,
+        restore_fingers: Optional[bool] = False,
+    ) -> bool:
+        """
+        Returns:
+            success: Whether executing the current step of the plan succeeded.
+        """
         # Get initial robot pose.
-        if idx == 0:
-            self.world.robot_env.robot.tar_arm_q = trajectory[-1]
+        if stage_ts == 0:
+            self.trajectory = self.compute_trajectory(stage=stage)
+            if len(self.trajectory) == 0:
+                return False
+            self.world.robot_env.robot.tar_arm_q = self.trajectory[-1]
             self.init_tar_fin_q = self.world.robot_env.robot.tar_fin_q
             self.init_fin_q = self.world.robot_env.robot.get_q_dq(
                 self.world.robot_env.robot.fin_actdofs
@@ -613,10 +555,10 @@ class DemoEnvironment:
                 self.world.robot_env.robot.arm_dofs
             )[0]
 
-        if idx > len(trajectory) - 1:
-            tar_arm_q = trajectory[-1]
+        if stage_ts > len(self.trajectory) - 1:
+            tar_arm_q = self.trajectory[-1]
         else:
-            tar_arm_q = trajectory[idx]
+            tar_arm_q = self.trajectory[stage_ts]
 
         tar_arm_vel = (tar_arm_q - self.last_tar_arm_q) / self.opt.ts
         max_force = self.world.robot_env.robot.maxForce
@@ -630,9 +572,10 @@ class DemoEnvironment:
             forces=[max_force * 5] * len(self.world.robot_env.robot.arm_dofs),
         )
 
-        if self.opt.restore_fingers and idx >= len(trajectory) * 0.1:
+        if restore_fingers and stage_ts >= len(self.trajectory) * 0.1:
             blending = np.clip(
-                (idx - len(trajectory) * 0.1) / (len(trajectory) * 0.6),
+                (stage_ts - len(self.trajectory) * 0.1)
+                / (len(self.trajectory) * 0.6),
                 0.0,
                 1.0,
             )
@@ -681,6 +624,8 @@ class DemoEnvironment:
         )
 
         self.last_tar_arm_q = tar_arm_q
+        self.world.step()
+        return True
 
     def get_grasp_observation(self) -> torch.Tensor:
         odict = self.initial_obs[self.src_idx]

@@ -36,7 +36,6 @@ OPTIONS = argparse.Namespace(
     n_plan_steps=305,
     n_grasp_steps=GRASP_CONTROL_STEPS * GRASP_CONTROL_SKIP,
     n_place_steps=PLACE_CONTROL_STEPS * PLACE_CONTROL_SKIP,
-    n_release_steps=100,
     grasp_pi=GRASP_PI,
     grasp_dir=GRASP_DIR,
     place_dir=PLACE_DIR,
