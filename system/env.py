@@ -128,10 +128,10 @@ class DemoEnvironment:
         else:
             p.connect(p.DIRECT)
 
-        self.imaginary_sess = ImaginaryArmObjSession()
-        self.a = InmoovShadowHandPlaceEnvV9(
-            renders=False, grasp_pi_name=self.opt.grasp_pi
-        )
+        # self.imaginary_sess = ImaginaryArmObjSession()
+        # self.a = InmoovShadowHandPlaceEnvV9(
+        #     renders=False, grasp_pi_name=self.opt.grasp_pi
+        # )
 
         self.timestep = 0
 
@@ -320,39 +320,35 @@ class DemoEnvironment:
         # print(f"\tStage: {stage}")
         # print(f"\tStage timestep: {stage_ts}")
 
+        # By default we assume that the stepping succeeds.
+        step_succeeded = True
         if stage == "plan":
             self.plan()
         else:
             if stage == "reach":
-                success = self.reach(stage_ts=stage_ts)
-                if not success:
-                    print(f"Reaching failed. Terminating early.")
-                    return True
+                step_succeeded = self.reach(stage_ts=stage_ts)
             elif stage == "grasp":
                 self.grasp(stage_ts=stage_ts)
             elif stage == "transport":
-                success = self.transport(stage_ts=stage_ts)
-                if not success:
-                    return True  # Let user know we're done.
+                step_succeeded = self.transport(stage_ts=stage_ts)
             elif stage == "place":
                 self.place(stage_ts=stage_ts)
             elif stage == "release":
                 self.release()
             elif stage == "retract":
-                success = self.retract(stage_ts=stage_ts)
-                if not success:
-                    return True
+                step_succeeded = self.retract(stage_ts=stage_ts)
             else:
                 raise ValueError(f"Invalid stage: {stage}")
             self.timestep += 1
 
         # Compute whether we have finished the entire sequence.
-        done = self.is_done()
+        done = not step_succeeded or self.is_done()
         if done:
-            p.disconnect()
-            # if self.observation_mode == "vision":
-            #     self.metrics.print()
+            self.cleanup()
         return done
+
+    def cleanup(self):
+        p.disconnect()
 
     def get_current_stage(self) -> Tuple[str, int]:
         """Retrieves the current stage of the demo.

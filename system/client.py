@@ -6,12 +6,14 @@ import websockets
 def hello():
     websocket = yield from websockets.connect("ws://localhost:8000/")
 
-    name = input("What's your name? ")
-    yield from websocket.send(name)
-    print("> {}".format(name))
+    print("Connected!")
 
-    greeting = yield from websocket.recv()
-    print("< {}".format(greeting))
+    # name = input("What's your name? ")
+    # yield from websocket.send(name)
+    # print("> {}".format(name))
+
+    # greeting = yield from websocket.recv()
+    # print("< {}".format(greeting))
 
     yield from websocket.close()
 
