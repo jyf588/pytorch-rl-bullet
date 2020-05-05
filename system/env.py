@@ -101,24 +101,26 @@ class DemoEnvironment:
         # Initialize the vision module if we are using vision for our
         # observations.
         if self.observation_mode == "vision":
-            self.planning_vision_module = VisionModule(
-                load_checkpoint_path=self.opt.planning_checkpoint_path
-            )
             if task == "stack":
-                self.placing_vision_module = VisionModule(
-                    load_checkpoint_path=self.opt.stacking_checkpoint_path
-                )
+                place_checkpoint_path = self.opt.stacking_checkpoint_path
             elif task == "place":
-                self.placing_vision_module = VisionModule(
-                    load_checkpoint_path=self.opt.placing_checkpoint_path
-                )
+                place_checkpoint_path = self.opt.placing_checkpoint_path
             else:
                 raise ValueError(f"Invalid task: {task}")
+            self.planning_vision_module = VisionModule(
+                load_checkpoint_path=self.opt.planning_checkpoint_path,
+                debug_dir=self.opt.debug_dir,
+            )
+            self.placing_vision_module = VisionModule(
+                load_checkpoint_path=place_checkpoint_path,
+                debug_dir=self.opt.debug_dir,
+            )
 
         # Initialize the segmentation module if requested.
         if self.opt.use_segmentation_module:
             self.segmentation_module = SegmentationModule(
-                load_checkpoint_path=self.opt.segmentation_checkpoint_path
+                load_checkpoint_path=self.opt.segmentation_checkpoint_path,
+                debug_dir=self.opt.debug_dir,
             )
 
         if visualize_bullet:
@@ -741,23 +743,22 @@ class DemoEnvironment:
         # Retrieves the image, camera pose, and object segmentation masks.
         rgb, masks, cam_position, cam_orientation = self.get_images()
 
-        # Predict the pose for each segmentation mask.
-        pred_odicts = []
-        for mask in masks:
-            # Predict attributes for a single object.
-            pred = vision_module.predict(rgb=rgb, mask=mask)
+        # Predict attributes for all the segmentations.
+        pred = vision_module.predict(
+            rgb=rgb, masks=masks, debug_id=self.timestep
+        )
 
-            # Convert vectorized predictions to dictionary form using camera
-            # information.
-            y_dict = dash_object.y_vec_to_dict(
-                y=list(pred),
+        pred_odicts = []
+        for y in pred:
+            # Convert vectorized predictions to dictionary form. The
+            # predicted pose is also transformed using camera information.
+            odict = dash_object.y_vec_to_dict(
+                y=list(y),
                 coordinate_frame=self.opt.coordinate_frame,
                 cam_position=cam_position,
                 cam_orientation=cam_orientation,
             )
-
-            # Store the predicted object dictionary.
-            pred_odicts.append(y_dict)
+            pred_odicts.append(odict)
 
         # We track predicted objects throughout time by matching the attributes
         # predicted at the current timestep with the object attributes from the
@@ -827,9 +828,12 @@ class DemoEnvironment:
         # unassigned element will by default hold the last prediction.
         pred_obs = copy.deepcopy(self.last_pred_obs)
 
-        # Override assigned elements in `pred_obs` with current predictions.
+        # Override the pose predictions for the objects being manipulated.
         for src_idx, dst_idx in zip(src_idxs, dst_idxs):
-            pred_obs[src_idx] = pred_odicts[dst_idx]
+            if src_idx in [self.src_idx, self.dst_idx]:
+                dst_odict = pred_odicts[dst_idx]
+                for attr in ["position", "up_vector"]:
+                    pred_obs[src_idx][attr] = dst_odict[attr]
         return pred_obs
 
     def get_images(self) -> Tuple:
@@ -871,11 +875,12 @@ class DemoEnvironment:
 
         # Either predict segmentations or use ground truth.
         if self.opt.use_segmentation_module:
-            masks = self.segmentation_module.predict(img=rgb)
+            masks = self.segmentation_module.predict(
+                img=rgb, debug_id=self.timestep
+            )
         else:
             # If using ground truth, convert the segmentation image into a
             # segmentation map.
-            raise NotImplementedError
             masks, _ = ns_vqa_dart.bullet.seg.seg_img_to_map(seg_img)
         return rgb, masks, camera_position, camera_orientation
 

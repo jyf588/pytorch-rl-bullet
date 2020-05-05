@@ -1,4 +1,5 @@
 """Defines a segmentation module for evaluation only."""
+import os
 import imageio
 import numpy as np
 
@@ -8,7 +9,9 @@ from detectron2.engine import DefaultPredictor
 
 
 class SegmentationModule:
-    def __init__(self, load_checkpoint_path: str):
+    def __init__(self, load_checkpoint_path: str, debug_dir: str):
+        self.debug_dir = debug_dir
+
         cfg = get_cfg()
         cfg.merge_from_file(
             model_zoo.get_config_file(
@@ -21,7 +24,7 @@ class SegmentationModule:
         cfg.MODEL.WEIGHTS = load_checkpoint_path
         self.predictor = DefaultPredictor(cfg)
 
-    def predict(self, img) -> np.ndarray:
+    def predict(self, img: np.ndarray, debug_id: int) -> np.ndarray:
         """Predicts binary instance segmentations of objects vs. background for
         a given image.
 
@@ -31,16 +34,18 @@ class SegmentationModule:
         Returns:
             masks: A numpy array of shape (N, H, W) of instance masks.
         """
-        path = "/home/michelle/tmp/seg_input.png"
-        imageio.imwrite(path, img)
-        print(f"Wrote seg input image to: {path}")
+        # Write the input image for debugging.
+        if self.debug_dir is not None:
+            path = os.path.join(
+                self.debug_dir, f"{debug_id:04}", "seg_input.png"
+            )
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            imageio.imwrite(path, img)
 
         outputs = self.predictor(img)
         # This produces a numpy array of shape (N, H, W) containing binary
         # masks.
-        # print(outputs["instances"])
         masks = outputs["instances"].to("cpu")._fields["pred_masks"].numpy()
-        # print(masks.shape)
         # seg = np.full((320, 480), -1, dtype=np.uint8)
         # for idx, mask in enumerate(masks):
         #     seg[mask] = idx

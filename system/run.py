@@ -18,7 +18,7 @@ from ns_vqa_dart.bullet.random_objects import RandomObjectsGenerator
 global args
 
 
-ADD_SURROUNDING_OBJECTS = True
+ADD_SURROUNDING_OBJECTS = False
 PLAN_TARGET_POSITION = [-0.06, 0.3, 0.0]
 STAGE2ANIMATION_Z_OFFSET = {
     "plan": 0.3,
@@ -48,6 +48,9 @@ async def send_to_client(websocket, path):
         src_shape = scene[1]["shape"]
         command = f"Put the green {src_shape} on top of the blue {dst_shape}"
 
+        print(f"scene:")
+        pprint.pprint(scene)
+
         # if scene_idx % 2 == 0:
         #     task = "stack"
         # else:
@@ -55,7 +58,6 @@ async def send_to_client(websocket, path):
         task = "stack"
         # for obs_mode in ["gt", "vision"]:
         for obs_mode in ["vision"]:
-
             # Modify the scene for placing. We keep only the first object for
             # now, and set the placing destination xy location to be the
             # location of the original blue object (deleted).
@@ -291,12 +293,16 @@ def generate_scenes():
             existing_odicts=top_scene
         )
         all_scene = []
-        if ADD_SURROUNDING_OBJECTS:
-            all_scene = generator_all.generate_tabletop_objects(
-                existing_odicts=top_scene + bottom_scene
-            )
+        all_scene = generator_all.generate_tabletop_objects(
+            existing_odicts=top_scene + bottom_scene
+        )
+        scene = top_scene + bottom_scene
 
-        scene = top_scene + bottom_scene + all_scene
+        # We still generate surrounding objects even if this flag is turned off
+        # because we want the top and bottom objects to be the same w/ and w/o
+        # this flag.
+        if ADD_SURROUNDING_OBJECTS:
+            scene += all_scene
         scenes.append(scene)
     return scenes
 
