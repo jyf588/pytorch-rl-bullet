@@ -577,7 +577,7 @@ class DemoEnvironment:
         self.execute_plan(trajectory=self.retract_trajectory, idx=stage_ts)
         return True
 
-    def execute_plan(self, trajectory: np.ndarray, idx: int):
+    def execute_plan_original(self, trajectory: np.ndarray, idx: int):
         if idx > len(trajectory) - 1:
             tar_arm_q = trajectory[-1]
         else:
@@ -602,6 +602,85 @@ class DemoEnvironment:
 
         self.world.robot_env.robot.apply_action([0.0] * 24)
         self.world.step()
+
+    def execute_plan(self, trajectory: np.ndarray, idx: int):
+        # Get initial robot pose.
+        if idx == 0:
+            self.world.robot_env.robot.tar_arm_q = trajectory[-1]
+            init_tar_fin_q = self.world.robot_env.robot.tar_fin_q
+            init_fin_q = self.world.robot_env.robot.get_q_dq(
+                self.world.robot_env.robot.fin_actdofs
+            )[0]
+            self.last_tar_arm_q = self.world.robot_env.robot.get_q_dq(
+                self.world.robot_env.robot.arm_dofs
+            )[0]
+
+        if idx > len(trajectory) - 1:
+            tar_arm_q = trajectory[-1]
+        else:
+            tar_arm_q = trajectory[idx]
+
+        tar_arm_vel = (tar_arm_q - self.last_tar_arm_q) / self.opt.ts
+        max_force = self.world.robot_env.robot.maxForce
+
+        p.setJointMotorControlArray(
+            bodyIndex=self.world.robot_env.robot.arm_id,
+            jointIndices=self.world.robot_env.robot.arm_dofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=list(tar_arm_q),
+            targetVelocities=list(tar_arm_vel),
+            forces=[max_force * 5] * len(self.world.robot_env.robot.arm_dofs),
+        )
+
+        if self.opt.restore_fingers and idx >= len(trajectory) * 0.1:
+            blending = np.clip(
+                (idx - len(trajectory) * 0.1) / (len(trajectory) * 0.6),
+                0.0,
+                1.0,
+            )
+            cur_fin_q = self.world.robot_env.robot.get_q_dq(
+                self.world.robot_env.robot.fin_actdofs
+            )[0]
+            tar_fin_q = (
+                self.world.robot_env.robot.init_fin_q * blending
+                + cur_fin_q * (1 - blending)
+            )
+        else:
+            # try to keep fin q close to init_fin_q (keep finger pose)
+            # add at most offset 0.05 in init_tar_fin_q direction so that grasp is tight
+            tar_fin_q = np.clip(
+                init_tar_fin_q, init_fin_q - 0.05, init_fin_q + 0.05
+            )
+
+        # clip to joint limit
+        tar_fin_q = np.clip(
+            tar_fin_q,
+            self.world.robot_env.robot.ll[
+                self.world.robot_env.robot.fin_actdofs
+            ],
+            self.world.robot_env.robot.ul[
+                self.world.robot_env.robot.fin_actdofs
+            ],
+        )
+
+        p.setJointMotorControlArray(
+            bodyIndex=self.world.robot_env.robot.arm_id,
+            jointIndices=self.world.robot_env.robot.fin_actdofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=list(tar_fin_q),
+            forces=[max_force] * len(self.world.robot_env.robot.fin_actdofs),
+        )
+        p.setJointMotorControlArray(
+            bodyIndex=self.world.robot_env.robot.arm_id,
+            jointIndices=self.world.robot_env.robot.fin_zerodofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=[0.0]
+            * len(self.world.robot_env.robot.fin_zerodofs),
+            forces=[max_force / 4.0]
+            * len(self.world.robot_env.robot.fin_zerodofs),
+        )
+
+        self.last_tar_arm_q = tar_arm_q
 
     def get_grasp_observation(self) -> torch.Tensor:
         odict = self.initial_obs[self.src_idx]

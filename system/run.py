@@ -175,9 +175,12 @@ async def send_to_client(websocket, path):
                         # render state.
                         render_state = copy.deepcopy(state)
                         if render_obs:
+                            h_odicts = compute_obs_w_gt_orn(
+                                obs=env.obs, gt_odicts=scene
+                            )
                             render_state = add_hallucinations_to_state(
                                 state=render_state,
-                                h_odicts=env.obs,
+                                h_odicts=h_odicts,
                                 color=None,
                             )
                         if render_hallucinations:
