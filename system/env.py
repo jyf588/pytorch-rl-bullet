@@ -44,6 +44,8 @@ class DemoEnvironment:
         visualize_unity: bool,
         renderer: Optional[str] = None,
         place_dst_xy: Optional[List[float]] = None,
+        init_fin_q: Optional[np.ndarray] = None,
+        init_arm_q: Optional[np.ndarray] = None,
     ):
         """
         Args:
@@ -76,6 +78,10 @@ class DemoEnvironment:
                 `observation_mode` is `vision`.
             place_dst_xy: The destination (x, y) location to place at. Used 
                 only if `task` is `place`.
+            init_fin_q: Used to initialize the pose of the fingers, if 
+                `opt.init_pose` is enabled.
+            init_arm_q: Used to initialize the pose of the arm, if 
+                `opt.init_pose` is enabled.
         """
         self.opt = opt
         self.trial = trial
@@ -87,6 +93,8 @@ class DemoEnvironment:
         self.visualize_unity = visualize_unity
         self.renderer = renderer
         self.place_dst_xy = place_dst_xy
+        self.init_fin_q = init_fin_q
+        self.init_arm_q = init_arm_q
 
         print("**********DEMO ENVIRONMENT**********")
 
@@ -96,7 +104,7 @@ class DemoEnvironment:
         self.planning_complete = False
         self.initial_obs = None
         self.obs = None
-        self.world = None
+        self.w = None
 
         # Initialize the vision module if we are using vision for our
         # observations.
@@ -187,7 +195,7 @@ class DemoEnvironment:
 
         # Create the bullet world now that we've finished our imaginary
         # sessions.
-        self.world = BulletWorld(
+        self.w = BulletWorld(
             opt=self.opt,
             p=p,
             scene=self.scene,
@@ -197,9 +205,14 @@ class DemoEnvironment:
         # If reaching is disabled, set the robot arm directly to the dstination
         # of reaching.
         if self.opt.disable_reaching:
-            self.world.robot_env.robot.reset_with_certain_arm_q(
-                self.q_reach_dst
-            )
+            self.w.robot_env.robot.reset_with_certain_arm_q(self.q_reach_dst)
+        if self.opt.init_pose:
+            if self.init_fin_q is not None:
+                self.w.robot_env.change_init_fin_q(self.init_fin_q)
+            if self.init_arm_q is not None:
+                self.w.robot_env.robot.reset_with_certain_arm_q(
+                    self.init_arm_q
+                )
 
         # Flag planning as complete.
         self.planning_complete = True
@@ -291,12 +304,12 @@ class DemoEnvironment:
             using zero-indexed assignment.
         """
         # If there is no bullet world, we simply return the input scene.
-        if self.world is None:
+        if self.w is None:
             state = {
                 "objects": {idx: odict for idx, odict in enumerate(self.scene)}
             }
         else:
-            state = self.world.get_state()
+            state = self.w.get_state()
 
         # Additionally, compute the up vector from the orientation.
         for idx in state["objects"].keys():
@@ -345,13 +358,11 @@ class DemoEnvironment:
             self.timestep += 1
 
         # Compute whether we have finished the entire sequence.
-        done = not step_succeeded or self.is_done()
-        if done:
-            self.cleanup()
-        return done
+        return self.is_done(), step_succeeded
 
     def cleanup(self):
         p.disconnect()
+        del self
 
     def get_current_stage(self) -> Tuple[str, int]:
         """Retrieves the current stage of the demo.
@@ -444,10 +455,10 @@ class DemoEnvironment:
         if stage == "reach":
             q_end = self.q_reach_dst
         elif stage == "transport":
-            q_start = self.world.get_robot_arm_q()
+            q_start = self.w.get_robot_q()[0]
             q_end = self.q_transport_dst
         elif stage == "retract":
-            q_start = self.world.get_robot_arm_q()
+            q_start = self.w.get_robot_q()[0]
 
             # Instead of using the initial observation, we use the latest
             # observation.
@@ -493,7 +504,7 @@ class DemoEnvironment:
             _, action, _, self.hidden_states = self.policy.act(
                 obs, self.hidden_states, self.masks, deterministic=self.opt.det
             )
-        self.world.step_robot(
+        self.w.step_robot(
             action=system.policy.unwrap_action(
                 action=action, is_cuda=self.opt.is_cuda
             )
@@ -502,7 +513,7 @@ class DemoEnvironment:
 
     def place(self, stage_ts: int):
         if stage_ts == 0:
-            self.world.robot_env.change_control_skip_scaling(
+            self.w.robot_env.change_control_skip_scaling(
                 c_skip=self.opt.placing_control_skip
             )
             (
@@ -525,7 +536,7 @@ class DemoEnvironment:
                 obs, self.hidden_states, self.masks, deterministic=self.opt.det
             )
 
-        self.world.step_robot(
+        self.w.step_robot(
             action=system.policy.unwrap_action(
                 action=action, is_cuda=self.opt.is_cuda
             )
@@ -546,14 +557,9 @@ class DemoEnvironment:
             self.trajectory = self.compute_trajectory(stage=stage)
             if len(self.trajectory) == 0:
                 return False
-            self.world.robot_env.robot.tar_arm_q = self.trajectory[-1]
-            self.init_tar_fin_q = self.world.robot_env.robot.tar_fin_q
-            self.init_fin_q = self.world.robot_env.robot.get_q_dq(
-                self.world.robot_env.robot.fin_actdofs
-            )[0]
-            self.last_tar_arm_q = self.world.robot_env.robot.get_q_dq(
-                self.world.robot_env.robot.arm_dofs
-            )[0]
+            self.w.robot_env.robot.tar_arm_q = self.trajectory[-1]
+            self.init_tar_fin_q = self.w.robot_env.robot.tar_fin_q
+            self.last_tar_arm_q, self.init_fin_q = self.w.get_robot_q()
 
         if stage_ts > len(self.trajectory) - 1:
             tar_arm_q = self.trajectory[-1]
@@ -561,15 +567,15 @@ class DemoEnvironment:
             tar_arm_q = self.trajectory[stage_ts]
 
         tar_arm_vel = (tar_arm_q - self.last_tar_arm_q) / self.opt.ts
-        max_force = self.world.robot_env.robot.maxForce
+        max_force = self.w.robot_env.robot.maxForce
 
         p.setJointMotorControlArray(
-            bodyIndex=self.world.robot_env.robot.arm_id,
-            jointIndices=self.world.robot_env.robot.arm_dofs,
+            bodyIndex=self.w.robot_env.robot.arm_id,
+            jointIndices=self.w.robot_env.robot.arm_dofs,
             controlMode=p.POSITION_CONTROL,
             targetPositions=list(tar_arm_q),
             targetVelocities=list(tar_arm_vel),
-            forces=[max_force * 5] * len(self.world.robot_env.robot.arm_dofs),
+            forces=[max_force * 5] * len(self.w.robot_env.robot.arm_dofs),
         )
 
         if restore_fingers and stage_ts >= len(self.trajectory) * 0.1:
@@ -579,11 +585,11 @@ class DemoEnvironment:
                 0.0,
                 1.0,
             )
-            cur_fin_q = self.world.robot_env.robot.get_q_dq(
-                self.world.robot_env.robot.fin_actdofs
+            cur_fin_q = self.w.robot_env.robot.get_q_dq(
+                self.w.robot_env.robot.fin_actdofs
             )[0]
             tar_fin_q = (
-                self.world.robot_env.robot.init_fin_q * blending
+                self.w.robot_env.robot.init_fin_q * blending
                 + cur_fin_q * (1 - blending)
             )
         else:
@@ -598,33 +604,28 @@ class DemoEnvironment:
         # clip to joint limit
         tar_fin_q = np.clip(
             tar_fin_q,
-            self.world.robot_env.robot.ll[
-                self.world.robot_env.robot.fin_actdofs
-            ],
-            self.world.robot_env.robot.ul[
-                self.world.robot_env.robot.fin_actdofs
-            ],
+            self.w.robot_env.robot.ll[self.w.robot_env.robot.fin_actdofs],
+            self.w.robot_env.robot.ul[self.w.robot_env.robot.fin_actdofs],
         )
 
         p.setJointMotorControlArray(
-            bodyIndex=self.world.robot_env.robot.arm_id,
-            jointIndices=self.world.robot_env.robot.fin_actdofs,
+            bodyIndex=self.w.robot_env.robot.arm_id,
+            jointIndices=self.w.robot_env.robot.fin_actdofs,
             controlMode=p.POSITION_CONTROL,
             targetPositions=list(tar_fin_q),
-            forces=[max_force] * len(self.world.robot_env.robot.fin_actdofs),
+            forces=[max_force] * len(self.w.robot_env.robot.fin_actdofs),
         )
         p.setJointMotorControlArray(
-            bodyIndex=self.world.robot_env.robot.arm_id,
-            jointIndices=self.world.robot_env.robot.fin_zerodofs,
+            bodyIndex=self.w.robot_env.robot.arm_id,
+            jointIndices=self.w.robot_env.robot.fin_zerodofs,
             controlMode=p.POSITION_CONTROL,
-            targetPositions=[0.0]
-            * len(self.world.robot_env.robot.fin_zerodofs),
+            targetPositions=[0.0] * len(self.w.robot_env.robot.fin_zerodofs),
             forces=[max_force / 4.0]
-            * len(self.world.robot_env.robot.fin_zerodofs),
+            * len(self.w.robot_env.robot.fin_zerodofs),
         )
 
         self.last_tar_arm_q = tar_arm_q
-        self.world.step()
+        self.w.step()
         return True
 
     def get_grasp_observation(self) -> torch.Tensor:
@@ -634,11 +635,11 @@ class DemoEnvironment:
         x, y = position[0], position[1]
         is_box = odict["shape"] == "box"
         if self.opt.use_height:
-            obs = self.world.robot_env.get_robot_contact_txtytz_halfh_shape_obs_no_dup(
+            obs = self.w.robot_env.get_robot_contact_txtytz_halfh_shape_obs_no_dup(
                 x, y, 0.0, half_height, is_box
             )
         else:
-            obs = self.world.robot_env.get_robot_contact_txty_shape_obs_no_dup(
+            obs = self.w.robot_env.get_robot_contact_txty_shape_obs_no_dup(
                 x, y, is_box
             )
         return obs
@@ -674,7 +675,7 @@ class DemoEnvironment:
             b_up = [0.0, 0.0, 1.0]
 
         if self.opt.use_height:
-            p_obs = self.world.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
+            p_obs = self.w.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
                 tx=x,
                 ty=y,
                 tz=tz,
@@ -686,7 +687,7 @@ class DemoEnvironment:
                 b_up=b_up,
             )
         else:
-            p_obs = self.world.robot_env.get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
+            p_obs = self.w.robot_env.get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
                 tx=x,
                 ty=y,
                 shape=is_box,

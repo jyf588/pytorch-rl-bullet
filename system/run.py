@@ -38,6 +38,8 @@ async def send_to_client(websocket, path):
     """
     scenes = generate_scenes()
 
+    # Used to initialize the pose of each trial with the pose of the last trial.
+    init_fin_q, init_arm_q = None, None
     for scene_idx in range(7, len(scenes)):
         scene = scenes[scene_idx]
 
@@ -78,9 +80,11 @@ async def send_to_client(websocket, path):
                 command=command,
                 observation_mode=obs_mode,
                 renderer="unity",
-                visualize_bullet=True,
+                visualize_bullet=args.render_bullet,
                 visualize_unity=False,
                 place_dst_xy=place_dst_xy,
+                init_fin_q=init_fin_q,
+                init_arm_q=init_arm_q,
             )
             cam_target = None
 
@@ -135,7 +139,7 @@ async def send_to_client(websocket, path):
                         position=cam_target,
                     )
                 else:
-                    render_frequency = None  # 70
+                    render_frequency = None if args.disable_unity else 70
                     if obs_mode == "vision":
                         unity_options = [(True, True, False, True)]
                     elif obs_mode == "gt":
@@ -221,12 +225,19 @@ async def send_to_client(websocket, path):
                         if send_image:
                             env.set_unity_data(data)
                         if should_step:
-                            is_done = env.step()
+                            is_done, success = env.step()
                 else:
-                    is_done = env.step()
+                    is_done, success = env.step()
 
-                # Break out if we're done.
-                if is_done:
+                # Break out if we're done with the sequence, or it failed.
+                if is_done or not success:
+                    # Only use qs for next trial if we finished the entire
+                    # sequence and it was successful.
+                    if is_done and success:
+                        init_arm_q, init_fin_q = env.w.get_robot_q()
+                    else:
+                        init_arm_q, init_fin_q = None, None
+                    env.cleanup()
                     break
 
                 if stage != "plan":
@@ -234,7 +245,7 @@ async def send_to_client(websocket, path):
             # print(f"end of scene:")
             # pprint.pprint(scene)
             # input("Press enter to continue")
-            del env
+            # del env
     sys.exit(0)
 
 
@@ -337,14 +348,27 @@ if __name__ == "__main__":
     parser.add_argument(
         "--hostname",
         type=str,
-        # default="172.27.76.64",
-        default="localhost",
+        default="172.27.76.64",
+        # default="localhost",
         help="The hostname of the server.",
     )
     parser.add_argument(
         "--port", type=int, default=8000, help="The port of the server."
     )
+    parser.add_argument(
+        "--disable_unity",
+        action="store_true",
+        help="Whether to disable unity.",
+    )
+    parser.add_argument(
+        "--render_bullet",
+        action="store_true",
+        help="Whether to render PyBullet using OpenGL.",
+    )
     args = parser.parse_args()
+
+    if args.disable_unity:
+        args.hostname = "localhost"
 
     # Start the python server.
     interface.run_server(

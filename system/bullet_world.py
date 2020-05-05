@@ -297,7 +297,7 @@ class BulletWorld:
             robot_state[joint_name] = joint_angle
         return robot_state
 
-    def get_robot_arm_q(self):
+    def get_robot_q(self):
         """Retrieves the arm joint angles.
 
         Returns:
@@ -309,9 +309,13 @@ class BulletWorld:
                 r_elbow_roll_joint
                 rh_WRJ2
                 rh_WRJ1
+            fin_q: The finger pose.
         """
         arm_q = self.robot_env.robot.get_q_dq(self.robot_env.robot.arm_dofs)[0]
-        return arm_q
+        fin_q = self.robot_env.robot.get_q_dq(
+            self.robot_env.robot.fin_actdofs
+        )[0]
+        return arm_q, fin_q
 
     def act(self):
         pass
