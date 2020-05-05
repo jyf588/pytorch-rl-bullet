@@ -33,6 +33,8 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
                  has_test_phase=True,
                  warm_start_phase=False,
+
+                 use_obj_heights=False,
                  ):
         self.renders = renders
         self.init_noise = init_noise
@@ -52,6 +54,8 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         self.test_start = 50
 
         self.n_best_cand = int(n_best_cand)
+
+        self.use_obj_heights = use_obj_heights
 
         # dummy, to be overwritten
         self.top_obj = {'id': None,
@@ -135,14 +139,8 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         p.setGravity(0, 0, -10)
         self.timer = 0
 
-        # if self.cotrain_onstack_grasp:
-        #     self.grasp_floor = self.np_random.randint(10) > 5
-        if self.warm_start:
-            if self.cotrain_onstack_grasp:
-                self.grasp_floor = self.np_random.randint(10) >= 7  # 30%, TODO
-        else:
-            if self.cotrain_onstack_grasp:
-                self.grasp_floor = self.np_random.randint(10) >= 6  # 40%, TODO
+        if self.cotrain_onstack_grasp:
+            self.grasp_floor = self.np_random.randint(10) >= 6  # 40%
 
         mu_f = self.np_random.uniform(utils.MU_MIN, utils.MU_MAX)
         self.table_id = utils.create_table(mu_f)
@@ -315,22 +313,22 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
                 curContact.extend([-1.0])
         self.observation.extend(curContact)
 
-        # TODO: make this use height flag
-        # xyz = np.array([self.tx, self.ty, self.tz])
-        # self.observation.extend(list(xyz))
-        # if self.obs_noise:
-        #     self.observation.extend(list(xyz))
-        # else:
-        #     self.observation.extend([self.tx_act, self.ty_act, self.tz_act])
-        xy = np.array([self.tx, self.ty])
-        self.observation.extend(list(xy))
-        if self.obs_noise:
-            self.observation.extend(list(xy))
+        if self.use_obj_heights:
+            xyz = np.array([self.tx, self.ty, self.tz])
+            self.observation.extend(list(xyz))
+            if self.obs_noise:
+                self.observation.extend(list(xyz))
+            else:
+                self.observation.extend([self.tx_act, self.ty_act, self.tz_act])
+            # top height info, btm height info included in tz
+            self.observation.extend([self.half_height_est])
         else:
-            self.observation.extend([self.tx_act, self.ty_act])
-
-        # # top height info, btm height info included in tz
-        # self.observation.extend([self.half_height_est])
+            xy = np.array([self.tx, self.ty])
+            self.observation.extend(list(xy))
+            if self.obs_noise:
+                self.observation.extend(list(xy))
+            else:
+                self.observation.extend([self.tx_act, self.ty_act])
 
         # btm obj shape is not important.
         if self.top_obj['shape'] == p.GEOM_BOX:

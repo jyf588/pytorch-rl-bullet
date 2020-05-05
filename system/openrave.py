@@ -134,14 +134,14 @@ def get_traj_from_openrave_container(
             print(f"Could not find OpenRAVE-generated file: {load_path}")
             return None
     if os.path.isfile(load_path):
-        time.sleep(0.3)  # TODO: wait for networking
+        time.sleep(0.3)  # TODO: wait for file write
         loaded_data = np.load(load_path)
         traj_i = loaded_data["arr_0"]
         traj_s = loaded_data["arr_1"]
         print("loaded")
         # for k in range(7):
-        #     plt.plot(range(400), traj_i[:,k])
-        #     plt.plot(range(400), traj_s[:,k])
+        #     plt.plot(range(300), traj_i[:,k])
+        #     plt.plot(range(300), traj_s[:,k])
         #     plt.show()
         try:
             os.remove(load_path)

@@ -123,27 +123,40 @@ class InmoovShadowHandDemoEnvV4:
         return self.observation
 
     def get_robot_contact_txtytz_halfh_shape_obs_no_dup(
-        self, tx, ty, tz, half_h, t_is_box
+        self, tx, ty, tz, half_h, shape
     ):
+        # TODO: shape: 1 box, 0 cyl, -1 sph
+
         self.get_robot_contact_txtytz_halfh_obs_nodup(tx, ty, tz, half_h)
 
-        if t_is_box:
+        shape_info = []
+        if shape == 1:
             shape_info = [1, -1, -1]
-        else:
+        elif shape == 0:
             shape_info = [-1, 1, -1]
+        elif shape == -1:
+            shape_info = [-1, -1, 1]
+        else:
+            assert False and "not implemented"
         self.observation.extend(shape_info)
 
         return self.observation
 
-    def get_robot_contact_txty_shape_obs_no_dup(self, tx, ty, t_is_box):
+    def get_robot_contact_txty_shape_obs_no_dup(self, tx, ty, shape):
+        # TODO: shape: 1 box, 0 cyl, -1 sph
         self.get_robot_contact_obs()
         self.observation.extend([tx, ty])
         self.observation.extend([tx, ty])
 
-        if t_is_box:
+        shape_info = []
+        if shape == 1:
             shape_info = [1, -1, -1]
-        else:
+        elif shape == 0:
             shape_info = [-1, 1, -1]
+        elif shape == -1:
+            shape_info = [-1, -1, 1]
+        else:
+            assert False and "not implemented"
         self.observation.extend(shape_info)
 
         return self.observation
@@ -194,7 +207,7 @@ class InmoovShadowHandDemoEnvV4:
         return self.observation
 
     def get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
-        self, tx, ty, tz, half_h, t_is_box, t_pos, t_up, b_pos, b_up
+        self, tx, ty, tz, half_h, shape, t_pos, t_up, b_pos, b_up
     ):
         """
         Args:
@@ -202,7 +215,7 @@ class InmoovShadowHandDemoEnvV4:
             ty: Target y position.
             tz: Target z position (height of bottom obj, or 0 if table)
             half_h: Half of the height of the top object.
-            t_is_box: is top object box or cylinder (todo, ball)
+            shape: TODO: shape: 1 box, 0 cyl, -1 sph
             t_pos: The xyz position of the top object.
             t_up: The up vector of the top object, normalized
             b_pos: The xyz position of the bottom object.
@@ -210,14 +223,14 @@ class InmoovShadowHandDemoEnvV4:
         """
         # self.get_robot_contact_txtytz_halfh_obs_nodup(tx, ty, tz, half_h)
         #
-        # if t_is_box:
+        # if shape:
         #     shape_info = [1, -1, -1]
         # else:
         #     shape_info = [-1, 1, -1]
         # self.observation.extend(shape_info)
 
         self.get_robot_contact_txtytz_halfh_shape_obs_no_dup(
-            tx, ty, tz, half_h, t_is_box
+            tx, ty, tz, half_h, shape
         )
 
         self.observation.extend(
@@ -229,20 +242,20 @@ class InmoovShadowHandDemoEnvV4:
         return self.observation
 
     def get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
-        self, tx, ty, t_is_box, t_pos, t_up, b_pos, b_up
+        self, tx, ty, shape, t_pos, t_up, b_pos, b_up
     ):
         """
         Args:
             tx: Target x position.
             ty: Target y position.
-            t_is_box: is top object box or cylinder (todo, ball)
+            shape: TODO: shape: 1 box, 0 cyl, -1 sph
             t_pos: The xyz position of the top object.
             t_up: The up vector of the top object, normalized
             b_pos: The xyz position of the bottom object.
             b_up: The up vector of the bottom object, normalized
         """
 
-        self.get_robot_contact_txty_shape_obs_no_dup(tx, ty, t_is_box)
+        self.get_robot_contact_txty_shape_obs_no_dup(tx, ty, shape)
 
         self.observation.extend(
             utils.obj_pos_and_upv_to_obs(t_pos, t_up, tx, ty)

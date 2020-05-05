@@ -58,6 +58,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         use_obj_heights=False,
         save_states=False,
         states_dir=None,
+        with_stack_place_bit=True,
     ):
         self.renders = renders
         self.init_noise = init_noise
@@ -77,6 +78,8 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         self.vision_counter = 0
 
         self.n_best_cand = int(n_best_cand)
+
+        self.with_stack_place_bit = with_stack_place_bit
 
         self.use_obj_heights = (
             use_obj_heights  # use or not obj heights info in planning and obs
@@ -178,6 +181,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                     utils.perturb(self.np_random, o_quat_pf, 0.005)
                 )
             all_fin_q_init = state["all_fin_q"]
+            # all_fin_q_init = utils.perturb(self.np_random, all_fin_q_init, 0.02)
             tar_fin_q_init = state["fin_tar_q"]
 
             self.robot.reset_with_certain_arm_q_finger_states(
@@ -264,7 +268,9 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                         self.tx,
                         self.ty,
                         utils.perturb_scalar(
-                            self.np_random, self.start_clearance + 0.0, 0.01
+                            self.np_random,
+                            self.start_clearance + 0.0,
+                            0.01
                         ),
                     ]  # used for planning
                 else:
@@ -319,7 +325,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         self.objs = {}
 
         if self.cotrain_stack_place:
-            self.place_floor = self.np_random.randint(10) > 6  # 30%
+            self.place_floor = self.np_random.randint(10) >= 7  # 30%
 
         mu_f = self.np_random.uniform(utils.MU_MIN, utils.MU_MAX)
         self.table_id = utils.create_table(mu_f)
@@ -439,6 +445,8 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         reward += hand_r - 7
         # print("no contact", hand_r - 7.0)
 
+        reward -= self.robot.get_4_finger_deviation() * 0.4
+
         #
         # if self.timer == 99 * self.control_skip:
         #     print(rot_metric, xyz_metric, vel_metric, any_hand_contact)
@@ -465,8 +473,10 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
 
         return obs, reward, False, {}
 
-    def obj6DtoObs_UpVec(self, o_pos, o_orn):
+    def obj6DtoObs_UpVec(self, o_pos, o_orn, is_sph=False):
         o_pos = np.array(o_pos)
+        if is_sph:
+            o_orn = [0.0, 0, 0, 1]
         o_upv = utils.quat_to_upv(o_orn)
 
         if self.obs_noise:
@@ -568,6 +578,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                 self.obj6DtoObs_UpVec(
                     self.objs[self.top_id]["last_position"],
                     self.objs[self.top_id]["last_orientation"],
+                    is_sph=(self.objs[self.top_id]["shape"] == "sphere")
                 )
             )
             if self.btm_id:
@@ -584,6 +595,12 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
             # print(self.objs[self.btm_id]['last_position'])
             # clPos_act, _ = p.getBasePositionAndOrientation(self.btm_id)
             # print("bact", clPos_act)
+
+        if self.with_stack_place_bit:
+            if self.place_floor:
+                self.observation.extend([1.0])
+            else:
+                self.observation.extend([-1.0])
 
         return self.observation
 

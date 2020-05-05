@@ -655,7 +655,7 @@ class DemoEnvironment:
                 ty=y,
                 tz=tz,
                 half_h=tdict["height"] / 2,
-                t_is_box=is_box,
+                shape=is_box,
                 t_pos=t_pos,
                 t_up=t_up,
                 b_pos=b_pos,
@@ -665,7 +665,7 @@ class DemoEnvironment:
             p_obs = self.world.robot_env.get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
                 tx=x,
                 ty=y,
-                t_is_box=is_box,
+                shape=is_box,
                 t_pos=t_pos,
                 t_up=t_up,
                 b_pos=b_pos,
