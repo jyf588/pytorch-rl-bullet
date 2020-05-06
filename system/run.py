@@ -36,11 +36,11 @@ async def send_to_client(websocket, path):
         websocket: The websocket protocol instance.
         path: The URI path.
     """
-    scenes = generate_scenes()
+    scenes = generate_scenes(disable_orientation=args.disable_orientation)
 
     # Used to initialize the pose of each trial with the pose of the last trial.
     init_fin_q, init_arm_q = None, None
-    FAIL_SCENES = [7, 8]
+    FAIL_SCENES = []  # [7, 8]
     for scene_idx in range(0, len(scenes)):
         # Skip failed scenes.
         if scene_idx in FAIL_SCENES:
@@ -54,16 +54,13 @@ async def send_to_client(websocket, path):
         src_shape = scene[1]["shape"]
         command = f"Put the green {src_shape} on top of the blue {dst_shape}"
 
-        print(f"scene:")
+        print(f"scene {scene_idx}:")
         pprint.pprint(scene)
 
-        # if scene_idx % 2 == 0:
-        #     task = "stack"
-        # else:
-        #     task = "place"
+        # task = "stack" if scene_idx % 2 == 0 else "place"
         task = "stack"
         # for obs_mode in ["gt", "vision"]:
-        for obs_mode in ["gt"]:
+        for obs_mode in ["vision"]:
             # Modify the scene for placing. We keep only the first object for
             # now, and set the placing destination xy location to be the
             # location of the original blue object (deleted).
@@ -97,7 +94,13 @@ async def send_to_client(websocket, path):
             while 1:
                 stage, stage_ts = env.get_current_stage()
 
-                # if stage_ts == 0 and stage == "place":
+                # Add options for early stopping during placing (since it's
+                # slow for vision).
+                # if (
+                #     obs_mode == "vision"
+                #     and stage == "place"
+                #     and stage_ts % 25 == 0
+                # ):
                 #     response = input("Continue? [Y/N] ")
                 #     if response == "N":
                 #         break
@@ -110,12 +113,10 @@ async def send_to_client(websocket, path):
                 # Only have lucas look at / send images back when planning or placing.
                 if obs_mode == "vision" and stage in ["plan", "place"]:
                     render_frequency = 2
-                    # unity_options = [(False, True)]
                     unity_options = [
                         (False, False, True, True),
-                        (True, True, False, False),
+                        # (True, True, False, False),  # Frame to render obs.
                     ]
-                    # unity_options = [(False, True, True)]
 
                     if stage == "plan":
                         cam_target = PLAN_TARGET_POSITION
@@ -125,13 +126,10 @@ async def send_to_client(websocket, path):
                                 env.initial_obs[0]["height"]
                             ]
                         elif task == "stack":
-                            print(f"env.dst_idx: {env.dst_idx}")
                             pprint.pprint(env.initial_obs)
                             cam_target = bullet2unity.states.get_object_camera_target(
                                 bullet_odicts=env.initial_obs, oidx=env.dst_idx
                             )
-                            print(f"cam_target: {cam_target}")
-                            input("enter")
 
                     # Set the camera target.
                     last_bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
@@ -143,7 +141,10 @@ async def send_to_client(websocket, path):
                         position=cam_target,
                     )
                 else:
-                    render_frequency = None if args.disable_unity else 2
+                    if args.disable_unity:
+                        render_frequency = None
+                    else:
+                        render_frequency = 70
                     if obs_mode == "vision":
                         unity_options = [(True, True, False, True)]
                     elif obs_mode == "gt":
@@ -183,9 +184,10 @@ async def send_to_client(websocket, path):
                         # render state.
                         render_state = copy.deepcopy(state)
                         if render_obs:
-                            h_odicts = compute_obs_w_gt_orn(
-                                obs=env.obs, gt_odicts=scene
-                            )
+                            # h_odicts = compute_obs_w_gt_orn(
+                            #     obs=env.obs, gt_odicts=scene
+                            # )
+                            h_odicts = env.obs
                             render_state = add_hallucinations_to_state(
                                 state=render_state,
                                 h_odicts=h_odicts,
@@ -253,7 +255,7 @@ async def send_to_client(websocket, path):
     sys.exit(0)
 
 
-def generate_scenes():
+def generate_scenes(disable_orientation: bool):
     # Top object, with different min radius.
     generator_top = RandomObjectsGenerator(
         seed=OPTIONS.seed,
@@ -270,6 +272,7 @@ def generate_scenes():
         mass_bounds=(utils.MASS_MIN, utils.MASS_MAX),
         mu_bounds=(OPTIONS.obj_mu, OPTIONS.obj_mu),
         position_mode="com",
+        disable_orientation=disable_orientation,
     )
     generator_bottom = RandomObjectsGenerator(
         seed=OPTIONS.seed,
@@ -286,6 +289,7 @@ def generate_scenes():
         mass_bounds=(utils.MASS_MIN, utils.MASS_MAX),
         mu_bounds=(OPTIONS.obj_mu, OPTIONS.obj_mu),
         position_mode="com",
+        disable_orientation=disable_orientation,
     )
     # Remaining objects.
     generator_all = RandomObjectsGenerator(
@@ -303,6 +307,7 @@ def generate_scenes():
         mass_bounds=(utils.MASS_MIN, utils.MASS_MAX),
         mu_bounds=(OPTIONS.obj_mu, OPTIONS.obj_mu),
         position_mode="com",
+        disable_orientation=disable_orientation,
     )
     scenes = []
     for _ in range(100):
@@ -368,6 +373,11 @@ if __name__ == "__main__":
         "--render_bullet",
         action="store_true",
         help="Whether to render PyBullet using OpenGL.",
+    )
+    parser.add_argument(
+        "--disable_orientation",
+        action="store_true",
+        help="Whether to disable randomizing orientation.",
     )
     args = parser.parse_args()
 

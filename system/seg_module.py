@@ -20,7 +20,7 @@ class SegmentationModule:
         )
         cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 128
         cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1
-        cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7
+        cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.99
         cfg.MODEL.WEIGHTS = load_checkpoint_path
         self.predictor = DefaultPredictor(cfg)
 
@@ -43,6 +43,7 @@ class SegmentationModule:
             imageio.imwrite(path, img)
 
         outputs = self.predictor(img)
+
         # This produces a numpy array of shape (N, H, W) containing binary
         # masks.
         masks = outputs["instances"].to("cpu")._fields["pred_masks"].numpy()

@@ -15,7 +15,6 @@ import system.policy
 from system import openrave
 from system.bullet_world import BulletWorld
 from system.vision_module import VisionModule
-from system.seg_module import SegmentationModule
 from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
 
 from NLP_module import NLPmod
@@ -24,6 +23,7 @@ import ns_vqa_dart.bullet.seg
 import my_pybullet_envs.utils as utils
 from ns_vqa_dart.bullet.metrics import Metrics
 from ns_vqa_dart.bullet import dash_object, gen_dataset, util
+from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
 
 
 class DemoEnvironment:
@@ -121,9 +121,8 @@ class DemoEnvironment:
 
         # Initialize the segmentation module if requested.
         if self.opt.use_segmentation_module:
-            self.segmentation_module = SegmentationModule(
-                load_checkpoint_path=self.opt.segmentation_checkpoint_path,
-                debug_dir=self.opt.debug_dir,
+            self.segmentation_module = DASHSegModule(
+                vis_dir=self.opt.debug_dir,
             )
 
         if visualize_bullet:
@@ -178,13 +177,14 @@ class DemoEnvironment:
         )
 
         # obtained from initial_obs
-        self.dst_xy = dst_xyz[:2]       # used for policy as well
-        self.src_xy = self.initial_obs[self.src_idx]["position"][:2]     # used for policy as well
+        self.dst_xy = dst_xyz[:2]  # used for policy as well
+        self.src_xy = self.initial_obs[self.src_idx]["position"][
+            :2
+        ]  # used for policy as well
 
         # Compute the goal arm poses for reaching and transport.
         self.q_reach_dst, self.q_transport_dst = self.compute_qs(
-            src_xy=self.src_xy,
-            dst_xyz=dst_xyz,
+            src_xy=self.src_xy, dst_xyz=dst_xyz,
         )
 
         # Create the bullet world now that we've finished our imaginary
@@ -201,7 +201,9 @@ class DemoEnvironment:
         if self.opt.disable_reaching:
             self.w.robot_env.robot.reset_with_certain_arm_q(self.q_reach_dst)
         else:
-            self.w.robot_env.robot.reset_with_certain_arm_q([0.0] * len(self.q_reach_dst))
+            self.w.robot_env.robot.reset_with_certain_arm_q(
+                [0.0] * len(self.q_reach_dst)
+            )
         # if self.opt.init_pose:
         #     if self.init_fin_q is not None:
         #         self.w.robot_env.change_init_fin_q(self.init_fin_q)
@@ -626,14 +628,37 @@ class DemoEnvironment:
         )
 
         if stage_ts == len(self.trajectory) + 4:
-            diff = np.linalg.norm(self.w.robot_env.robot.get_q_dq(self.w.robot_env.robot.arm_dofs)[0]
-                                  - tar_arm_q)
+            diff = np.linalg.norm(
+                self.w.robot_env.robot.get_q_dq(
+                    self.w.robot_env.robot.arm_dofs
+                )[0]
+                - tar_arm_q
+            )
             print("diff final", diff)
-            print("vel final", np.linalg.norm(self.w.robot_env.robot.get_q_dq(self.w.robot_env.robot.arm_dofs)[1]))
+            print(
+                "vel final",
+                np.linalg.norm(
+                    self.w.robot_env.robot.get_q_dq(
+                        self.w.robot_env.robot.arm_dofs
+                    )[1]
+                ),
+            )
             print("fin dofs")
-            print(["{0:0.3f}".format(n) for n in self.w.robot_env.robot.get_q_dq(self.w.robot_env.robot.fin_actdofs)[0]])
+            print(
+                [
+                    "{0:0.3f}".format(n)
+                    for n in self.w.robot_env.robot.get_q_dq(
+                        self.w.robot_env.robot.fin_actdofs
+                    )[0]
+                ]
+            )
             print("cur_fin_tar_q")
-            print(["{0:0.3f}".format(n) for n in self.w.robot_env.robot.tar_fin_q])
+            print(
+                [
+                    "{0:0.3f}".format(n)
+                    for n in self.w.robot_env.robot.tar_fin_q
+                ]
+            )
 
         self.last_tar_arm_q = tar_arm_q
         self.w.step()
@@ -664,7 +689,7 @@ class DemoEnvironment:
             )
 
         # Compute the observation vector from object poses and placing position.
-        tx, ty = self.dst_xy        # this should be dst xy rather than src xy
+        tx, ty = self.dst_xy  # this should be dst xy rather than src xy
         if self.task == "stack":
             b_init_dict = self.initial_obs[self.dst_idx]
             tz = b_init_dict["height"]
@@ -674,7 +699,9 @@ class DemoEnvironment:
         tdict = self.obs[self.src_idx]
         t_pos = tdict["position"]
         t_up = tdict["up_vector"]
-        is_box = (tdict["shape"] == "box")      # should not matter if use init_obs or obs
+        is_box = (
+            tdict["shape"] == "box"
+        )  # should not matter if use init_obs or obs
 
         if self.task == "stack":
             bdict = self.obs[self.dst_idx]
@@ -910,8 +937,10 @@ class DemoEnvironment:
 
         # Either predict segmentations or use ground truth.
         if self.opt.use_segmentation_module:
-            masks = self.segmentation_module.predict(
-                img=rgb, debug_id=self.timestep
+            masks = self.segmentation_module.eval_example(
+                checkpoint_path=self.opt.seg_checkpoint_path,
+                img=rgb,
+                vis_id=self.timestep,
             )
         else:
             # If using ground truth, convert the segmentation image into a
