@@ -136,11 +136,6 @@ class DemoEnvironment:
         else:
             p.connect(p.DIRECT)
 
-        # self.imaginary_sess = ImaginaryArmObjSession()
-        # self.a = InmoovShadowHandPlaceEnvV9(
-        #     renders=False, grasp_pi_name=self.opt.grasp_pi
-        # )
-
         self.timestep = 0
 
     def compute_stages(self):
@@ -652,12 +647,12 @@ class DemoEnvironment:
             )
 
         # Compute the observation vector from object poses and placing position.
-        t_init_dict = self.scene[self.src_idx]
+        t_init_dict = self.initial_obs[self.src_idx]
         x, y, _ = t_init_dict["position"]
         is_box = t_init_dict["shape"] == "box"
 
         if self.task == "stack":
-            b_init_dict = self.scene[self.dst_idx]
+            b_init_dict = self.initial_obs[self.dst_idx]
             tz = b_init_dict["height"]
         else:
             tz = 0.0
