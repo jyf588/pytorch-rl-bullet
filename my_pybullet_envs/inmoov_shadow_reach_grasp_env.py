@@ -106,21 +106,6 @@ class InmoovShadowHandReachGraspEnv(gym.Env):
 
             return
 
-            # # desired_obj_pos = [self.tx, self.ty, self.tz]    # used for planning
-            # if self.grasp_floor:
-            #     desired_obj_pos = [self.tx, self.ty, self.np_random.uniform(-0.01, 0.01)]
-            # else:
-            #     desired_obj_pos = [self.tx, self.ty, self.np_random.uniform(0.15, 0.17)]
-            #
-            # arm_qs = utils.get_n_optimal_init_arm_qs(self.robot, self.p_pos_of_init, self.p_quat_of_init,
-            #                                          desired_obj_pos, self.table_id, n=self.n_best_cand,
-            #                                          wrist_gain=3.0)
-            # if len(arm_qs) == 0:
-            #     continue
-            # else:
-            #     arm_q = arm_qs[self.np_random.randint(len(arm_qs))]
-            #     return arm_q
-
     def reset(self):
         p.resetSimulation()
         p.setPhysicsEngineParameter(numSolverIterations=utils.BULLET_CONTACT_ITER)
@@ -170,21 +155,20 @@ class InmoovShadowHandReachGraspEnv(gym.Env):
 
     def step(self, action):
 
-        # TODO: add back
         bottom_id = self.table_id if self.grasp_floor else self.btm_obj['id']
 
         if self.has_test_phase:
-            # if self.timer == self.test_start * self.control_skip:
-            #     self.force_global = [self.np_random.uniform(-100, 100),
-            #                          self.np_random.uniform(-100, 100),
-            #                          -200.]
+            if self.timer == self.test_start * self.control_skip:
+                self.force_global = [self.np_random.uniform(-100, 100),
+                                     self.np_random.uniform(-100, 100),
+                                     -200.]
 
             if self.timer > self.test_start * self.control_skip:
                 p.setCollisionFilterPair(self.top_obj['id'], bottom_id, -1, -1, enableCollision=0)
-                # _, quat = p.getBasePositionAndOrientation(self.top_obj['id'])
-                # _, quat_inv = p.invertTransform([0, 0, 0], quat)
-                # force_local, _ = p.multiplyTransforms([0, 0, 0], quat_inv, self.force_global, [0, 0, 0, 1])
-                # p.applyExternalForce(self.top_obj['id'], -1, force_local, [0, 0, 0], flags=p.LINK_FRAME)
+                _, quat = p.getBasePositionAndOrientation(self.top_obj['id'])
+                _, quat_inv = p.invertTransform([0, 0, 0], quat)
+                force_local, _ = p.multiplyTransforms([0, 0, 0], quat_inv, self.force_global, [0, 0, 0, 1])
+                p.applyExternalForce(self.top_obj['id'], -1, force_local, [0, 0, 0], flags=p.LINK_FRAME)
 
         for _ in range(self.control_skip):
             # action is in not -1,1
@@ -200,13 +184,13 @@ class InmoovShadowHandReachGraspEnv(gym.Env):
             self.timer += 1
 
         # TODO: seem to affect most
-        # top_pos, _ = p.getBasePositionAndOrientation(self.top_obj['id'])
-        top_pos = [self.tx_act, self.ty_act, self.tz_act + self.top_obj['height'] / 2.0]
+        top_pos, _ = p.getBasePositionAndOrientation(self.top_obj['id'])
+        top_pos_1 = [self.tx_act, self.ty_act, self.tz_act + self.top_obj['height'] / 2.0]
 
         reward = 0.0
 
         palm_com_pos = p.getLinkState(self.robot.arm_id, self.robot.ee_id)[0]
-        dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(top_pos)), 1.0)
+        dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(top_pos_1)), 1.0)
 
         # TODO: grasp does not have this term, add this term to reaching
         tip_pos = []                   # 4 finger tips & thumb tip
@@ -215,7 +199,7 @@ class InmoovShadowHandReachGraspEnv(gym.Env):
         for i in self.robot.fin_tips[:5]:
             cur_tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
             tip_pos.append(cur_tip_pos)
-            cur_tip_dist = np.linalg.norm(np.array(cur_tip_pos) - np.array(top_pos))
+            cur_tip_dist = np.linalg.norm(np.array(cur_tip_pos) - np.array(top_pos_1))
             tip_dists.append(cur_tip_dist)
             dist_diffs.append(dist - cur_tip_dist)      # this number should be larger, finger closer to obj center
 
@@ -234,10 +218,10 @@ class InmoovShadowHandReachGraspEnv(gym.Env):
             # and always positive
             # so it does not hurt to enter phase two
 
-            # TODO: add back with 2.0/12.0
+            # # TODO: add back with 2.0/12.0
             # top_xy_ideal = np.array([self.tx_act, self.ty_act])
             # xy_dist = np.linalg.norm(top_xy_ideal - np.array(top_pos[:2]))
-            # reward += 1.0 - np.minimum(xy_dist, 0.4) * 2.0     # make this always positive
+            # reward += 5.0 - np.minimum(xy_dist, 0.4) * 8.0     # TODO: make this always positive
 
             for i in range(4):
                 reward += 0.5 - np.minimum(tip_dists[i], 0.5)       # 4 fin tips
