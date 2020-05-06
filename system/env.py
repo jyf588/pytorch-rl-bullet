@@ -17,12 +17,7 @@ from system.bullet_world import BulletWorld
 from system.vision_module import VisionModule
 from system.seg_module import SegmentationModule
 from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
-from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import (
-    ImaginaryArmObjSession,
-)
-from my_pybullet_envs.inmoov_shadow_place_env_v9 import (
-    InmoovShadowHandPlaceEnvV9,
-)
+
 from NLP_module import NLPmod
 
 import ns_vqa_dart.bullet.seg
@@ -187,9 +182,13 @@ class DemoEnvironment:
             command=self.command, observation=self.initial_obs
         )
 
+        # obtained from initial_obs
+        self.dst_xy = dst_xyz[:2]       # used for policy as well
+        self.src_xy = self.initial_obs[self.src_idx]["position"][:2]     # used for policy as well
+
         # Compute the goal arm poses for reaching and transport.
         self.q_reach_dst, self.q_transport_dst = self.compute_qs(
-            src_xy=self.initial_obs[self.src_idx]["position"][:2],
+            src_xy=self.src_xy,
             dst_xyz=dst_xyz,
         )
 
@@ -206,13 +205,15 @@ class DemoEnvironment:
         # of reaching.
         if self.opt.disable_reaching:
             self.w.robot_env.robot.reset_with_certain_arm_q(self.q_reach_dst)
-        if self.opt.init_pose:
-            if self.init_fin_q is not None:
-                self.w.robot_env.change_init_fin_q(self.init_fin_q)
-            if self.init_arm_q is not None:
-                self.w.robot_env.robot.reset_with_certain_arm_q(
-                    self.init_arm_q
-                )
+        else:
+            self.w.robot_env.robot.reset_with_certain_arm_q([0.0] * len(self.q_reach_dst))
+        # if self.opt.init_pose:
+        #     if self.init_fin_q is not None:
+        #         self.w.robot_env.change_init_fin_q(self.init_fin_q)
+        #     if self.init_arm_q is not None:
+        #         self.w.robot_env.robot.reset_with_certain_arm_q(
+        #             self.init_arm_q
+        #         )
 
         # Flag planning as complete.
         self.planning_complete = True
@@ -409,15 +410,15 @@ class DemoEnvironment:
         robot = InmoovShadowNew(
             init_noise=False, timestep=utils.TS, np_random=np.random,
         )
-        debug = utils.get_n_optimal_init_arm_qs(
-            robot,
-            utils.PALM_POS_OF_INIT,
-            p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
-            src_xyz,
-            table_id,
-            wrist_gain=3.0,
-        )
-        print(f"get_n_optimal_init_arm_qs: {debug}")
+        # debug = utils.get_n_optimal_init_arm_qs(
+        #     robot,
+        #     utils.PALM_POS_OF_INIT,
+        #     p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
+        #     src_xyz,
+        #     table_id,
+        #     wrist_gain=3.0,
+        # )
+        # print(f"get_n_optimal_init_arm_qs: {debug}")
         q_reach_dst = utils.get_n_optimal_init_arm_qs(
             robot,
             utils.PALM_POS_OF_INIT,
@@ -624,16 +625,27 @@ class DemoEnvironment:
             * len(self.w.robot_env.robot.fin_zerodofs),
         )
 
+        if stage_ts == len(self.trajectory) + 4:
+            diff = np.linalg.norm(self.w.robot_env.robot.get_q_dq(self.w.robot_env.robot.arm_dofs)[0]
+                                  - tar_arm_q)
+            print("diff final", diff)
+            print("vel final", np.linalg.norm(self.w.robot_env.robot.get_q_dq(self.w.robot_env.robot.arm_dofs)[1]))
+            print("fin dofs")
+            print(["{0:0.3f}".format(n) for n in self.w.robot_env.robot.get_q_dq(self.w.robot_env.robot.fin_actdofs)[0]])
+            print("cur_fin_tar_q")
+            print(["{0:0.3f}".format(n) for n in self.w.robot_env.robot.tar_fin_q])
+
         self.last_tar_arm_q = tar_arm_q
         self.w.step()
         return True
 
     def get_grasp_observation(self) -> torch.Tensor:
+        x, y = self.src_xy
+
         odict = self.initial_obs[self.src_idx]
-        position = odict["position"]
         half_height = odict["height"] / 2
-        x, y = position[0], position[1]
         is_box = odict["shape"] == "box"
+
         if self.opt.use_height:
             obs = self.w.robot_env.get_robot_contact_txtytz_halfh_shape_obs_no_dup(
                 x, y, 0.0, half_height, is_box
@@ -652,12 +664,9 @@ class DemoEnvironment:
             )
 
         # Compute the observation vector from object poses and placing position.
-        t_init_dict = self.scene[self.src_idx]
-        x, y, _ = t_init_dict["position"]
-        is_box = t_init_dict["shape"] == "box"
-
+        tx, ty = self.dst_xy        # this should be dst xy rather than src xy
         if self.task == "stack":
-            b_init_dict = self.scene[self.dst_idx]
+            b_init_dict = self.initial_obs[self.dst_idx]
             tz = b_init_dict["height"]
         else:
             tz = 0.0
@@ -665,6 +674,7 @@ class DemoEnvironment:
         tdict = self.obs[self.src_idx]
         t_pos = tdict["position"]
         t_up = tdict["up_vector"]
+        is_box = (tdict["shape"] == "box")      # should not matter if use init_obs or obs
 
         if self.task == "stack":
             bdict = self.obs[self.dst_idx]
@@ -676,8 +686,8 @@ class DemoEnvironment:
 
         if self.opt.use_height:
             p_obs = self.w.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
-                tx=x,
-                ty=y,
+                tx=tx,
+                ty=ty,
                 tz=tz,
                 half_h=tdict["height"] / 2,
                 shape=is_box,
@@ -688,8 +698,8 @@ class DemoEnvironment:
             )
         else:
             p_obs = self.w.robot_env.get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
-                tx=x,
-                ty=y,
+                tx=tx,
+                ty=ty,
                 shape=is_box,
                 t_pos=t_pos,
                 t_up=t_up,

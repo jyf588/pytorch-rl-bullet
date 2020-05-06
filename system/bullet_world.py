@@ -106,8 +106,8 @@ class BulletWorld:
             oids: A list of object IDs corresponding to the object order in the
                 input scene.
         """
+        self.load_table()       # should not matter but change loading order for now
         robot_env = self.load_robot()
-        self.load_table()
         oids = self.load_tabletop_objects(scene=scene)
         return robot_env, oids
 
