@@ -40,7 +40,11 @@ async def send_to_client(websocket, path):
 
     # Used to initialize the pose of each trial with the pose of the last trial.
     init_fin_q, init_arm_q = None, None
-    for scene_idx in range(7, len(scenes)):
+    FAIL_SCENES = [7, 8]
+    for scene_idx in range(0, len(scenes)):
+        # Skip failed scenes.
+        if scene_idx in FAIL_SCENES:
+            continue
         scene = scenes[scene_idx]
 
         # Hard code top object to be green, and bottom object to be blue.
@@ -139,7 +143,7 @@ async def send_to_client(websocket, path):
                         position=cam_target,
                     )
                 else:
-                    render_frequency = None if args.disable_unity else 70
+                    render_frequency = None if args.disable_unity else 2
                     if obs_mode == "vision":
                         unity_options = [(True, True, False, True)]
                     elif obs_mode == "gt":

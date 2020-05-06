@@ -131,11 +131,6 @@ class DemoEnvironment:
         else:
             p.connect(p.DIRECT)
 
-        # self.imaginary_sess = ImaginaryArmObjSession()
-        # self.a = InmoovShadowHandPlaceEnvV9(
-        #     renders=False, grasp_pi_name=self.opt.grasp_pi
-        # )
-
         self.timestep = 0
 
     def compute_stages(self):
