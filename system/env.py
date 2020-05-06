@@ -446,6 +446,7 @@ class DemoEnvironment:
 
     def compute_trajectory(self, stage: str) -> np.ndarray:
         q_start, q_end = None, None
+        expected_src_base_z_post_placing = None
         odicts = self.initial_obs
 
         if stage == "reach":
@@ -469,6 +470,9 @@ class DemoEnvironment:
                 raise ValueError(
                     f"Invalid observation mode: {self.observation_mode}."
                 )
+            expected_src_base_z_post_placing = self.initial_obs[self.dst_idx][
+                "height"
+            ]
         else:
             raise ValueError(f"Invalid stage: {stage}.")
         trajectory = openrave.compute_trajectory(
@@ -477,6 +481,7 @@ class DemoEnvironment:
             q_start=q_start,
             q_end=q_end,
             stage=stage,
+            src_base_z_post_placing=expected_src_base_z_post_placing,
         )
         return trajectory
 
