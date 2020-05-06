@@ -82,7 +82,7 @@ CLOSE_THRES = 0.25
 
 NUM_TRIALS = 300
 
-GRASP_END_STEP = 35     # TODO, some policies sensitive to this
+GRASP_END_STEP = 35
 PLACE_END_STEP = 75
 
 INIT_NOISE = True
@@ -293,10 +293,10 @@ def sample_obj_dict(is_thicker=False, whole_table_top=False):
 
 def load_obj_and_construct_state(obj_dicts_list):
     state = {}
-    # # load surrounding first
-    # for idx in range(2, len(obj_dicts_list)):
-    #     bullet_id = utils.create_sym_prim_shape_helper_new(obj_dicts_list[idx])
-    #     state[bullet_id] = obj_dicts_list[idx]
+    # load surrounding first
+    for idx in range(2, len(obj_dicts_list)):
+        bullet_id = utils.create_sym_prim_shape_helper_new(obj_dicts_list[idx])
+        state[bullet_id] = obj_dicts_list[idx]
 
     bottom_id = None
     # ignore btm if placing on tabletop
