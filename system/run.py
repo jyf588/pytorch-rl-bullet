@@ -18,7 +18,8 @@ from ns_vqa_dart.bullet.random_objects import RandomObjectsGenerator
 global args
 
 
-ADD_SURROUNDING_OBJECTS = False
+ADD_SURROUNDING_OBJECTS = True
+OBJECT_DIST_THRESH = 0.25
 PLAN_TARGET_POSITION = [-0.06, 0.3, 0.0]
 STAGE2ANIMATION_Z_OFFSET = {
     "plan": 0.3,
@@ -36,12 +37,18 @@ async def send_to_client(websocket, path):
         websocket: The websocket protocol instance.
         path: The URI path.
     """
-    scenes = generate_scenes(disable_orientation=args.disable_orientation)
+    scenes = generate_scenes(
+        seed=args.seed,
+        n_scenes=args.n_scenes,
+        disable_orientation=args.disable_orientation,
+    )
+
+    use_control_skip = args.fast_mode
 
     # Used to initialize the pose of each trial with the pose of the last trial.
     init_fin_q, init_arm_q = None, None
     FAIL_SCENES = []  # [7, 8]
-    for scene_idx in range(0, len(scenes)):
+    for scene_idx in range(13, len(scenes)):
         # Skip failed scenes.
         if scene_idx in FAIL_SCENES:
             continue
@@ -58,7 +65,7 @@ async def send_to_client(websocket, path):
         pprint.pprint(scene)
 
         # task = "stack" if scene_idx % 2 == 0 else "place"
-        task = "stack"
+        task = "place"
         # for obs_mode in ["gt", "vision"]:
         for obs_mode in ["vision"]:
             # Modify the scene for placing. We keep only the first object for
@@ -86,6 +93,7 @@ async def send_to_client(websocket, path):
                 place_dst_xy=place_dst_xy,
                 init_fin_q=init_fin_q,
                 init_arm_q=init_arm_q,
+                use_control_skip=use_control_skip,
             )
             cam_target = None
 
@@ -115,7 +123,7 @@ async def send_to_client(websocket, path):
                     render_frequency = 2
                     unity_options = [
                         (False, False, True, True),
-                        # (True, True, False, False),  # Frame to render obs.
+                        (True, True, False, False),  # Frame to render obs.
                     ]
 
                     if stage == "plan":
@@ -123,7 +131,7 @@ async def send_to_client(websocket, path):
                     elif stage == "place" and stage_ts == 0:
                         if task == "place":
                             cam_target = place_dst_xy + [
-                                env.initial_obs[0]["height"]
+                                env.initial_obs[env.src_idx]["height"]
                             ]
                         elif task == "stack":
                             pprint.pprint(env.initial_obs)
@@ -144,7 +152,7 @@ async def send_to_client(websocket, path):
                     if args.disable_unity:
                         render_frequency = None
                     else:
-                        render_frequency = 70
+                        render_frequency = 70 if args.fast_mode else 2
                     if obs_mode == "vision":
                         unity_options = [(True, True, False, True)]
                     elif obs_mode == "gt":
@@ -255,12 +263,12 @@ async def send_to_client(websocket, path):
     sys.exit(0)
 
 
-def generate_scenes(disable_orientation: bool):
+def generate_scenes(seed: int, n_scenes: int, disable_orientation: bool):
     # Top object, with different min radius.
     generator_top = RandomObjectsGenerator(
-        seed=OPTIONS.seed,
+        seed=seed,
         n_objs_bounds=(1, 1),
-        obj_dist_thresh=0.2,
+        obj_dist_thresh=OBJECT_DIST_THRESH,
         max_retries=50,
         shapes=["box", "cylinder"],
         colors=["blue", "green", "red", "yellow"],
@@ -275,9 +283,9 @@ def generate_scenes(disable_orientation: bool):
         disable_orientation=disable_orientation,
     )
     generator_bottom = RandomObjectsGenerator(
-        seed=OPTIONS.seed,
+        seed=seed,
         n_objs_bounds=(1, 1),
-        obj_dist_thresh=0.2,
+        obj_dist_thresh=OBJECT_DIST_THRESH,
         max_retries=50,
         shapes=["box", "cylinder"],
         colors=["blue", "green", "red", "yellow"],
@@ -293,9 +301,9 @@ def generate_scenes(disable_orientation: bool):
     )
     # Remaining objects.
     generator_all = RandomObjectsGenerator(
-        seed=OPTIONS.seed,
+        seed=seed,
         n_objs_bounds=(2, 4),  # Maximum number of objects allowed by OR is 6.
-        obj_dist_thresh=0.2,
+        obj_dist_thresh=OBJECT_DIST_THRESH,
         max_retries=50,
         shapes=["box", "cylinder", "sphere"],
         colors=["red", "yellow"],
@@ -310,7 +318,7 @@ def generate_scenes(disable_orientation: bool):
         disable_orientation=disable_orientation,
     )
     scenes = []
-    for _ in range(100):
+    for _ in range(n_scenes):
         top_scene = generator_top.generate_tabletop_objects()
         bottom_scene = generator_bottom.generate_tabletop_objects(
             existing_odicts=top_scene
@@ -375,9 +383,26 @@ if __name__ == "__main__":
         help="Whether to render PyBullet using OpenGL.",
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=101,
+        help="Seed to use for scene generation.",
+    )
+    parser.add_argument(
+        "--n_scenes",
+        type=int,
+        default=100,
+        help="Number of scenes to generate.",
+    )
+    parser.add_argument(
         "--disable_orientation",
         action="store_true",
         help="Whether to disable randomizing orientation.",
+    )
+    parser.add_argument(
+        "--fast_mode",
+        action="store_true",
+        help="Whether to use fast mode. Useful for evaluation, not demo.",
     )
     args = parser.parse_args()
 
