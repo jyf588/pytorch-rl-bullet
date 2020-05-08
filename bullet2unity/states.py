@@ -78,10 +78,21 @@ def create_bullet_camera_targets(
     return bullet_camera_targets
 
 
-def get_first_object_camera_target(bullet_odicts: List[Dict]):
-    dst_odict = copy.deepcopy(bullet_odicts[0])
-    position = dst_odict["position"]
-    position[2] += dst_odict["height"] / 2
+def get_object_camera_target(bullet_odicts: List[Dict], oidx: int):
+    """Computes the position of the target for the camera to look at, for a
+    given object index.
+
+    Args:
+        bullet_odicts: A list of object dictionaries.
+        oidx: The object index to compute the target for.
+    """
+    # Make a copy because we are modifying.
+    target_odict = copy.deepcopy(bullet_odicts[oidx])
+
+    # The target position is computed as center-top position of the object,
+    # computed by adding the height to the com position.
+    position = target_odict["position"]
+    position[2] += target_odict["height"] / 2
     return position
 
 
@@ -358,7 +369,10 @@ def bullet2unity_objects(bullet_state: Dict[int, Dict]):
         radius = odict["radius"]
         height = odict["height"]
         bullet_position = odict["position"]
-        bullet_orientation = odict["orientation"]
+        if "orientation" in odict:
+            bullet_orientation = odict["orientation"]
+        else:
+            bullet_orientation = util.up_to_orientation(up=odict["up_vector"])
 
         # Convert the object size.
         width = radius * 2

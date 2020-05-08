@@ -25,6 +25,7 @@ class BulletWorld:
         scene: List[Dict],
         visualize: bool,
         p: Optional = None,
+        use_control_skip: Optional[bool] = False,
     ):
         """
         Args:
@@ -48,6 +49,7 @@ class BulletWorld:
         self.opt = opt
         self.scene = scene
         self.visualize = visualize
+        self.use_control_skip = use_control_skip
 
         if p is None:
             self.bc = self.create_bullet_client()
@@ -106,8 +108,8 @@ class BulletWorld:
             oids: A list of object IDs corresponding to the object order in the
                 input scene.
         """
+        self.load_table()  # should not matter but change loading order for now
         robot_env = self.load_robot()
-        self.load_table()
         oids = self.load_tabletop_objects(scene=scene)
         return robot_env, oids
 
@@ -125,7 +127,7 @@ class BulletWorld:
             withVel=False,
             diffTar=True,
             robot_mu=self.opt.hand_mu,
-            control_skip=self.opt.grasping_control_skip,
+            control_skip=self.opt.control_skip,
         )
         init_fin_q = np.array(
             [0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.1]
@@ -297,7 +299,7 @@ class BulletWorld:
             robot_state[joint_name] = joint_angle
         return robot_state
 
-    def get_robot_arm_q(self):
+    def get_robot_q(self):
         """Retrieves the arm joint angles.
 
         Returns:
@@ -309,9 +311,13 @@ class BulletWorld:
                 r_elbow_roll_joint
                 rh_WRJ2
                 rh_WRJ1
+            fin_q: The finger pose.
         """
         arm_q = self.robot_env.robot.get_q_dq(self.robot_env.robot.arm_dofs)[0]
-        return arm_q
+        fin_q = self.robot_env.robot.get_q_dq(
+            self.robot_env.robot.fin_actdofs
+        )[0]
+        return arm_q, fin_q
 
     def act(self):
         pass
@@ -321,4 +327,17 @@ class BulletWorld:
         time.sleep(self.opt.ts)
 
     def step_robot(self, action: np.ndarray):
-        self.robot_env.step(action=action)
+        """Applies the robot action and steps a single simulation step.
+
+        Args:
+            action: The robot action to apply.
+        """
+        # Note that we call `step_sim` instead of `step` because we want the
+        # frames at each simulation step, instead of each control step.
+        # Here we have the option to step `control_skip` instead, if the flag
+        # is enabled.
+        if self.use_control_skip:
+            for _ in range(self.opt.control_skip):
+                self.robot_env.step_sim(action=action)
+        else:
+            self.robot_env.step_sim(action=action)

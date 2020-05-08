@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 homedir = os.path.expanduser("~")
 CONTAINER_DIR = os.path.join(homedir, "container_data")
 STAGE2NAME = {"reach": "REACH", "transport": "MOVE", "retract": "RETRACT"}
+MAX_OBJECTS = 6
 
 
 def compute_trajectory(
@@ -18,6 +19,8 @@ def compute_trajectory(
     q_start: np.ndarray,
     q_end: np.ndarray,
     stage: str,
+    src_base_z_post_placing: Optional[float] = None,
+    default_base_z: Optional[float] = 0.0,
 ) -> np.ndarray:
     """Computes a trajectory using OpenRAVE.
     Args:
@@ -33,12 +36,21 @@ def compute_trajectory(
         q_start: The source / starting q of shape (7,).
         q_end: The destination q of shape (7,).
         stage: The stage we are computing the trajectory for.
+        src_base_z_post_placing: The base z position of the object 
+            corresponding to `target_idx` after placing.
+        default_base_z: The default base z position of objects in `odicts`.
         
     Returns:
-        traj: The trajectory computed by OpenRAVE of shape (200, 7). Returns
-            None if OpenRAVE failed to give us a result.
+        traj: The trajectory computed by OpenRAVE of shape (T, 7).
+            If we did not find the file from OpenRAVE, we return None.
+            If we found the file but no solution was found, we return an empty
+                array.
     """
     name = STAGE2NAME[stage]
+
+    # Clip the number of objects at the maximum allowed by OpenRAVE.
+    if len(odicts) > MAX_OBJECTS:
+        odicts = copy.deepcopy(odicts[:MAX_OBJECTS])
 
     # Extract object positions from the state. Destination object needs to come
     # first.
@@ -55,8 +67,13 @@ def compute_trajectory(
         # Extract the position.
         position = odicts[idx]["position"]
 
-        # Set object z to zero because that's what OR expects.
-        position[2] = 0.0
+        # OpenRAVE expects the z position to represent the bottom of the
+        # objects.
+        if stage == "retract" and idx == 0:
+            assert src_base_z_post_placing is not None
+            position[2] = src_base_z_post_placing
+        else:
+            position[2] = default_base_z
 
         # Store the object position.
         object_positions.append(position)
@@ -95,8 +112,10 @@ def get_traj_from_openrave_container(
         load_path: The path to load OpenRAVE's output trajectory from.
     
     Returns:
-        traj: The trajectory computed by OpenRAVE of shape (200, 7). Returns
-            None if OpenRAVE failed to give us a result.    # TODO
+        traj: The trajectory computed by OpenRAVE of shape (T, 7).
+            If we did not find the file from OpenRAVE, we return None.
+            If we found the file but no solution was found, we return an empty
+                array.
     """
     print("Printing inputs to computing trajectory")
     print(f"object_positions: {object_positions}")
@@ -129,14 +148,14 @@ def get_traj_from_openrave_container(
             print(f"Could not find OpenRAVE-generated file: {load_path}")
             return None
     if os.path.isfile(load_path):
-        time.sleep(0.3)  # TODO: wait for networking
+        time.sleep(0.3)  # TODO: wait for file write
         loaded_data = np.load(load_path)
         traj_i = loaded_data["arr_0"]
         traj_s = loaded_data["arr_1"]
         print("loaded")
         # for k in range(7):
-        #     plt.plot(range(400), traj_i[:,k])
-        #     plt.plot(range(400), traj_s[:,k])
+        #     plt.plot(range(300), traj_i[:,k])
+        #     plt.plot(range(300), traj_s[:,k])
         #     plt.show()
         try:
             os.remove(load_path)

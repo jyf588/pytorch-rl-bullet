@@ -9,25 +9,21 @@ import argparse
 import numpy as np
 import pybullet as p
 from typing import *
+from scipy.optimize import linear_sum_assignment
 
 import system.policy
 from system import openrave
 from system.bullet_world import BulletWorld
 from system.vision_module import VisionModule
-from system.seg_module import SegmentationModule
 from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
-from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import (
-    ImaginaryArmObjSession,
-)
-from my_pybullet_envs.inmoov_shadow_place_env_v9 import (
-    InmoovShadowHandPlaceEnvV9,
-)
+
 from NLP_module import NLPmod
 
 import ns_vqa_dart.bullet.seg
 import my_pybullet_envs.utils as utils
 from ns_vqa_dart.bullet.metrics import Metrics
 from ns_vqa_dart.bullet import dash_object, gen_dataset, util
+from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
 
 
 class DemoEnvironment:
@@ -43,6 +39,9 @@ class DemoEnvironment:
         visualize_unity: bool,
         renderer: Optional[str] = None,
         place_dst_xy: Optional[List[float]] = None,
+        init_fin_q: Optional[np.ndarray] = None,
+        init_arm_q: Optional[np.ndarray] = None,
+        use_control_skip: Optional[bool] = False,
     ):
         """
         Args:
@@ -75,6 +74,13 @@ class DemoEnvironment:
                 `observation_mode` is `vision`.
             place_dst_xy: The destination (x, y) location to place at. Used 
                 only if `task` is `place`.
+            init_fin_q: Used to initialize the pose of the fingers, if 
+                `opt.init_pose` is enabled.
+            init_arm_q: Used to initialize the pose of the arm, if 
+                `opt.init_pose` is enabled.
+            use_control_skip: Whether to use control skipping when stepping
+                the bullet world. If enabled, we take `opt.control_skip` steps
+                instead of a single step.
         """
         self.opt = opt
         self.trial = trial
@@ -86,6 +92,9 @@ class DemoEnvironment:
         self.visualize_unity = visualize_unity
         self.renderer = renderer
         self.place_dst_xy = place_dst_xy
+        self.init_fin_q = init_fin_q
+        self.init_arm_q = init_arm_q
+        self.use_control_skip = use_control_skip
 
         print("**********DEMO ENVIRONMENT**********")
 
@@ -95,40 +104,38 @@ class DemoEnvironment:
         self.planning_complete = False
         self.initial_obs = None
         self.obs = None
-        self.world = None
+        self.w = None
 
         # Initialize the vision module if we are using vision for our
         # observations.
         if self.observation_mode == "vision":
-            self.planning_vision_module = VisionModule(
-                load_checkpoint_path=self.opt.planning_checkpoint_path
-            )
             if task == "stack":
-                self.placing_vision_module = VisionModule(
-                    load_checkpoint_path=self.opt.stacking_checkpoint_path
-                )
+                place_checkpoint_path = self.opt.stacking_checkpoint_path
             elif task == "place":
-                self.placing_vision_module = VisionModule(
-                    load_checkpoint_path=self.opt.placing_checkpoint_path
-                )
+                place_checkpoint_path = self.opt.placing_checkpoint_path
             else:
                 raise ValueError(f"Invalid task: {task}")
+            self.planning_vision_module = VisionModule(
+                load_checkpoint_path=self.opt.planning_checkpoint_path,
+                debug_dir=self.opt.debug_dir,
+            )
+            self.placing_vision_module = VisionModule(
+                load_checkpoint_path=place_checkpoint_path,
+                debug_dir=self.opt.debug_dir,
+            )
 
         # Initialize the segmentation module if requested.
         if self.opt.use_segmentation_module:
-            self.segmentation_module = SegmentationModule(
-                load_checkpoint_path=self.opt.segmentation_checkpoint_path
+            self.segmentation_module = DASHSegModule(
+                mode="eval",
+                checkpoint_path=self.opt.seg_checkpoint_path,
+                vis_dir=os.path.join(self.opt.debug_dir, f"{trial:04}"),
             )
 
         if visualize_bullet:
             p.connect(p.GUI)
         else:
             p.connect(p.DIRECT)
-
-        self.imaginary_sess = ImaginaryArmObjSession()
-        self.a = InmoovShadowHandPlaceEnvV9(
-            renders=False, grasp_pi_name=self.opt.grasp_pi
-        )
 
         self.timestep = 0
 
@@ -141,14 +148,20 @@ class DemoEnvironment:
             reach_start = 0
             reach_end = reach_start + self.opt.n_plan_steps
             grasp_start = reach_end
-        grasp_end = grasp_start + self.opt.n_grasp_steps
+
+        n_grasp = self.opt.grasp_control_steps
+        n_place = self.opt.place_control_steps
+
+        if not self.use_control_skip:
+            n_grasp *= self.opt.control_skip
+            n_place *= self.opt.control_skip
+
+        grasp_end = grasp_start + n_grasp
         transport_start = grasp_end
         transport_end = transport_start + self.opt.n_plan_steps
         place_start = transport_end
-        place_end = place_start + self.opt.n_place_steps
-        release_start = place_end
-        release_end = release_start + self.opt.n_release_steps
-        retract_start = release_end
+        place_end = place_start + n_place
+        retract_start = place_end
         retract_end = retract_start + self.opt.n_plan_steps
 
         stage2ts_bounds = {
@@ -156,7 +169,6 @@ class DemoEnvironment:
             "grasp": (grasp_start, grasp_end),
             "transport": (transport_start, transport_end),
             "place": (place_start, place_end),
-            "release": (release_start, release_end),
             "retract": (retract_start, retract_end),
         }
 
@@ -179,27 +191,42 @@ class DemoEnvironment:
             command=self.command, observation=self.initial_obs
         )
 
+        # obtained from initial_obs
+        self.dst_xy = dst_xyz[:2]  # used for policy as well
+        self.src_xy = self.initial_obs[self.src_idx]["position"][
+            :2
+        ]  # used for policy as well
+
         # Compute the goal arm poses for reaching and transport.
         self.q_reach_dst, self.q_transport_dst = self.compute_qs(
-            src_xy=self.initial_obs[self.src_idx]["position"][:2],
-            dst_xyz=dst_xyz,
+            src_xy=self.src_xy, dst_xyz=dst_xyz,
         )
 
         # Create the bullet world now that we've finished our imaginary
         # sessions.
-        self.world = BulletWorld(
+        self.w = BulletWorld(
             opt=self.opt,
             p=p,
             scene=self.scene,
             visualize=self.visualize_bullet,
+            use_control_skip=self.use_control_skip,
         )
 
         # If reaching is disabled, set the robot arm directly to the dstination
         # of reaching.
         if self.opt.disable_reaching:
-            self.world.robot_env.robot.reset_with_certain_arm_q(
-                self.q_reach_dst
+            self.w.robot_env.robot.reset_with_certain_arm_q(self.q_reach_dst)
+        else:
+            self.w.robot_env.robot.reset_with_certain_arm_q(
+                [0.0] * len(self.q_reach_dst)
             )
+        # if self.opt.init_pose:
+        #     if self.init_fin_q is not None:
+        #         self.w.robot_env.change_init_fin_q(self.init_fin_q)
+        #     if self.init_arm_q is not None:
+        #         self.w.robot_env.robot.reset_with_certain_arm_q(
+        #             self.init_arm_q
+        #         )
 
         # Flag planning as complete.
         self.planning_complete = True
@@ -243,9 +270,22 @@ class DemoEnvironment:
                 sentence=command, vision_output=language_input
             )
         elif self.task == "place":
-            # We assume that the first object in the scene is the source
-            # object.
-            src_idx = 0
+            # We assume that the first object in the ground truth scene is the
+            # source object.
+            if self.observation_mode == "gt":
+                src_idx = self.opt.gt_place_idx
+            elif self.observation_mode == "vision":
+                # We need to find the index of the vision predicted object that
+                # is the closest neighbor to the ground truth.
+                # Compute the mapping from GT indexes to predicted indexes.
+                gt2pred_idxs = self.match_objects(
+                    src_odicts=self.scene, dst_odicts=observation
+                )
+                src_idx = gt2pred_idxs[self.opt.gt_place_idx]
+            else:
+                raise ValueError(
+                    f"Invalid observation mode: {self.observation_mode}."
+                )
             dst_idx = None
             assert self.place_dst_xy is not None
             dst_x, dst_y = self.place_dst_xy
@@ -257,7 +297,10 @@ class DemoEnvironment:
         if dst_idx is None:
             z = 0.0
         else:
-            z = observation[dst_idx]["height"]
+            if self.opt.use_height:
+                z = observation[dst_idx]["height"]
+            else:
+                z = utils.H_MAX
 
         dst_xyz = [dst_x, dst_y, z + utils.PLACE_START_CLEARANCE]
         return src_idx, dst_idx, dst_xyz
@@ -288,12 +331,12 @@ class DemoEnvironment:
             using zero-indexed assignment.
         """
         # If there is no bullet world, we simply return the input scene.
-        if self.world is None:
+        if self.w is None:
             state = {
                 "objects": {idx: odict for idx, odict in enumerate(self.scene)}
             }
         else:
-            state = self.world.get_state()
+            state = self.w.get_state()
 
         # Additionally, compute the up vector from the orientation.
         for idx in state["objects"].keys():
@@ -314,37 +357,39 @@ class DemoEnvironment:
         # print(f"\tStage: {stage}")
         # print(f"\tStage timestep: {stage_ts}")
 
+        # By default we assume that the stepping succeeds.
+        step_succeeded = True
         if stage == "plan":
             self.plan()
         else:
             if stage == "reach":
-                success = self.reach(stage_ts=stage_ts)
-                if not success:
-                    print(f"Reaching failed. Terminating early.")
-                    return True
+                step_succeeded = self.execute_plan(
+                    stage=stage, stage_ts=stage_ts
+                )
             elif stage == "grasp":
                 self.grasp(stage_ts=stage_ts)
             elif stage == "transport":
-                success = self.transport(stage_ts=stage_ts)
-                if not success:
-                    return True  # Let user know we're done.
+                step_succeeded = self.execute_plan(
+                    stage=stage, stage_ts=stage_ts
+                )
             elif stage == "place":
                 self.place(stage_ts=stage_ts)
-            elif stage == "release":
-                self.release()
             elif stage == "retract":
-                self.retract(stage_ts=stage_ts)
+                step_succeeded = self.execute_plan(
+                    stage=stage,
+                    stage_ts=stage_ts,
+                    restore_fingers=self.opt.restore_fingers,
+                )
             else:
                 raise ValueError(f"Invalid stage: {stage}")
             self.timestep += 1
 
         # Compute whether we have finished the entire sequence.
-        done = self.is_done()
-        if done:
-            p.disconnect()
-            # if self.observation_mode == "vision":
-            #     self.metrics.print()
-        return done
+        return self.is_done(), step_succeeded
+
+    def cleanup(self):
+        p.disconnect()
+        del self
 
     def get_current_stage(self) -> Tuple[str, int]:
         """Retrieves the current stage of the demo.
@@ -391,15 +436,15 @@ class DemoEnvironment:
         robot = InmoovShadowNew(
             init_noise=False, timestep=utils.TS, np_random=np.random,
         )
-        debug = utils.get_n_optimal_init_arm_qs(
-            robot,
-            utils.PALM_POS_OF_INIT,
-            p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
-            src_xyz,
-            table_id,
-            wrist_gain=3.0,
-        )
-        print(f"get_n_optimal_init_arm_qs: {debug}")
+        # debug = utils.get_n_optimal_init_arm_qs(
+        #     robot,
+        #     utils.PALM_POS_OF_INIT,
+        #     p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
+        #     src_xyz,
+        #     table_id,
+        #     wrist_gain=3.0,
+        # )
+        # print(f"get_n_optimal_init_arm_qs: {debug}")
         q_reach_dst = utils.get_n_optimal_init_arm_qs(
             robot,
             utils.PALM_POS_OF_INIT,
@@ -430,63 +475,49 @@ class DemoEnvironment:
         p.resetSimulation()
         return q_reach_dst, q_transport_dst
 
-    def compute_reach_trajectory(self) -> np.ndarray:
-        """Computes the reaching trajectory.
-        
-        Returns:
-            trajectory: The reaching trajectory of shape (n_steps, 7).
-        """
+    def compute_trajectory(self, stage: str) -> np.ndarray:
+        q_start, q_end = None, None
+        expected_src_base_z_post_placing = None
+        odicts = self.initial_obs
+
+        if stage == "reach":
+            q_end = self.q_reach_dst
+        elif stage == "transport":
+            q_start = self.w.get_robot_q()[0]
+            q_end = self.q_transport_dst
+        elif stage == "retract":
+            q_start = self.w.get_robot_q()[0]
+
+            # Instead of using the initial observation, we use the latest
+            # observation.
+            if self.observation_mode == "gt":
+                odicts = self.get_observation(
+                    observation_mode=self.observation_mode,
+                    renderer=self.renderer,
+                )
+            elif self.observation_mode == "vision":
+                odicts = self.last_pred_obs
+            else:
+                raise ValueError(
+                    f"Invalid observation mode: {self.observation_mode}."
+                )
+            if self.task == "place":
+                expected_src_base_z_post_placing = 0.0
+            elif self.task == "stack":
+                expected_src_base_z_post_placing = self.initial_obs[
+                    self.dst_idx
+                ]["height"]
+        else:
+            raise ValueError(f"Invalid stage: {stage}.")
         trajectory = openrave.compute_trajectory(
-            odicts=self.initial_obs,
+            odicts=odicts,
             target_idx=self.src_idx,
-            q_start=None,
-            q_end=self.q_reach_dst,
-            stage="reach",
+            q_start=q_start,
+            q_end=q_end,
+            stage=stage,
+            src_base_z_post_placing=expected_src_base_z_post_placing,
         )
         return trajectory
-
-    def compute_transport_trajectory(self) -> np.ndarray:
-        """Computes the transport trajectory.
-        
-        Returns:
-            trajectory: The transport trajectory of shape (n_steps, 7).
-        """
-        q_src = self.world.get_robot_arm_q()
-        q_dst = self.q_transport_dst
-
-        trajectory = openrave.compute_trajectory(
-            odicts=self.initial_obs,
-            target_idx=self.src_idx,
-            q_start=q_src,
-            q_end=q_dst,
-            stage="transport",
-        )
-        return trajectory
-
-    def compute_retract_trajectory(self) -> np.ndarray:
-        """Computes the retract trajectory.
-        
-        Returns:
-            trajectory: The retract trajectory of shape (n_steps, 7).
-        """
-        q_src = self.world.get_robot_arm_q()
-
-        trajectory = openrave.compute_trajectory(
-            odicts=self.initial_obs,
-            target_idx=self.src_idx,
-            q_start=q_src,
-            q_end=None,
-            stage="retract",
-        )
-        return trajectory
-
-    def reach(self, stage_ts: int):
-        if stage_ts == 0:
-            self.reach_trajectory = self.compute_reach_trajectory()
-            if len(self.reach_trajectory) == 0:
-                return False
-        self.execute_plan(trajectory=self.reach_trajectory, idx=stage_ts)
-        return True
 
     def grasp(self, stage_ts: int):
         # Load the grasping actor critic model.
@@ -502,31 +533,23 @@ class DemoEnvironment:
                 is_cuda=self.opt.is_cuda,
             )
         obs = system.policy.wrap_obs(
-            self.get_grasping_observation(), is_cuda=self.opt.is_cuda
+            self.get_grasp_observation(), is_cuda=self.opt.is_cuda
         )
         with torch.no_grad():
             _, action, _, self.hidden_states = self.policy.act(
                 obs, self.hidden_states, self.masks, deterministic=self.opt.det
             )
-        self.world.step_robot(
+        self.w.step_robot(
             action=system.policy.unwrap_action(
                 action=action, is_cuda=self.opt.is_cuda
             )
         )
         self.masks.fill_(1.0)
 
-    def transport(self, stage_ts: int):
-        if stage_ts == 0:
-            self.transport_trajectory = self.compute_transport_trajectory()
-            if len(self.transport_trajectory) == 0:
-                return False
-        self.execute_plan(trajectory=self.transport_trajectory, idx=stage_ts)
-        return True
-
     def place(self, stage_ts: int):
         if stage_ts == 0:
-            self.world.robot_env.change_control_skip_scaling(
-                c_skip=self.opt.placing_control_skip
+            self.w.robot_env.change_control_skip_scaling(
+                c_skip=self.opt.control_skip
             )
             (
                 self.policy,
@@ -541,53 +564,156 @@ class DemoEnvironment:
 
         # Get the current observation.
         obs = system.policy.wrap_obs(
-            self.get_placing_observation(), is_cuda=self.opt.is_cuda
+            self.get_place_observation(), is_cuda=self.opt.is_cuda
         )
         with torch.no_grad():
             _, action, _, self.hidden_states = self.policy.act(
                 obs, self.hidden_states, self.masks, deterministic=self.opt.det
             )
 
-        self.world.step_robot(
+        self.w.step_robot(
             action=system.policy.unwrap_action(
                 action=action, is_cuda=self.opt.is_cuda
             )
         )
 
-    def release(self):
-        self.world.step()
-
-    def retract(self, stage_ts: int):
+    def execute_plan(
+        self,
+        stage: str,
+        stage_ts: int,
+        restore_fingers: Optional[bool] = False,
+    ) -> bool:
+        """
+        Returns:
+            success: Whether executing the current step of the plan succeeded.
+        """
+        # Get initial robot pose.
         if stage_ts == 0:
-            self.retract_trajectory = self.compute_retract_trajectory()
-            if len(self.retract_trajectory) == 0:
+            self.trajectory = self.compute_trajectory(stage=stage)
+            if len(self.trajectory) == 0:
                 return False
-        self.execute_plan(trajectory=self.retract_trajectory, idx=stage_ts)
+            self.w.robot_env.robot.tar_arm_q = self.trajectory[-1]
+            self.init_tar_fin_q = self.w.robot_env.robot.tar_fin_q
+            self.last_tar_arm_q, self.init_fin_q = self.w.get_robot_q()
+
+        if stage_ts > len(self.trajectory) - 1:
+            tar_arm_q = self.trajectory[-1]
+        else:
+            tar_arm_q = self.trajectory[stage_ts]
+
+        tar_arm_vel = (tar_arm_q - self.last_tar_arm_q) / self.opt.ts
+        max_force = self.w.robot_env.robot.maxForce
+
+        p.setJointMotorControlArray(
+            bodyIndex=self.w.robot_env.robot.arm_id,
+            jointIndices=self.w.robot_env.robot.arm_dofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=list(tar_arm_q),
+            targetVelocities=list(tar_arm_vel),
+            forces=[max_force * 5] * len(self.w.robot_env.robot.arm_dofs),
+        )
+
+        if restore_fingers and stage_ts >= len(self.trajectory) * 0.1:
+            blending = np.clip(
+                (stage_ts - len(self.trajectory) * 0.1)
+                / (len(self.trajectory) * 0.6),
+                0.0,
+                1.0,
+            )
+            cur_fin_q = self.w.robot_env.robot.get_q_dq(
+                self.w.robot_env.robot.fin_actdofs
+            )[0]
+            tar_fin_q = (
+                self.w.robot_env.robot.init_fin_q * blending
+                + cur_fin_q * (1 - blending)
+            )
+        else:
+            # try to keep fin q close to init_fin_q (keep finger pose)
+            # add at most offset 0.05 in init_tar_fin_q direction so that grasp is tight
+            tar_fin_q = np.clip(
+                self.init_tar_fin_q,
+                self.init_fin_q - 0.05,
+                self.init_fin_q + 0.05,
+            )
+
+        # clip to joint limit
+        tar_fin_q = np.clip(
+            tar_fin_q,
+            self.w.robot_env.robot.ll[self.w.robot_env.robot.fin_actdofs],
+            self.w.robot_env.robot.ul[self.w.robot_env.robot.fin_actdofs],
+        )
+
+        p.setJointMotorControlArray(
+            bodyIndex=self.w.robot_env.robot.arm_id,
+            jointIndices=self.w.robot_env.robot.fin_actdofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=list(tar_fin_q),
+            forces=[max_force] * len(self.w.robot_env.robot.fin_actdofs),
+        )
+        p.setJointMotorControlArray(
+            bodyIndex=self.w.robot_env.robot.arm_id,
+            jointIndices=self.w.robot_env.robot.fin_zerodofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=[0.0] * len(self.w.robot_env.robot.fin_zerodofs),
+            forces=[max_force / 4.0]
+            * len(self.w.robot_env.robot.fin_zerodofs),
+        )
+
+        if stage_ts == len(self.trajectory) + 4:
+            diff = np.linalg.norm(
+                self.w.robot_env.robot.get_q_dq(
+                    self.w.robot_env.robot.arm_dofs
+                )[0]
+                - tar_arm_q
+            )
+            print("diff final", diff)
+            print(
+                "vel final",
+                np.linalg.norm(
+                    self.w.robot_env.robot.get_q_dq(
+                        self.w.robot_env.robot.arm_dofs
+                    )[1]
+                ),
+            )
+            print("fin dofs")
+            print(
+                [
+                    "{0:0.3f}".format(n)
+                    for n in self.w.robot_env.robot.get_q_dq(
+                        self.w.robot_env.robot.fin_actdofs
+                    )[0]
+                ]
+            )
+            print("cur_fin_tar_q")
+            print(
+                [
+                    "{0:0.3f}".format(n)
+                    for n in self.w.robot_env.robot.tar_fin_q
+                ]
+            )
+
+        self.last_tar_arm_q = tar_arm_q
+        self.w.step()
         return True
 
-    def execute_plan(self, trajectory: np.ndarray, idx: int):
-        if idx > len(trajectory) - 1:
-            tar_arm_q = trajectory[-1]
-        else:
-            tar_arm_q = trajectory[idx]
-        self.world.robot_env.robot.tar_arm_q = tar_arm_q
-        self.world.robot_env.robot.apply_action([0.0] * 24)
-        self.world.step()
+    def get_grasp_observation(self) -> torch.Tensor:
+        x, y = self.src_xy
 
-    def get_grasping_observation(self) -> torch.Tensor:
         odict = self.initial_obs[self.src_idx]
-        position = odict["position"]
         half_height = odict["height"] / 2
-        x, y = position[0], position[1]
-        # obs = self.world.robot_env.get_robot_contact_txty_halfh_obs_nodup(
-        #     x, y, half_height
-        # )
-        obs = self.world.robot_env.get_robot_contact_txtytz_halfh_shape_obs_no_dup(
-            x, y, 0.0, half_height, odict["shape"] == "box"
-        )
+        is_box = odict["shape"] == "box"
+
+        if self.opt.use_height:
+            obs = self.w.robot_env.get_robot_contact_txtytz_halfh_shape_obs_no_dup(
+                x, y, 0.0, half_height, is_box
+            )
+        else:
+            obs = self.w.robot_env.get_robot_contact_txty_shape_obs_no_dup(
+                x, y, is_box
+            )
         return obs
 
-    def get_placing_observation(self):
+    def get_place_observation(self):
         # Update the observation only every `vision_delay` steps.
         if self.timestep % self.opt.vision_delay == 0:
             self.obs = self.get_observation(
@@ -595,10 +721,19 @@ class DemoEnvironment:
             )
 
         # Compute the observation vector from object poses and placing position.
+        tx, ty = self.dst_xy  # this should be dst xy rather than src xy
+        if self.task == "stack":
+            b_init_dict = self.initial_obs[self.dst_idx]
+            tz = b_init_dict["height"]
+        else:
+            tz = 0.0
+
         tdict = self.obs[self.src_idx]
-        t_init_dict = self.scene[self.src_idx]
-        x, y, z = t_init_dict["position"]
-        is_box = t_init_dict["shape"] == "box"
+        t_pos = tdict["position"]
+        t_up = tdict["up_vector"]
+        is_box = (
+            tdict["shape"] == "box"
+        )  # should not matter if use init_obs or obs
 
         if self.task == "stack":
             bdict = self.obs[self.dst_idx]
@@ -608,17 +743,28 @@ class DemoEnvironment:
             b_pos = [0.0, 0.0, 0.0]
             b_up = [0.0, 0.0, 1.0]
 
-        p_obs = self.world.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
-            tx=x,
-            ty=y,
-            tz=z,
-            half_h=tdict["height"] / 2,
-            t_is_box=is_box,
-            t_pos=tdict["position"],
-            t_up=tdict["up_vector"],
-            b_pos=b_pos,
-            b_up=b_up,
-        )
+        if self.opt.use_height:
+            p_obs = self.w.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
+                tx=tx,
+                ty=ty,
+                tz=tz,
+                half_h=tdict["height"] / 2,
+                shape=is_box,
+                t_pos=t_pos,
+                t_up=t_up,
+                b_pos=b_pos,
+                b_up=b_up,
+            )
+        else:
+            p_obs = self.w.robot_env.get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
+                tx=tx,
+                ty=ty,
+                shape=is_box,
+                t_pos=t_pos,
+                t_up=t_up,
+                b_pos=b_pos,
+                b_up=b_up,
+            )
         return p_obs
 
     def get_observation(self, observation_mode: str, renderer: str):
@@ -666,148 +812,152 @@ class DemoEnvironment:
             renderer: The renderer of the input images to the vision module.
         
         Returns:
-            obs: The observation, in the format: 
-                {
-                    "objects": {
-                        "<oid>": {
-                            "shape": shape,
-                            "color": color,
-                            "radius": radius,
-                            "height": height,
-                            "position": [x, y, z],
-                            "orientation": [x, y, z, w],
-                        },
-                        ...
+            obs: The vision observation, in the format:
+                [
+                    {
+                        "shape": shape,  # First prediction
+                        "color": color,  # First prediction
+                        "radius": radius,  # First prediction
+                        "height": height,  # First prediction
+                        "position": [x, y, z],  # Current prediction
+                        "up_vector": [u1, u2, u3],  # Current prediction
                     },
-                    "robot": {
-                        "<joint_name>": <joint_angle>,
-                        ...
-                    }
-                }.
+                    ...
+                ], 
         """
-        # The final visual observation, for now, is the same as the ground
-        # truth state except with the source object's pose predicted. So, we
-        # initialize the observation with the true state as a starting point.
-        gt_odicts = copy.deepcopy(
-            self.get_observation(observation_mode="gt", renderer=self.renderer)
-        )
-        # obs = copy.deepcopy(gt_odicts)
-
         # Select the vision module based on the current stage.
         stage, _ = self.get_current_stage()
         if stage == "plan":
             vision_module = self.planning_vision_module
-            num_obs = len(gt_odicts)
         elif stage == "place":
             vision_module = self.placing_vision_module
-            if self.task == "place":
-                num_obs = 1
-            elif self.task == "stack":
-                num_obs = 2
         else:
             raise ValueError(f"No vision module for stage: {stage}.")
 
-        rgb, seg = self.get_images()
+        # Retrieves the image, camera pose, and object segmentation masks.
+        rgb, masks, cam_position, cam_orientation = self.get_images()
 
-        # Predict the object pose for the objects that we've "looked" at.
+        # Predict attributes for all the segmentations.
+        pred = vision_module.predict(
+            rgb=rgb, masks=masks, debug_id=self.timestep
+        )
+
         pred_odicts = []
-        pred_obs = [None] * num_obs
-        assigned_idxs = []
-        for idx in range(num_obs):
-            pred = vision_module.predict(oid=idx, rgb=rgb, seg=seg)
-
-            # Convert vectorized predictions to dictionary form using camera
-            # information.
-            y_dict = dash_object.y_vec_to_dict(
-                y=list(pred[0]),
+        for y in pred:
+            # Convert vectorized predictions to dictionary form. The
+            # predicted pose is also transformed using camera information.
+            odict = dash_object.y_vec_to_dict(
+                y=list(y),
                 coordinate_frame=self.opt.coordinate_frame,
-                cam_position=self.unity_data[0]["camera_position"],
-                cam_orientation=self.unity_data[0]["camera_orientation"],
+                cam_position=cam_position,
+                cam_orientation=cam_orientation,
             )
+            pred_odicts.append(odict)
 
-            # self.metrics.add_example(gt_dict=gt_odicts[idx], pred_dict=y_dict)
-            pred_odicts.append(y_dict)
-
-            # Update the position and up vector with predicted values.
-            # obs[idx]["position"] = y_dict["position"]
-            # obs[idx]["up_vector"] = y_dict["up_vector"]
-
-            # Important: override the GT orientation with the predicted
-            # orientation. The predicted orientation will be the GT rotation
-            # matrix, except with the last column overridden with the predicted
-            # up vector.
-            # To do this, we convert the predicted up vector into an
-            # orientation, using the GT z rot.
-            # obs[idx]["orientation"] = pred_orientation
-            nearest_neighbor_idx = self.find_nearest_neighbor(
-                src_odict=y_dict,
-                ref_odicts=gt_odicts,
-                assigned_idxs=assigned_idxs,
+        # We track predicted objects throughout time by matching the attributes
+        # predicted at the current timestep with the object attributes from the
+        # initial observation.
+        if self.initial_obs is None:
+            pred_obs = pred_odicts
+        else:
+            pred_obs = self.match_predictions_with_initial_obs(
+                pred_odicts=pred_odicts
             )
-            assert nearest_neighbor_idx is not None
-            assigned_idxs.append(nearest_neighbor_idx)
-            gt_odict = gt_odicts[nearest_neighbor_idx]
-            pred_orientation = util.up_to_orientation(
-                up=y_dict["up_vector"], gt_orientation=gt_odict["orientation"],
-            )
-            pred_odict = copy.deepcopy(gt_odict)
-            pred_odict["position"] = y_dict["position"]
-            pred_odict["up_vector"] = y_dict["up_vector"]
-            pred_odict["orientation"] = pred_orientation
-            pred_obs[nearest_neighbor_idx] = pred_odict
+        # Store the computed observation for future computation.
+        self.last_pred_obs = copy.deepcopy(pred_obs)
 
         # Save the predicted and ground truth object dictionaries.
-        if self.opt.save_predictions:
-            path = os.path.join(
-                self.opt.save_preds_dir,
-                f"{self.trial:02}",
-                f"{self.timestep:04}.p",
-            )
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            util.save_pickle(
-                path=path, data={"gt": gt_odicts, "pred": pred_odicts}
-            )
+        # if self.opt.save_predictions:
+        #     path = os.path.join(
+        #         self.opt.save_preds_dir,
+        #         f"{self.trial:02}",
+        #         f"{self.timestep:04}.p",
+        #     )
+        #     os.makedirs(os.path.dirname(path), exist_ok=True)
+        #     util.save_pickle(
+        #         path=path, data={"gt": gt_odicts, "pred": pred_odicts}
+        #     )
         return pred_obs
 
-    def find_nearest_neighbor(
-        self, src_odict: Dict, ref_odicts: List[Dict], assigned_idxs: List[int]
-    ):
-        """Finds the index of the nearest neighboring ground truth object when
-        compared to a single object.
-
-        TODO: Change to hungarian matching algorithm.
+    def match_predictions_with_initial_obs(
+        self, pred_odicts: List[Dict]
+    ) -> List:
+        """Matches predictions with `self.initial_obs`.
 
         Args:
-            src_odict: The object that we want to find the nearest neighboring
-                object for.
-            ref_odicts: The reference objects that we want to select the 
-                nearest neighbor from.
-            assigned_idxs: A list of assigned indexes.
-        
-        Returns:
-            nearest_neighbor_idx: The index corresponding to the nearest
-                neighbor.
-        """
-        nearest_neighbor_idx = None
-        max_score = None
-        for idx, ref_odict in enumerate(ref_odicts):
-            # Skip over objects that have already been assigned.
-            if idx in assigned_idxs:
-                continue
-            score = 0
-            for attr in ["shape", "color"]:
-                if src_odict[attr] == ref_odict[attr]:
-                    score += 1
-                if max_score is None or score > max_score:
-                    nearest_neighbor_idx = idx
-                    max_score = score
-        print(f"src_odict: {src_odict}")
-        print(f"ref_odicts: {ref_odicts}")
-        print(f"max_score: {max_score}")
-        print(f"nearest_neighbor_idx: {nearest_neighbor_idx}")
-        return nearest_neighbor_idx
+            pred_odicts: A list of predicted object dictionaries to match with
+                `self.initial_obs`.
 
-    def get_images(self):
+        Returns:
+            pred_obs: A list of predicted object observations that is same 
+                length as `self.initial_obs`. Each element in `pred_obs` 
+                corresponds to the object predicted in `self.initial_obs`, and
+                contains either:
+                (1) The assigned object prediction from the current timestep based
+                    on matching with the corresponding object from 
+                    `self.initial_obs`, or
+                (2) The most recent matched prediction.
+        """
+        # Verify that `self.initial_obs` is defined.
+        assert self.initial_obs is not None
+
+        # Compute assignments.
+        s2d_idxs = self.match_objects(
+            src_odicts=self.initial_obs, dst_odicts=pred_odicts
+        )
+
+        # If `self.initial_obs` has more elements than `pred_odicts`, then
+        # there will be unassigned elements in `self.initial_obs`. We assign
+        # unassigned elements with the last observation. To do this, we
+        # initialize the `pred_obs` which will be returned with
+        # `self.last_pred_obs`. Since we only override assigned elements, each
+        # unassigned element will by default hold the last prediction.
+        pred_obs = copy.deepcopy(self.last_pred_obs)
+
+        # Override the pose predictions for the objects being manipulated.
+        if self.task == "stack":
+            place_object_idxs = [self.src_idx, self.dst_idx]
+        elif self.task == "place":
+            place_object_idxs = [self.src_idx]
+        else:
+            raise ValueError(f"Invalid task: {self.task}")
+        for s in place_object_idxs:
+            # We only update the place object if we found a corresponding
+            # match in the predictions.
+            if s in s2d_idxs:
+                d = s2d_idxs[s]
+                dst_odict = pred_odicts[d]
+                for attr in ["position", "up_vector"]:
+                    pred_obs[s][attr] = dst_odict[attr]
+        return pred_obs
+
+    def match_objects(
+        self, src_odicts: List[Dict], dst_odicts: List[Dict]
+    ) -> Tuple:
+        """
+        Args:
+            src_odicts: The source object dictionaries to match from.
+            dst_odicts: The destination object dictionaries to match to.
+
+        Returns:
+            src2dst_idxs: A mapping from src to dst index assignments.
+        """
+        # Construct the cost matrix.
+        cost = np.zeros((len(src_odicts), len(dst_odicts)))
+        for src_idx, src_y in enumerate(src_odicts):
+            for dst_idx, dst_y in enumerate(dst_odicts):
+                cell = 0
+                for attr in ["color", "shape"]:
+                    if src_y[attr] != dst_y[attr]:
+                        cell += 1
+                cost[src_idx][dst_idx] = cell
+
+        # Compute assignments.
+        src_idxs, dst_idxs = linear_sum_assignment(cost)
+        src2dst_idxs = {s: d for s, d in zip(src_idxs, dst_idxs)}
+        return src2dst_idxs
+
+    def get_images(self) -> Tuple:
         """Retrieves the images that are input to the vision module.
 
         Args:
@@ -816,7 +966,11 @@ class DemoEnvironment:
         
         Returns:
             rgb: The RGB image of the object.
-            seg_rgb: The RGB segmentation image of the object.
+            masks: A numpy array of shape (N, H, W) of instance masks.
+            camera_position: The position of the camera used to capture the
+                image.
+            camera_orientation: The orientation of the camera used to capture 
+                the image.
         """
         if self.renderer == "opengl":
             raise NotImplementedError
@@ -826,6 +980,9 @@ class DemoEnvironment:
             # Unity should have already called set_unity_data before this.
             rgb = self.unity_data[0]["rgb"]
             seg_img = self.unity_data[0]["seg_img"]
+
+            camera_position = self.unity_data[0]["camera_position"]
+            camera_orientation = self.unity_data[0]["camera_orientation"]
 
             # Optionally we can visualize unity images using OpenCV.
             if self.visualize_unity:
@@ -839,12 +996,15 @@ class DemoEnvironment:
 
         # Either predict segmentations or use ground truth.
         if self.opt.use_segmentation_module:
-            seg = self.segmentation_module.predict(img=rgb)
+            bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+            masks = self.segmentation_module.eval_example(
+                img=bgr, vis_id=self.timestep,
+            )
         else:
             # If using ground truth, convert the segmentation image into a
             # segmentation map.
-            seg, _ = ns_vqa_dart.bullet.seg.seg_img_to_map(seg_img)
-        return rgb, seg
+            masks, _ = ns_vqa_dart.bullet.seg.seg_img_to_map(seg_img)
+        return rgb, masks, camera_position, camera_orientation
 
     def set_unity_data(self, data: Dict):
         """Sets the data received from Unity.
