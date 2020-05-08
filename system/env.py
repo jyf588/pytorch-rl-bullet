@@ -798,8 +798,6 @@ class DemoEnvironment:
             obs = list(self.get_state()["objects"].values())
         elif observation_mode == "vision":
             obs = self.get_vision_observation(renderer=renderer)
-            pprint.pprint(obs)
-            input("get_vision_observation")
         else:
             raise ValueError(
                 "Unsupported observation mode: {self.observation_mode}"

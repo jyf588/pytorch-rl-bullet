@@ -29,6 +29,8 @@ STAGE2ANIMATION_Z_OFFSET = {
 }
 TASK2ANIMATION_Z_OFFSET = {"place": 0.1, "stack": 0.2}
 
+DEMO_SCENE_IDS = [5, 6, 7, 9, 10, 11, 12, 13, 14]
+
 
 async def send_to_client(websocket, path):
     """Sends and receives data to and from Unity.
@@ -48,9 +50,12 @@ async def send_to_client(websocket, path):
     # Used to initialize the pose of each trial with the pose of the last trial.
     init_fin_q, init_arm_q = None, None
     FAIL_SCENES = []  # [7, 8]
-    for scene_idx in range(13, len(scenes)):
+    for scene_idx in range(0, len(scenes)):
         # Skip failed scenes.
         if scene_idx in FAIL_SCENES:
+            continue
+
+        if args.demo_scenes and scene_idx not in DEMO_SCENE_IDS:
             continue
         scene = scenes[scene_idx]
 
@@ -65,8 +70,7 @@ async def send_to_client(websocket, path):
         pprint.pprint(scene)
 
         # task = "stack" if scene_idx % 2 == 0 else "place"
-        task = "place"
-        # for obs_mode in ["gt", "vision"]:
+        task = "stack"
         for obs_mode in ["vision"]:
             # Modify the scene for placing. We keep only the first object for
             # now, and set the placing destination xy location to be the
@@ -117,14 +121,13 @@ async def send_to_client(websocket, path):
 
                 # Temporarily remove robot state.
                 # state = {"objects": state["objects"]}
-
+                render_frequency = args.render_frequency
                 # Only have lucas look at / send images back when planning or placing.
                 if obs_mode == "vision" and stage in ["plan", "place"]:
-                    render_frequency = 2
-                    unity_options = [
-                        (False, False, True, True),
-                        (True, True, False, False),  # Frame to render obs.
-                    ]
+                    render_frequency = OPTIONS.vision_delay
+                    unity_options = [(False, False, True, True)]
+                    if args.render_obs:
+                        unity_options += [(True, True, False, False)]
 
                     if stage == "plan":
                         cam_target = PLAN_TARGET_POSITION
@@ -151,10 +154,10 @@ async def send_to_client(websocket, path):
                 else:
                     if args.disable_unity:
                         render_frequency = None
-                    else:
-                        render_frequency = 70 if args.fast_mode else 2
+                    elif args.fast_mode:
+                        render_frequency = 70
                     if obs_mode == "vision":
-                        unity_options = [(True, True, False, True)]
+                        unity_options = [(args.render_obs, True, False, True)]
                     elif obs_mode == "gt":
                         unity_options = [(False, True, False, True)]
 
@@ -163,12 +166,16 @@ async def send_to_client(websocket, path):
                     b_ani_tar = None
                 else:
                     if stage in ["reach", "grasp"]:
-                        b_ani_tar = env.scene[env.src_idx]["position"]
+                        b_ani_tar = env.initial_obs[env.src_idx]["position"]
                     elif stage in ["transport", "place", "release"]:
                         if task == "place":
-                            b_ani_tar = place_dst_xy + [env.scene[0]["height"]]
+                            b_ani_tar = place_dst_xy + [
+                                env.initial_obs[env.src_idx]["height"]
+                            ]
                         elif task == "stack":
-                            b_ani_tar = env.scene[env.dst_idx]["position"]
+                            b_ani_tar = env.initial_obs[env.dst_idx][
+                                "position"
+                            ]
                         else:
                             raise ValueError(f"Unsupported task: {task}")
                     else:
@@ -395,14 +402,30 @@ if __name__ == "__main__":
         help="Number of scenes to generate.",
     )
     parser.add_argument(
+        "--demo_scenes",
+        action="store_true",
+        help="Whether to use the demo scenes.",
+    )
+    parser.add_argument(
         "--disable_orientation",
         action="store_true",
         help="Whether to disable randomizing orientation.",
     )
     parser.add_argument(
+        "--render_frequency",
+        type=int,
+        default=2,
+        help="The rendering frequency to use.",
+    )
+    parser.add_argument(
         "--fast_mode",
         action="store_true",
         help="Whether to use fast mode. Useful for evaluation, not demo.",
+    )
+    parser.add_argument(
+        "--render_obs",
+        action="store_true",
+        help="Whether to render the observations.",
     )
     args = parser.parse_args()
 
