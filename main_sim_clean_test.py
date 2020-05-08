@@ -83,7 +83,7 @@ CLOSE_THRES = 0.25
 NUM_TRIALS = 300
 
 GRASP_END_STEP = 35
-PLACE_END_STEP = 75
+PLACE_END_STEP = 70
 
 INIT_NOISE = True
 DET_CONTACT = 0  # 0 false, 1 true
@@ -139,6 +139,11 @@ else:
 
             PLACE_PI = "0426_0_n_place_0426_0"
             PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
+            # GRASP_PI = "0502_1_n_25_45"
+            # GRASP_DIR = "./trained_models_%s/ppo/" % "0502_1_n"
+            #
+            # PLACE_PI = "0502_1_n_place_0502_5"
+            # PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
     GRASP_PI_ENV_NAME = "InmoovHandGraspBulletEnv-v6"
     PLACE_PI_ENV_NAME = "InmoovHandPlaceBulletEnv-v9"
@@ -403,10 +408,10 @@ def get_stacking_obs(
     top_half_height = obj_state[top_oid]["height"] / 2
 
     if ADD_WHITE_NOISE:
-        top_pos = utils.perturb(np.random, top_pos, r=0.02)
-        btm_pos = utils.perturb(np.random, btm_pos, r=0.02)
-        top_up = utils.perturb(np.random, top_up, r=0.03)
-        btm_up = utils.perturb(np.random, btm_up, r=0.03)
+        top_pos = utils.perturb(np.random, top_pos, r=0.03)
+        btm_pos = utils.perturb(np.random, btm_pos, r=0.03)
+        top_up = utils.perturb(np.random, top_up, r=0.04)
+        btm_up = utils.perturb(np.random, btm_up, r=0.04)
         top_half_height = utils.perturb_scalar(np.random, top_half_height, r=0.01)
 
     return top_pos, top_up, btm_pos, btm_up, top_half_height
@@ -464,8 +469,8 @@ for trial in range(NUM_TRIALS):
         t_half_height = top_dict["height"]/2
 
         if ADD_WHITE_NOISE:
-            g_tx += np.random.uniform(low=-0.015, high=0.015)
-            g_ty += np.random.uniform(low=-0.015, high=0.015)
+            g_tx += np.random.uniform(low=-0.02, high=0.02)
+            g_ty += np.random.uniform(low=-0.02, high=0.02)
             t_half_height += np.random.uniform(low=-0.01, high=0.01)
             p_tx += np.random.uniform(low=-0.015, high=0.015)
             p_ty += np.random.uniform(low=-0.015, high=0.015)
