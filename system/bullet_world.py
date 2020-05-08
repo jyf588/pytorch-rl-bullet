@@ -25,6 +25,7 @@ class BulletWorld:
         scene: List[Dict],
         visualize: bool,
         p: Optional = None,
+        use_control_skip: Optional[bool] = False,
     ):
         """
         Args:
@@ -48,6 +49,7 @@ class BulletWorld:
         self.opt = opt
         self.scene = scene
         self.visualize = visualize
+        self.use_control_skip = use_control_skip
 
         if p is None:
             self.bc = self.create_bullet_client()
@@ -106,7 +108,7 @@ class BulletWorld:
             oids: A list of object IDs corresponding to the object order in the
                 input scene.
         """
-        self.load_table()       # should not matter but change loading order for now
+        self.load_table()  # should not matter but change loading order for now
         robot_env = self.load_robot()
         oids = self.load_tabletop_objects(scene=scene)
         return robot_env, oids
@@ -125,7 +127,7 @@ class BulletWorld:
             withVel=False,
             diffTar=True,
             robot_mu=self.opt.hand_mu,
-            control_skip=self.opt.grasping_control_skip,
+            control_skip=self.opt.control_skip,
         )
         init_fin_q = np.array(
             [0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.1]
@@ -332,4 +334,10 @@ class BulletWorld:
         """
         # Note that we call `step_sim` instead of `step` because we want the
         # frames at each simulation step, instead of each control step.
-        self.robot_env.step_sim(action=action)
+        # Here we have the option to step `control_skip` instead, if the flag
+        # is enabled.
+        if self.use_control_skip:
+            for _ in range(self.opt.control_skip):
+                self.robot_env.step_sim(action=action)
+        else:
+            self.robot_env.step_sim(action=action)

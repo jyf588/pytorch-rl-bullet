@@ -19,6 +19,8 @@ def compute_trajectory(
     q_start: np.ndarray,
     q_end: np.ndarray,
     stage: str,
+    src_base_z_post_placing: Optional[float] = None,
+    default_base_z: Optional[float] = 0.0,
 ) -> np.ndarray:
     """Computes a trajectory using OpenRAVE.
     Args:
@@ -34,6 +36,9 @@ def compute_trajectory(
         q_start: The source / starting q of shape (7,).
         q_end: The destination q of shape (7,).
         stage: The stage we are computing the trajectory for.
+        src_base_z_post_placing: The base z position of the object 
+            corresponding to `target_idx` after placing.
+        default_base_z: The default base z position of objects in `odicts`.
         
     Returns:
         traj: The trajectory computed by OpenRAVE of shape (T, 7).
@@ -62,8 +67,13 @@ def compute_trajectory(
         # Extract the position.
         position = odicts[idx]["position"]
 
-        # Set object z to zero because that's what OR expects.
-        position[2] = 0.0
+        # OpenRAVE expects the z position to represent the bottom of the
+        # objects.
+        if stage == "retract" and idx == 0:
+            assert src_base_z_post_placing is not None
+            position[2] = src_base_z_post_placing
+        else:
+            position[2] = default_base_z
 
         # Store the object position.
         object_positions.append(position)

@@ -15,7 +15,6 @@ import system.policy
 from system import openrave
 from system.bullet_world import BulletWorld
 from system.vision_module import VisionModule
-from system.seg_module import SegmentationModule
 from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
 
 from NLP_module import NLPmod
@@ -24,6 +23,7 @@ import ns_vqa_dart.bullet.seg
 import my_pybullet_envs.utils as utils
 from ns_vqa_dart.bullet.metrics import Metrics
 from ns_vqa_dart.bullet import dash_object, gen_dataset, util
+from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
 
 
 class DemoEnvironment:
@@ -41,6 +41,7 @@ class DemoEnvironment:
         place_dst_xy: Optional[List[float]] = None,
         init_fin_q: Optional[np.ndarray] = None,
         init_arm_q: Optional[np.ndarray] = None,
+        use_control_skip: Optional[bool] = False,
     ):
         """
         Args:
@@ -77,6 +78,9 @@ class DemoEnvironment:
                 `opt.init_pose` is enabled.
             init_arm_q: Used to initialize the pose of the arm, if 
                 `opt.init_pose` is enabled.
+            use_control_skip: Whether to use control skipping when stepping
+                the bullet world. If enabled, we take `opt.control_skip` steps
+                instead of a single step.
         """
         self.opt = opt
         self.trial = trial
@@ -90,6 +94,7 @@ class DemoEnvironment:
         self.place_dst_xy = place_dst_xy
         self.init_fin_q = init_fin_q
         self.init_arm_q = init_arm_q
+        self.use_control_skip = use_control_skip
 
         print("**********DEMO ENVIRONMENT**********")
 
@@ -121,9 +126,10 @@ class DemoEnvironment:
 
         # Initialize the segmentation module if requested.
         if self.opt.use_segmentation_module:
-            self.segmentation_module = SegmentationModule(
-                load_checkpoint_path=self.opt.segmentation_checkpoint_path,
-                debug_dir=self.opt.debug_dir,
+            self.segmentation_module = DASHSegModule(
+                mode="eval",
+                checkpoint_path=self.opt.seg_checkpoint_path,
+                vis_dir=os.path.join(self.opt.debug_dir, f"{trial:04}"),
             )
 
         if visualize_bullet:
@@ -142,11 +148,19 @@ class DemoEnvironment:
             reach_start = 0
             reach_end = reach_start + self.opt.n_plan_steps
             grasp_start = reach_end
-        grasp_end = grasp_start + self.opt.n_grasp_steps
+
+        n_grasp = self.opt.grasp_control_steps
+        n_place = self.opt.place_control_steps
+
+        if not self.use_control_skip:
+            n_grasp *= self.opt.control_skip
+            n_place *= self.opt.control_skip
+
+        grasp_end = grasp_start + n_grasp
         transport_start = grasp_end
         transport_end = transport_start + self.opt.n_plan_steps
         place_start = transport_end
-        place_end = place_start + self.opt.n_place_steps
+        place_end = place_start + n_place
         retract_start = place_end
         retract_end = retract_start + self.opt.n_plan_steps
 
@@ -178,13 +192,14 @@ class DemoEnvironment:
         )
 
         # obtained from initial_obs
-        self.dst_xy = dst_xyz[:2]       # used for policy as well
-        self.src_xy = self.initial_obs[self.src_idx]["position"][:2]     # used for policy as well
+        self.dst_xy = dst_xyz[:2]  # used for policy as well
+        self.src_xy = self.initial_obs[self.src_idx]["position"][
+            :2
+        ]  # used for policy as well
 
         # Compute the goal arm poses for reaching and transport.
         self.q_reach_dst, self.q_transport_dst = self.compute_qs(
-            src_xy=self.src_xy,
-            dst_xyz=dst_xyz,
+            src_xy=self.src_xy, dst_xyz=dst_xyz,
         )
 
         # Create the bullet world now that we've finished our imaginary
@@ -194,6 +209,7 @@ class DemoEnvironment:
             p=p,
             scene=self.scene,
             visualize=self.visualize_bullet,
+            use_control_skip=self.use_control_skip,
         )
 
         # If reaching is disabled, set the robot arm directly to the dstination
@@ -201,7 +217,9 @@ class DemoEnvironment:
         if self.opt.disable_reaching:
             self.w.robot_env.robot.reset_with_certain_arm_q(self.q_reach_dst)
         else:
-            self.w.robot_env.robot.reset_with_certain_arm_q([0.0] * len(self.q_reach_dst))
+            self.w.robot_env.robot.reset_with_certain_arm_q(
+                [0.0] * len(self.q_reach_dst)
+            )
         # if self.opt.init_pose:
         #     if self.init_fin_q is not None:
         #         self.w.robot_env.change_init_fin_q(self.init_fin_q)
@@ -252,9 +270,22 @@ class DemoEnvironment:
                 sentence=command, vision_output=language_input
             )
         elif self.task == "place":
-            # We assume that the first object in the scene is the source
-            # object.
-            src_idx = 0
+            # We assume that the first object in the ground truth scene is the
+            # source object.
+            if self.observation_mode == "gt":
+                src_idx = self.opt.gt_place_idx
+            elif self.observation_mode == "vision":
+                # We need to find the index of the vision predicted object that
+                # is the closest neighbor to the ground truth.
+                # Compute the mapping from GT indexes to predicted indexes.
+                gt2pred_idxs = self.match_objects(
+                    src_odicts=self.scene, dst_odicts=observation
+                )
+                src_idx = gt2pred_idxs[self.opt.gt_place_idx]
+            else:
+                raise ValueError(
+                    f"Invalid observation mode: {self.observation_mode}."
+                )
             dst_idx = None
             assert self.place_dst_xy is not None
             dst_x, dst_y = self.place_dst_xy
@@ -446,6 +477,7 @@ class DemoEnvironment:
 
     def compute_trajectory(self, stage: str) -> np.ndarray:
         q_start, q_end = None, None
+        expected_src_base_z_post_placing = None
         odicts = self.initial_obs
 
         if stage == "reach":
@@ -469,6 +501,12 @@ class DemoEnvironment:
                 raise ValueError(
                     f"Invalid observation mode: {self.observation_mode}."
                 )
+            if self.task == "place":
+                expected_src_base_z_post_placing = 0.0
+            elif self.task == "stack":
+                expected_src_base_z_post_placing = self.initial_obs[
+                    self.dst_idx
+                ]["height"]
         else:
             raise ValueError(f"Invalid stage: {stage}.")
         trajectory = openrave.compute_trajectory(
@@ -477,6 +515,7 @@ class DemoEnvironment:
             q_start=q_start,
             q_end=q_end,
             stage=stage,
+            src_base_z_post_placing=expected_src_base_z_post_placing,
         )
         return trajectory
 
@@ -510,7 +549,7 @@ class DemoEnvironment:
     def place(self, stage_ts: int):
         if stage_ts == 0:
             self.w.robot_env.change_control_skip_scaling(
-                c_skip=self.opt.placing_control_skip
+                c_skip=self.opt.control_skip
             )
             (
                 self.policy,
@@ -621,14 +660,37 @@ class DemoEnvironment:
         )
 
         if stage_ts == len(self.trajectory) + 4:
-            diff = np.linalg.norm(self.w.robot_env.robot.get_q_dq(self.w.robot_env.robot.arm_dofs)[0]
-                                  - tar_arm_q)
+            diff = np.linalg.norm(
+                self.w.robot_env.robot.get_q_dq(
+                    self.w.robot_env.robot.arm_dofs
+                )[0]
+                - tar_arm_q
+            )
             print("diff final", diff)
-            print("vel final", np.linalg.norm(self.w.robot_env.robot.get_q_dq(self.w.robot_env.robot.arm_dofs)[1]))
+            print(
+                "vel final",
+                np.linalg.norm(
+                    self.w.robot_env.robot.get_q_dq(
+                        self.w.robot_env.robot.arm_dofs
+                    )[1]
+                ),
+            )
             print("fin dofs")
-            print(["{0:0.3f}".format(n) for n in self.w.robot_env.robot.get_q_dq(self.w.robot_env.robot.fin_actdofs)[0]])
+            print(
+                [
+                    "{0:0.3f}".format(n)
+                    for n in self.w.robot_env.robot.get_q_dq(
+                        self.w.robot_env.robot.fin_actdofs
+                    )[0]
+                ]
+            )
             print("cur_fin_tar_q")
-            print(["{0:0.3f}".format(n) for n in self.w.robot_env.robot.tar_fin_q])
+            print(
+                [
+                    "{0:0.3f}".format(n)
+                    for n in self.w.robot_env.robot.tar_fin_q
+                ]
+            )
 
         self.last_tar_arm_q = tar_arm_q
         self.w.step()
@@ -659,7 +721,7 @@ class DemoEnvironment:
             )
 
         # Compute the observation vector from object poses and placing position.
-        tx, ty = self.dst_xy        # this should be dst xy rather than src xy
+        tx, ty = self.dst_xy  # this should be dst xy rather than src xy
         if self.task == "stack":
             b_init_dict = self.initial_obs[self.dst_idx]
             tz = b_init_dict["height"]
@@ -669,7 +731,9 @@ class DemoEnvironment:
         tdict = self.obs[self.src_idx]
         t_pos = tdict["position"]
         t_up = tdict["up_vector"]
-        is_box = (tdict["shape"] == "box")      # should not matter if use init_obs or obs
+        is_box = (
+            tdict["shape"] == "box"
+        )  # should not matter if use init_obs or obs
 
         if self.task == "stack":
             bdict = self.obs[self.dst_idx]
@@ -837,18 +901,10 @@ class DemoEnvironment:
         # Verify that `self.initial_obs` is defined.
         assert self.initial_obs is not None
 
-        # Construct the cost matrix.
-        cost = np.zeros((len(self.initial_obs), len(pred_odicts)))
-        for src_idx, src_y in enumerate(self.initial_obs):
-            for dst_idx, dst_y in enumerate(pred_odicts):
-                cell = 0
-                for attr in ["color", "shape"]:
-                    if src_y[attr] != dst_y[attr]:
-                        cell += 1
-                cost[src_idx][dst_idx] = cell
-
         # Compute assignments.
-        src_idxs, dst_idxs = linear_sum_assignment(cost)
+        s2d_idxs = self.match_objects(
+            src_odicts=self.initial_obs, dst_odicts=pred_odicts
+        )
 
         # If `self.initial_obs` has more elements than `pred_odicts`, then
         # there will be unassigned elements in `self.initial_obs`. We assign
@@ -859,12 +915,47 @@ class DemoEnvironment:
         pred_obs = copy.deepcopy(self.last_pred_obs)
 
         # Override the pose predictions for the objects being manipulated.
-        for src_idx, dst_idx in zip(src_idxs, dst_idxs):
-            if src_idx in [self.src_idx, self.dst_idx]:
-                dst_odict = pred_odicts[dst_idx]
+        if self.task == "stack":
+            place_object_idxs = [self.src_idx, self.dst_idx]
+        elif self.task == "place":
+            place_object_idxs = [self.src_idx]
+        else:
+            raise ValueError(f"Invalid task: {self.task}")
+        for s in place_object_idxs:
+            # We only update the place object if we found a corresponding
+            # match in the predictions.
+            if s in s2d_idxs:
+                d = s2d_idxs[s]
+                dst_odict = pred_odicts[d]
                 for attr in ["position", "up_vector"]:
-                    pred_obs[src_idx][attr] = dst_odict[attr]
+                    pred_obs[s][attr] = dst_odict[attr]
         return pred_obs
+
+    def match_objects(
+        self, src_odicts: List[Dict], dst_odicts: List[Dict]
+    ) -> Tuple:
+        """
+        Args:
+            src_odicts: The source object dictionaries to match from.
+            dst_odicts: The destination object dictionaries to match to.
+
+        Returns:
+            src2dst_idxs: A mapping from src to dst index assignments.
+        """
+        # Construct the cost matrix.
+        cost = np.zeros((len(src_odicts), len(dst_odicts)))
+        for src_idx, src_y in enumerate(src_odicts):
+            for dst_idx, dst_y in enumerate(dst_odicts):
+                cell = 0
+                for attr in ["color", "shape"]:
+                    if src_y[attr] != dst_y[attr]:
+                        cell += 1
+                cost[src_idx][dst_idx] = cell
+
+        # Compute assignments.
+        src_idxs, dst_idxs = linear_sum_assignment(cost)
+        src2dst_idxs = {s: d for s, d in zip(src_idxs, dst_idxs)}
+        return src2dst_idxs
 
     def get_images(self) -> Tuple:
         """Retrieves the images that are input to the vision module.
@@ -905,8 +996,9 @@ class DemoEnvironment:
 
         # Either predict segmentations or use ground truth.
         if self.opt.use_segmentation_module:
-            masks = self.segmentation_module.predict(
-                img=rgb, debug_id=self.timestep
+            bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+            masks = self.segmentation_module.eval_example(
+                img=bgr, vis_id=self.timestep,
             )
         else:
             # If using ground truth, convert the segmentation image into a

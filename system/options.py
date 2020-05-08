@@ -2,8 +2,7 @@ import argparse
 
 GRASP_CONTROL_STEPS = 35
 PLACE_CONTROL_STEPS = 75
-GRASP_CONTROL_SKIP = 6
-PLACE_CONTROL_SKIP = 6
+CONTROL_SKIP = 6
 USE_HEIGHT = False
 
 # Models with height:
@@ -35,21 +34,21 @@ OPTIONS = argparse.Namespace(
     restore_fingers=True,
     use_height=USE_HEIGHT,
     n_plan_steps=305,
-    n_grasp_steps=GRASP_CONTROL_STEPS * GRASP_CONTROL_SKIP,
-    n_place_steps=PLACE_CONTROL_STEPS * PLACE_CONTROL_SKIP,
+    gt_place_idx=0,  # The index of the placing object in the GT scene.
+    grasp_control_steps=GRASP_CONTROL_STEPS,
+    place_control_steps=PLACE_CONTROL_STEPS,
+    control_skip=CONTROL_SKIP,
     grasp_pi=GRASP_PI,
     grasp_dir=GRASP_DIR,
     place_dir=PLACE_DIR,
     grasp_env_name="InmoovHandGraspBulletEnv-v6",
     place_env_name="InmoovHandPlaceBulletEnv-v9",
-    grasping_control_skip=GRASP_CONTROL_SKIP,
-    placing_control_skip=PLACE_CONTROL_SKIP,
     vision_delay=2,
-    segmentation_checkpoint_path="/media/sdc3/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
+    seg_checkpoint_path="/media/sdc3/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
     planning_checkpoint_path="/media/sdc3/mguo/outputs/planning_v003_20K/checkpoint_best.pt",
     placing_checkpoint_path="/media/sdc3/mguo/outputs/placing_v003_2K_20K/checkpoint_best.pt",
     stacking_checkpoint_path="/media/sdc3/mguo/outputs/stacking_v003_2K_20K/checkpoint_best.pt",
-    use_segmentation_module=False,
+    use_segmentation_module=True,
     coordinate_frame="unity_camera",
     save_predictions=True,
     save_preds_dir="/media/sdc3/mguo/outputs/system/placing",
