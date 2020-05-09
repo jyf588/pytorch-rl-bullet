@@ -129,7 +129,7 @@ class DemoEnvironment:
             self.segmentation_module = DASHSegModule(
                 mode="eval",
                 checkpoint_path=self.opt.seg_checkpoint_path,
-                vis_dir=os.path.join(self.opt.debug_dir, f"{trial:04}"),
+                vis_dir=None if self.opt.debug_dir is None else os.path.join(self.opt.debug_dir, f"{trial:04}"),
             )
 
         if visualize_bullet:
