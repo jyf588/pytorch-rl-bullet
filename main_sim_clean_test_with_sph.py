@@ -40,7 +40,7 @@ homedir = os.path.expanduser("~")
 
 # TODO: main module depends on the following code/model:
 # demo env: especially observation  # change obs vec (note diffTar)
-# the settings of inmoov hand v2        # TODO: init thumb 0.0 vs 0.1
+# the settings of inmoov hand v2        # init thumb 0.0 vs 0.1
 # obj sizes & frame representation & friction & obj xy range
 # frame skip
 # vision delay
@@ -71,6 +71,8 @@ ADD_SURROUNDING_OBJS = True
 LONG_MOVE = bool(args.long_move)
 SURROUNDING_OBJS_MAX_NUM = 4
 
+GRASP_SPH_ON = True
+
 ADD_WHITE_NOISE = True
 RENDER = bool(args.render)
 
@@ -79,7 +81,7 @@ CLOSE_THRES = 0.25
 NUM_TRIALS = 300
 
 GRASP_END_STEP = 35
-PLACE_END_STEP = 70
+PLACE_END_STEP = 75
 
 INIT_NOISE = True
 DET_CONTACT = 0  # 0 false, 1 true
@@ -111,28 +113,30 @@ else:
         PLACE_PI = "0404_0_n_place_0404_0"
         PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
-        # GRASP_PI = "0410_0_n_25_45"
-        # GRASP_DIR = "./trained_models_%s/ppo/" % "0410_0_n"
-        #
-        # PLACE_PI = "0410_0_n_place_0410_0"
-        # PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
     else:
-        # GRASP_PI = "0411_0_n_25_45"
-        # GRASP_DIR = "./trained_models_%s/ppo/" % "0411_0_n"
-        #
-        # PLACE_PI = "0411_0_n_place_0411_0"
-        # PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
+        GRASP_PI = "0411_0_n_25_45"
+        GRASP_DIR = "./trained_models_%s/ppo/" % "0411_0_n"
 
-        GRASP_PI = "0426_0_n_25_45"
-        GRASP_DIR = "./trained_models_%s/ppo/" % "0426_0_n"
-
-        PLACE_PI = "0426_0_n_place_0426_0"
+        PLACE_PI = "0411_0_n_place_0411_0"
         PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
+
+        # GRASP_PI = "0426_0_n_25_45"
+        # GRASP_DIR = "./trained_models_%s/ppo/" % "0426_0_n"
+        #
+        # PLACE_PI = "0426_0_n_place_0426_0"
+        # PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
     GRASP_PI_ENV_NAME = "InmoovHandGraspBulletEnv-v6"
     PLACE_PI_ENV_NAME = "InmoovHandPlaceBulletEnv-v9"
 
     INIT_FIN_Q = np.array([0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.1])
+
+if GRASP_SPH_ON:
+    GRASP_SPH_PI = "0422_sph_n_25_45"   # TODO: 0420
+    GRASP_SPH_DIR = "./trained_models_%s/ppo/" % "0422_sph_n"
+
+    PLACE_SPH_PI = "0422_sph_n_place_0422_sph"
+    PLACE_SPH_DIR = "./trained_models_%s/ppo/" % PLACE_SPH_PI
 
 USE_VISION_DELAY = True
 VISION_DELAY = 2
@@ -141,27 +145,82 @@ GRASPING_CONTROL_SKIP = 6
 
 
 def planning(trajectory, restore_fingers=False):
+    # TODO: total traj length 300+5 now
+
+    max_force = env_core.robot.maxForce
+
     last_tar_arm_q = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
-    # env_core.robot.maxForce = 1000
-    for idx in range(len(trajectory) + 50):
+
+    init_tar_fin_q = env_core.robot.tar_fin_q
+    init_fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
+
+    env_core.robot.tar_arm_q = trajectory[-1]  # TODO: important!
+
+    print("init_tar_fin_q")
+    print(["{0:0.3f}".format(n) for n in init_tar_fin_q])
+    print("init_fin_q")
+    print(["{0:0.3f}".format(n) for n in init_fin_q])
+
+    for idx in range(len(trajectory) + 5):
         if idx > len(trajectory) - 1:
             tar_arm_q = trajectory[-1]
         else:
             tar_arm_q = trajectory[idx]
 
+        tar_arm_vel = (tar_arm_q - last_tar_arm_q) / utils.TS
+
+        p.setJointMotorControlArray(
+            bodyIndex=env_core.robot.arm_id,
+            jointIndices=env_core.robot.arm_dofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=list(tar_arm_q),
+            targetVelocities=list(tar_arm_vel),
+            forces=[max_force * 5] * len(env_core.robot.arm_dofs))
+
         if restore_fingers and idx >= len(trajectory) * 0.1:   # TODO: hardcoded
             blending = np.clip((idx - len(trajectory) * 0.1) / (len(trajectory) * 0.6), 0.0, 1.0)
             cur_fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
             tar_fin_q = env_core.robot.init_fin_q * blending + cur_fin_q * (1-blending)
-            env_core.robot.tar_fin_q = tar_fin_q
+        else:
+            # try to keep fin q close to init_fin_q (keep finger pose)
+            # add at most offset 0.05 in init_tar_fin_q direction so that grasp is tight
+            tar_fin_q = np.clip(init_tar_fin_q, init_fin_q - 0.05, init_fin_q + 0.05)
 
-        env_core.robot.tar_arm_q = tar_arm_q
-        env_core.robot.apply_action([0.0] * 24)
+        # clip to joint limit
+        tar_fin_q = np.clip(tar_fin_q,
+                            env_core.robot.ll[env_core.robot.fin_actdofs],
+                            env_core.robot.ul[env_core.robot.fin_actdofs])
+
+        p.setJointMotorControlArray(
+            bodyIndex=env_core.robot.arm_id,
+            jointIndices=env_core.robot.fin_actdofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=list(tar_fin_q),
+            forces=[max_force] * len(env_core.robot.fin_actdofs))
+        p.setJointMotorControlArray(
+            bodyIndex=env_core.robot.arm_id,
+            jointIndices=env_core.robot.fin_zerodofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=[0.0]*len(env_core.robot.fin_zerodofs),
+            forces=[max_force / 4.0] * len(env_core.robot.fin_zerodofs))
+
+        diff = np.linalg.norm(env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
+                              - tar_arm_q)
+
+        if idx == len(trajectory) + 4:
+            print("diff final", diff)
+            print("vel final", np.linalg.norm(env_core.robot.get_q_dq(env_core.robot.arm_dofs)[1]))
+            print("fin dofs")
+            print(["{0:0.3f}".format(n) for n in env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]])
+            print("cur_fin_tar_q")
+            print(["{0:0.3f}".format(n) for n in env_core.robot.tar_fin_q])
 
         for _ in range(1):
             p.stepSimulation()
         if DUMMY_SLEEP:
-            time.sleep(utils.TS / 2.0)
+            time.sleep(utils.TS * 0.6)
+
+        last_tar_arm_q = tar_arm_q
 
 
 def get_relative_state_for_reset(oid):
@@ -185,7 +244,7 @@ def get_relative_state_for_reset(oid):
     return relative_state
 
 
-def sample_obj_dict(is_thicker=False, whole_table_top=False):
+def sample_obj_dict(is_thicker=False, whole_table_top=False, only_sph=False):
     # a dict containing obj info
     # "shape", "radius", "height", "position", "orientation", "mass", "mu"
 
@@ -201,8 +260,15 @@ def sample_obj_dict(is_thicker=False, whole_table_top=False):
         y_min = utils.TY_MIN
         y_max = utils.TY_MAX
 
+    if GRASP_SPH_ON:
+        shape = utils.SHAPE_IND_TO_NAME_MAP[np.random.randint(3) - 1]   # -1(sph)/0/1
+    else:
+        shape = utils.SHAPE_IND_TO_NAME_MAP[np.random.randint(2)]
+    if only_sph:
+        shape = utils.SHAPE_IND_TO_NAME_MAP[-1]
+
     obj_dict = {
-        "shape": utils.SHAPE_IND_TO_NAME_MAP[np.random.randint(2)],
+        "shape": shape,
         "radius": np.random.uniform(min_r, utils.HALF_W_MAX),
         "height": np.random.uniform(utils.H_MIN, utils.H_MAX),
         "position": [
@@ -220,6 +286,9 @@ def sample_obj_dict(is_thicker=False, whole_table_top=False):
 
     if obj_dict["shape"] == "box":
         obj_dict["radius"] *= 0.8
+    elif GRASP_SPH_ON and obj_dict['shape'] == "sphere":
+        obj_dict['height'] *= 0.75
+        obj_dict['radius'] = None
     obj_dict["position"][2] = obj_dict["height"] / 2.0
 
     return obj_dict
@@ -227,10 +296,10 @@ def sample_obj_dict(is_thicker=False, whole_table_top=False):
 
 def load_obj_and_construct_state(obj_dicts_list):
     state = {}
-    # # load surrounding first
-    # for idx in range(2, len(obj_dicts_list)):
-    #     bullet_id = utils.create_sym_prim_shape_helper_new(obj_dicts_list[idx])
-    #     state[bullet_id] = obj_dicts_list[idx]
+    # load surrounding first
+    for idx in range(2, len(obj_dicts_list)):
+        bullet_id = utils.create_sym_prim_shape_helper_new(obj_dicts_list[idx])
+        state[bullet_id] = obj_dicts_list[idx]
 
     bottom_id = None
     # ignore btm if placing on tabletop
@@ -279,10 +348,10 @@ def get_stack_policy_obs_tensor(tx, ty, tz, t_half_height, is_box, t_pos, t_up, 
         obs = env_core.get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
             tx, ty, is_box, t_pos, t_up, b_pos, b_up
         )
-        if TEST_PLACING:
-            obs.extend([1.0])
-        else:
-            obs.extend([-1.0])
+        # if TEST_PLACING:
+        #     obs.extend([1.0])
+        # else:
+        #     obs.extend([-1.0])
     obs = policy.wrap_obs(obs, IS_CUDA)
     return obs
 
@@ -314,6 +383,8 @@ def get_stacking_obs(
     """
 
     top_pos, top_quat = p.getBasePositionAndOrientation(top_oid)
+    if GRASP_SPH_ON and obj_state[top_oid]["shape"] == "sphere":
+        top_quat = [0., 0, 0, 1]
     if btm_oid is None:
         btm_pos, btm_quat = [0.0, 0, 0], [0.0, 0, 0, 1]
     else:
@@ -359,12 +430,27 @@ p_actor_critic, _, recurrent_hidden_states, masks = policy.load(
     PLACE_DIR, PLACE_PI_ENV_NAME, IS_CUDA
 )
 
+if GRASP_SPH_ON:
+    sph_g_actor_critic, _, _, _ = policy.load(
+        GRASP_SPH_DIR, GRASP_PI_ENV_NAME, IS_CUDA
+    )
+    sph_p_actor_critic, _, _, _ = policy.load(
+        PLACE_SPH_DIR, PLACE_PI_ENV_NAME, IS_CUDA
+    )
+
 o_pos_pf_ave, o_quat_pf_ave, _ = \
     utils.read_grasp_final_states_from_pickle(GRASP_PI)
 
 p_pos_of_ave, p_quat_of_ave = p.invertTransform(
     o_pos_pf_ave, o_quat_pf_ave
 )
+
+if GRASP_SPH_ON:
+    sph_o_pos_pf_ave, sph_o_quat_pf_ave, _ = \
+        utils.read_grasp_final_states_from_pickle(GRASP_SPH_PI)
+    sph_p_pos_of_ave, sph_p_quat_of_ave = p.invertTransform(
+        sph_o_pos_pf_ave, sph_o_quat_pf_ave
+    )
 
 """Start Bullet session."""
 if RENDER:
@@ -378,7 +464,7 @@ for trial in range(NUM_TRIALS):
     all_dicts = []
 
     while True:
-        top_dict = sample_obj_dict()
+        top_dict = sample_obj_dict(only_sph=False)
         btm_dict = sample_obj_dict(is_thicker=True)
 
         g_tx, g_ty = top_dict["position"][0], top_dict["position"][1]
@@ -397,7 +483,10 @@ for trial in range(NUM_TRIALS):
             # overwrite ptz
             p_tz = 0.0
 
-        is_box = (top_dict["shape"] == "box")
+        # if GRASP_SPH_ON
+        top_shape = utils.NAME_TO_SHAPE_IND_MAP[top_dict["shape"]]  # -1(sph)/0/1
+        # else
+        # is_box = int(top_dict["shape"] == "box")      # 0/1
 
         dist = CLOSE_THRES*2.0 if LONG_MOVE else CLOSE_THRES
         if is_close(top_dict, btm_dict, dist=dist):
@@ -415,7 +504,7 @@ for trial in range(NUM_TRIALS):
         Qreach = np.array(sess.get_most_comfortable_q_and_refangle(g_tx, g_ty)[0])
         del sess
     else:
-        # maybe not necessary to create table and robot twice. Decide later TODO
+        # maybe not necessary to create table and robot twice. Decide later
         desired_obj_pos = [g_tx, g_ty, 0.0]
 
         table_id = utils.create_table(FLOOR_MU)
@@ -425,7 +514,6 @@ for trial in range(NUM_TRIALS):
             timestep=utils.TS,
             np_random=np.random,
         )
-        # TODO: [1] is the 2nd candidate
         Qreach = utils.get_n_optimal_init_arm_qs(robot, utils.PALM_POS_OF_INIT,
                                                  p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
                                                  desired_obj_pos, table_id, wrist_gain=3.0)[0]
@@ -448,10 +536,22 @@ for trial in range(NUM_TRIALS):
         np_random=np.random,
     )
 
-    # TODO: [1] is the 2nd candidate
-    Qdestin = utils.get_n_optimal_init_arm_qs(
-        robot, p_pos_of_ave, p_quat_of_ave, desired_obj_pos, table_id
-    )[0]
+    if GRASP_SPH_ON and top_shape == -1:     # sphere has no "up vector"
+        _, desired_obj_quat = p.multiplyTransforms(
+            [0, 0, 0],
+            p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
+            [0, 0, 0],
+            sph_o_quat_pf_ave
+        )
+        Qdestin = utils.get_n_optimal_init_arm_qs(
+            robot, sph_p_pos_of_ave, sph_p_quat_of_ave, desired_obj_pos, table_id, desired_obj_quat=desired_obj_quat
+        )[0]
+    else:
+        desired_obj_quat = [0., 0, 0, 1]  # box or cyl be upright
+        Qdestin = utils.get_n_optimal_init_arm_qs(
+            robot, p_pos_of_ave, p_quat_of_ave, desired_obj_pos, table_id, desired_obj_quat=desired_obj_quat
+        )[0]
+
     del table_id, robot, desired_obj_pos
     p.resetSimulation()
 
@@ -494,7 +594,7 @@ for trial in range(NUM_TRIALS):
         if Traj_reach is None or len(Traj_reach) == 0:
             p.resetSimulation()
             print("*******", success_count * 1.0 / (trial + 1))
-            continue  # TODO: reaching failed
+            continue  # reaching failed
         else:
             planning(Traj_reach)
 
@@ -503,19 +603,24 @@ for trial in range(NUM_TRIALS):
         env_core.robot.reset_with_certain_arm_q(Qreach)
         # input("press enter")
 
-    g_obs = get_grasp_policy_obs_tensor(g_tx, g_ty, t_half_height, is_box)
+    g_obs = get_grasp_policy_obs_tensor(g_tx, g_ty, t_half_height, top_shape)
 
     """Grasp"""
     control_steps = 0
     for i in range(GRASP_END_STEP):
         with torch.no_grad():
-            value, action, _, recurrent_hidden_states = g_actor_critic.act(
-                g_obs, recurrent_hidden_states, masks, deterministic=args.det
-            )
+            if GRASP_SPH_ON and top_shape == -1:
+                value, action, _, recurrent_hidden_states = sph_g_actor_critic.act(
+                    g_obs, recurrent_hidden_states, masks, deterministic=args.det
+                )
+            else:
+                value, action, _, recurrent_hidden_states = g_actor_critic.act(
+                    g_obs, recurrent_hidden_states, masks, deterministic=args.det
+                )
 
         env_core.step(policy.unwrap_action(action, IS_CUDA))
 
-        g_obs = get_grasp_policy_obs_tensor(g_tx, g_ty, t_half_height, is_box)
+        g_obs = get_grasp_policy_obs_tensor(g_tx, g_ty, t_half_height, top_shape)
 
         # print(g_obs)
         # print(action)
@@ -549,7 +654,7 @@ for trial in range(NUM_TRIALS):
     if Traj_move is None or len(Traj_move) == 0:
         p.resetSimulation()
         print("*******", success_count * 1.0 / (trial + 1))
-        continue        # TODO: transporting failed
+        continue        # transporting failed
     else:
         planning(Traj_move)
 
@@ -562,27 +667,36 @@ for trial in range(NUM_TRIALS):
     # print(f"Pose before placing")
     # pprint.pprint(pose_saver.poses[-1])
     #
-    ##### fake: reset###
-    o_pos_pf = state['obj_pos_in_palm']
-    o_quat_pf = state['obj_quat_in_palm']
-    all_fin_q_init = state['all_fin_q']
-    tar_fin_q_init = state['fin_tar_q']
-    env_core.robot.reset_with_certain_arm_q_finger_states(Qdestin, all_fin_q_init, tar_fin_q_init)
-    p_pos, p_quat = env_core.robot.get_link_pos_quat(env_core.robot.ee_id)
-    o_pos, o_quat = p.multiplyTransforms(p_pos, p_quat, o_pos_pf, o_quat_pf)
-
-    # table_id = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/tabletop.urdf'), TABLE_OFFSET,
-    #                       useFixedBase=1)
-    # p.changeDynamics(table_id, -1, lateralFriction=FLOOR_MU)
-    # oid1 = p.loadURDF(os.path.join(currentdir, 'my_pybullet_envs/assets/cylinder_small.urdf'), o_pos, o_quat,
-    #                   useFixedBase=0)
-    # p.changeDynamics(oid1, -1, lateralFriction=OBJ_MU)
-    p.resetBasePositionAndOrientation(top_id, o_pos, o_quat)
-    p.stepSimulation()
-    env_core.robot.reset_with_certain_arm_q_finger_states(Qdestin, all_fin_q_init, tar_fin_q_init)
-    p.resetBasePositionAndOrientation(top_id, o_pos, o_quat)
-    p.stepSimulation()
-    #####
+    # input("ready to place")
+    # ##### fake: reset###
+    # # reset only arm but not obj/finger
+    # # reset obj/finger but not arm
+    # # reset finger vel/obj vel only
+    # # reset obj but not arm/finger -- good
+    # # reset obj vel but not pos -- somewhat good
+    # # reset obj but not arm/finger
+    #
+    # # # TODO:tmp
+    # # state = get_relative_state_for_reset(top_id)
+    # # print("after grasping", state)
+    #
+    # o_pos_pf = state['obj_pos_in_palm']
+    # o_quat_pf = state['obj_quat_in_palm']
+    # all_fin_q_init = state['all_fin_q']
+    # tar_fin_q_init = state['fin_tar_q']
+    # # env_core.robot.reset_with_certain_arm_q_finger_states(Qdestin, all_fin_q_init, tar_fin_q_init)
+    # # env_core.robot.reset_only_certain_finger_states(all_fin_q_init, tar_fin_q_init)
+    #
+    # p_pos, p_quat = env_core.robot.get_link_pos_quat(env_core.robot.ee_id)
+    # o_pos, o_quat = p.multiplyTransforms(p_pos, p_quat, o_pos_pf, o_quat_pf)
+    # p.resetBasePositionAndOrientation(top_id, o_pos, o_quat)
+    # p.stepSimulation()
+    # # env_core.robot.reset_with_certain_arm_q_finger_states(Qdestin, all_fin_q_init, tar_fin_q_init)
+    # # env_core.robot.reset_only_certain_finger_states(all_fin_q_init, tar_fin_q_init)
+    # p.resetBasePositionAndOrientation(top_id, o_pos, o_quat)
+    # p.stepSimulation()
+    # #####
+    # # input("reset")
 
     """Prepare for placing"""
     env_core.change_control_skip_scaling(c_skip=PLACING_CONTROL_SKIP)
@@ -601,12 +715,12 @@ for trial in range(NUM_TRIALS):
         t_half_height,
     )
 
-    # TODO: an unly hack to force Bullet compute forward kinematics
+    # an ugly hack to force Bullet compute forward kinematics
     _ = get_stack_policy_obs_tensor(
-        p_tx, p_ty, p_tz, t_half_height, is_box, t_pos, t_up, b_pos, b_up
+        p_tx, p_ty, p_tz, t_half_height, top_shape, t_pos, t_up, b_pos, b_up
     )
     p_obs = get_stack_policy_obs_tensor(
-        p_tx, p_ty, p_tz, t_half_height, is_box, t_pos, t_up, b_pos, b_up
+        p_tx, p_ty, p_tz, t_half_height, top_shape, t_pos, t_up, b_pos, b_up
     )
     # print("pobs", p_obs)
     # input("ready to place")
@@ -615,9 +729,14 @@ for trial in range(NUM_TRIALS):
     print(f"Executing placing...")
     for i in tqdm(range(PLACE_END_STEP)):
         with torch.no_grad():
-            value, action, _, recurrent_hidden_states = p_actor_critic.act(
-                p_obs, recurrent_hidden_states, masks, deterministic=args.det
-            )
+            if GRASP_SPH_ON and top_shape == -1:
+                value, action, _, recurrent_hidden_states = sph_p_actor_critic.act(
+                    p_obs, recurrent_hidden_states, masks, deterministic=args.det
+                )
+            else:
+                value, action, _, recurrent_hidden_states = p_actor_critic.act(
+                    p_obs, recurrent_hidden_states, masks, deterministic=args.det
+                )
 
         env_core.step(policy.unwrap_action(action, IS_CUDA))
 
@@ -636,7 +755,7 @@ for trial in range(NUM_TRIALS):
             )
 
         p_obs = get_stack_policy_obs_tensor(
-            p_tx, p_ty, p_tz, l_t_half_height, is_box, l_t_pos, l_t_up, l_b_pos, l_b_up
+            p_tx, p_ty, p_tz, l_t_half_height, top_shape, l_t_pos, l_t_up, l_b_pos, l_b_up
         )
 
         # print(action)
@@ -664,13 +783,13 @@ for trial in range(NUM_TRIALS):
         if Traj_reach is None or len(Traj_reach) == 0:
             p.resetSimulation()
             print("*******", success_count * 1.0 / (trial + 1))
-            continue  # TODO: retracting failed
+            continue  # retracting failed
         else:
             planning(Traj_reach, restore_fingers=True)
 
     t_pos, t_quat = p.getBasePositionAndOrientation(top_id)
     if t_pos[2] - p_tz > 0.05 and (t_pos[0] - p_tx)**2 + (t_pos[1] - p_ty)**2 < 0.1**2:
-        # a very rough check
+        # TODO: ptz noisy a very rough check
         success_count += 1
 
     openrave_success_count += 1

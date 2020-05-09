@@ -1782,6 +1782,13 @@ without height
 without height and from stack grasping (TB tested)
 0412
 
+# baseline policy
+# reach+grasp
+# will fail to reach if use dist between obj and palm
+# if use dist between palm and obj init pos, will reach accurately and sweep obj
+
+
+
 # whole system issues:
 # large obj collide during transporting --> make a large BB, move up & move down
 # collide with other objs during grasping. --> increase dev pen, or make drop condition harsh

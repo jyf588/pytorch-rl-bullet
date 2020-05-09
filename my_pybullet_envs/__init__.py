@@ -202,7 +202,7 @@ register(
 register(
     id="InmoovHandReachGraspBulletEnv-v1",
     entry_point="my_pybullet_envs:InmoovShadowHandReachGraspEnv",
-    max_episode_steps=120,  # large enough, controlled by done
+    max_episode_steps=95,  # large enough, controlled by done
 )
 
 
