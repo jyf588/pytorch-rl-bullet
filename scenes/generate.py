@@ -10,11 +10,11 @@ from scenes.generator import SceneGenerator
 def main(args: argparse.Namespace):
     for task in OPT.TASK_LIST:
         print(f"Generating scenes for task: {task}...")
+        exp_options = OPT.EXPERIMENT_OPTIONS[args.experiment][task]
         generators = create_generators(
-            seed=OPT.EXPERIMENT2SEED[args.experiment][task],
-            generator_options=OPT.TASK2OPTIONS[task],
+            seed=exp_options["seed"], generator_options=OPT.TASK2OPTIONS[task],
         )
-        _ = generate_scenes(n_scenes=OPT.N_SCENES, generators=generators)
+        _ = generate_scenes(n_scenes=exp_options["n_scenes"], generators=generators)
 
 
 def create_generators(seed: int, generator_options: List) -> List:
