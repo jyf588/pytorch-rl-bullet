@@ -129,7 +129,7 @@ class DemoEnvironment:
             self.segmentation_module = DASHSegModule(
                 mode="eval",
                 checkpoint_path=self.opt.seg_checkpoint_path,
-                vis_dir=os.path.join(self.opt.debug_dir, f"{trial:04}"),
+                vis_dir=None if self.opt.debug_dir is None else os.path.join(self.opt.debug_dir, f"{trial:04}"),
             )
 
         if visualize_bullet:
@@ -140,14 +140,12 @@ class DemoEnvironment:
         self.timestep = 0
 
     def compute_stages(self):
-        if self.opt.disable_reaching:
-            reach_start = -1
-            reach_end = -1
-            grasp_start = 0
-        else:
+        if self.opt.enable_reaching:
             reach_start = 0
             reach_end = reach_start + self.opt.n_plan_steps
             grasp_start = reach_end
+        else:
+            grasp_start = 0
 
         n_grasp = self.opt.grasp_control_steps
         n_place = self.opt.place_control_steps
@@ -165,12 +163,14 @@ class DemoEnvironment:
         retract_end = retract_start + self.opt.n_plan_steps
 
         stage2ts_bounds = {
-            "reach": (reach_start, reach_end),
             "grasp": (grasp_start, grasp_end),
             "transport": (transport_start, transport_end),
             "place": (place_start, place_end),
             "retract": (retract_start, retract_end),
         }
+
+        if self.opt.enable_reaching:
+            stage2ts_bounds["reach"] = (reach_start, reach_end)
 
         n_total_steps = 0
         for start_ts, end_ts in stage2ts_bounds.values():
@@ -214,12 +214,11 @@ class DemoEnvironment:
 
         # If reaching is disabled, set the robot arm directly to the dstination
         # of reaching.
-        if self.opt.disable_reaching:
-            self.w.robot_env.robot.reset_with_certain_arm_q(self.q_reach_dst)
+        if self.opt.enable_reaching:
+            q_zero = [0.0] * len(self.q_reach_dst)
+            self.w.robot_env.robot.reset_with_certain_arm_q(q_zero)
         else:
-            self.w.robot_env.robot.reset_with_certain_arm_q(
-                [0.0] * len(self.q_reach_dst)
-            )
+            self.w.robot_env.robot.reset_with_certain_arm_q(self.q_reach_dst)
         # if self.opt.init_pose:
         #     if self.init_fin_q is not None:
         #         self.w.robot_env.change_init_fin_q(self.init_fin_q)
