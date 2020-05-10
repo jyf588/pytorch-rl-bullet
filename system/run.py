@@ -11,9 +11,7 @@ import bullet2unity.states
 import system.base_scenes
 from system.env import DemoEnvironment
 from system.options import OPTIONS
-from system.scene import SceneGenerator
 import my_pybullet_envs.utils as utils
-from ns_vqa_dart.bullet.random_objects import RandomObjectsGenerator
 
 global args
 
@@ -268,81 +266,6 @@ async def send_to_client(websocket, path):
             # input("Press enter to continue")
             # del env
     sys.exit(0)
-
-
-def generate_scenes(seed: int, n_scenes: int, disable_orientation: bool):
-    # Top object, with different min radius.
-    generator_top = RandomObjectsGenerator(
-        seed=seed,
-        n_objs_bounds=(1, 1),
-        obj_dist_thresh=OBJECT_DIST_THRESH,
-        max_retries=50,
-        shapes=["box", "cylinder"],
-        colors=["blue", "green", "red", "yellow"],
-        radius_bounds=(utils.HALF_W_MIN_BTM, utils.HALF_W_MAX),
-        height_bounds=(utils.H_MIN, utils.H_MAX),
-        x_bounds=(utils.TX_MIN, utils.TX_MAX),
-        y_bounds=(utils.TY_MIN, utils.TY_MAX),
-        z_bounds=(0.0, 0.0),
-        mass_bounds=(utils.MASS_MIN, utils.MASS_MAX),
-        mu_bounds=(OPTIONS.obj_mu, OPTIONS.obj_mu),
-        position_mode="com",
-        disable_orientation=disable_orientation,
-    )
-    generator_bottom = RandomObjectsGenerator(
-        seed=seed,
-        n_objs_bounds=(1, 1),
-        obj_dist_thresh=OBJECT_DIST_THRESH,
-        max_retries=50,
-        shapes=["box", "cylinder"],
-        colors=["blue", "green", "red", "yellow"],
-        radius_bounds=(utils.HALF_W_MIN, utils.HALF_W_MAX),
-        height_bounds=(utils.H_MIN, utils.H_MAX),
-        x_bounds=(utils.TX_MIN, utils.TX_MAX),
-        y_bounds=(utils.TY_MIN, utils.TY_MAX),
-        z_bounds=(0.0, 0.0),
-        mass_bounds=(utils.MASS_MIN, utils.MASS_MAX),
-        mu_bounds=(OPTIONS.obj_mu, OPTIONS.obj_mu),
-        position_mode="com",
-        disable_orientation=disable_orientation,
-    )
-    # Remaining objects.
-    generator_all = RandomObjectsGenerator(
-        seed=seed,
-        n_objs_bounds=(2, 4),  # Maximum number of objects allowed by OR is 6.
-        obj_dist_thresh=OBJECT_DIST_THRESH,
-        max_retries=50,
-        shapes=["box", "cylinder", "sphere"],
-        colors=["red", "yellow"],
-        radius_bounds=(utils.HALF_W_MIN, utils.HALF_W_MAX),
-        height_bounds=(utils.H_MIN, utils.H_MAX),
-        x_bounds=(utils.TX_MIN, utils.TX_MAX),
-        y_bounds=(utils.TY_MIN, utils.TY_MAX),
-        z_bounds=(0.0, 0.0),
-        mass_bounds=(utils.MASS_MIN, utils.MASS_MAX),
-        mu_bounds=(OPTIONS.obj_mu, OPTIONS.obj_mu),
-        position_mode="com",
-        disable_orientation=disable_orientation,
-    )
-    scenes = []
-    for _ in range(n_scenes):
-        top_scene = generator_top.generate_tabletop_objects()
-        bottom_scene = generator_bottom.generate_tabletop_objects(
-            existing_odicts=top_scene
-        )
-        all_scene = []
-        all_scene = generator_all.generate_tabletop_objects(
-            existing_odicts=top_scene + bottom_scene
-        )
-        scene = top_scene + bottom_scene
-
-        # We still generate surrounding objects even if this flag is turned off
-        # because we want the top and bottom objects to be the same w/ and w/o
-        # this flag.
-        if ADD_SURROUNDING_OBJECTS:
-            scene += all_scene
-        scenes.append(scene)
-    return scenes
 
 
 def add_hallucinations_to_state(state: Dict, h_odicts: Dict, color: str):

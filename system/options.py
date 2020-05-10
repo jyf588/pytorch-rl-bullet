@@ -1,7 +1,5 @@
 import argparse
 
-GRASP_CONTROL_STEPS = 35
-PLACE_CONTROL_STEPS = 75
 CONTROL_SKIP = 6
 USE_HEIGHT = False
 
@@ -26,18 +24,19 @@ OPTIONS = argparse.Namespace(
     det_contact=0,
     init_noise=True,
     ts=1.0 / 240,
+    obj_dist_thresh=0.25,
     obj_mu=1.0,
     hand_mu=1.0,
     floor_mu=1.0,
     init_pose=False,
-    enable_reaching=False,
-    enable_retract=False,
+    enable_reaching=True,
+    enable_retract=True,
     restore_fingers=True,
     use_height=USE_HEIGHT,
     n_plan_steps=305,
     gt_place_idx=0,  # The index of the placing object in the GT scene.
-    grasp_control_steps=GRASP_CONTROL_STEPS,
-    place_control_steps=PLACE_CONTROL_STEPS,
+    grasp_control_steps=35,
+    place_control_steps=75,
     control_skip=CONTROL_SKIP,
     grasp_pi=GRASP_PI,
     grasp_dir=GRASP_DIR,
