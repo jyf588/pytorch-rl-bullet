@@ -31,6 +31,7 @@ class DemoEnvironment:
         opt: argparse.Namespace,
         bullet_opt: argparse.Namespace,
         policy_opt: argparse.Namespace,
+        name2policy_models: Dict,
         vision_opt: argparse.Namespace,
         trial: int,
         scene: List[Dict],
@@ -53,12 +54,15 @@ class DemoEnvironment:
         self.opt = opt
         self.bullet_opt = bullet_opt
         self.policy_opt = policy_opt
+        self.name2policy_models = name2policy_models
         self.vision_opt = vision_opt
         self.trial = trial
         self.scene = scene
         self.task = task
         self.command = command
         self.place_dst_xy = place_dst_xy
+
+        np.random.seed(self.opt.seed)
 
         self.timestep = 0
         self.planning_complete = False
@@ -101,6 +105,19 @@ class DemoEnvironment:
         else:
             p.connect(p.DIRECT)
 
+    def cleanup(self):
+        p.disconnect()
+        del self
+
+    def is_done(self) -> bool:
+        """Determines whether we have finished the sequence.
+
+        Returns:
+            done: Whether the sequence has finished.
+        """
+        # If we executed all steps, we are done.
+        return self.timestep == self.n_total_steps
+
     def compute_stages(self):
         if self.opt.enable_reaching:
             reach_start = 0
@@ -139,159 +156,27 @@ class DemoEnvironment:
             n_total_steps += end_ts - start_ts
         return stage2ts_bounds, n_total_steps
 
-    def plan(self):
-        # First, get the current observation which we will store as the initial
-        # observation for planning reach/transport and for grasping.
-        self.initial_obs = self.get_observation()
-        self.obs = copy.deepcopy(self.initial_obs)
-
-        # Use language module to determine the source / target objects and
-        # positions.
-        self.src_idx, self.dst_idx, dst_xyz = self.parse_command(
-            command=self.command, observation=self.initial_obs
-        )
-
-        # obtained from initial_obs
-        self.dst_xy = dst_xyz[:2]  # used for policy as well
-        self.src_xy = self.initial_obs[self.src_idx]["position"][
-            :2
-        ]  # used for policy as well
-
-        # Compute the goal arm poses for reaching and transport.
-        self.q_reach_dst, self.q_transport_dst = self.compute_qs(
-            src_xy=self.src_xy, dst_xyz=dst_xyz,
-        )
-
-        # Create the bullet world now that we've finished our imaginary
-        # sessions.
-        self.w = BulletWorld(
-            opt=self.bullet_opt,
-            policy_opt=self.policy_opt,
-            p=p,
-            scene=self.scene,
-            visualize=self.opt.render_bullet,
-            use_control_skip=self.opt.use_control_skip,
-        )
-
-        # If reaching is disabled, set the robot arm directly to the dstination
-        # of reaching.
-        if self.opt.enable_reaching:
-            q_zero = [0.0] * len(self.q_reach_dst)
-            self.w.robot_env.robot.reset_with_certain_arm_q(q_zero)
-        else:
-            self.w.robot_env.robot.reset_with_certain_arm_q(self.q_reach_dst)
-
-        # Flag planning as complete.
-        self.planning_complete = True
-
-    def parse_command(self, command: str, observation: Dict):
-        """Parses a language command in the context of an observation of a
-        scene and computes the source and target objects and location for a 
-        pick-and-place task.
-
-        Args:
-            command: The command to execute.
-            observation: A list of object dictionaries defining the tabletop 
-                objects in a scene, in the format:
-                [
-                    {
-                        "shape": shape,
-                        "color": color,
-                        "radius": radius,
-                        "height": height,
-                        "position": [x, y, z],
-                        "orientation": [x, y, z, w],
-                    },
-                    ...
-                ]
-        
-        Returns:
-            src_idx: The index of the source object.
-            dst_idx: The index of the destination object.
-            dst_xyz: The (x, y, z) location to end transport at / start placing.
-        """
-        # Language is only supported for stacking for now.
-        if self.task == "stack":
-            # Zero-pad the scene's position with fourth dimension because that's
-            # what the language module expects.
-            language_input = copy.deepcopy(observation)
-            for idx, odict in enumerate(language_input):
-                language_input[idx]["position"] = odict["position"] + [0.0]
-
-            # Feed through the language module.
-            src_idx, (dst_x, dst_y), dst_idx = NLPmod(
-                sentence=command, vision_output=language_input
-            )
-        elif self.task == "place":
-            # We assume that the first object in the ground truth scene is the
-            # source object.
-            if self.opt.obs_mode == "gt":
-                src_idx = self.opt.gt_place_idx
-            elif self.opt.obs_mode == "vision":
-                # We need to find the index of the vision predicted object that
-                # is the closest neighbor to the ground truth.
-                # Compute the mapping from GT indexes to predicted indexes.
-                gt2pred_idxs = self.match_objects(
-                    src_odicts=self.scene, dst_odicts=observation
-                )
-                src_idx = gt2pred_idxs[self.opt.gt_place_idx]
-            else:
-                raise ValueError(f"Invalid observation mode: {self.opt.obs_mode}.")
-            dst_idx = None
-            assert self.place_dst_xy is not None
-            dst_x, dst_y = self.place_dst_xy
-        else:
-            raise ValueError(f"Invalid task: {self.task}.")
-
-        # Compute the destination z based on whether there is a destination
-        # object that we are placing on top of (stacking).
-        if dst_idx is None:
-            z = 0.0
-        else:
-            if self.policy_opt.use_height:
-                z = observation[dst_idx]["height"]
-            else:
-                z = utils.H_MAX
-
-        dst_xyz = [dst_x, dst_y, z + utils.PLACE_START_CLEARANCE]
-        return src_idx, dst_idx, dst_xyz
-
-    def get_state(self):
-        """Retrieves the current state of the bullet world.
+    def get_current_stage(self) -> Tuple[str, int]:
+        """Retrieves the current stage of the demo.
 
         Returns:
-            state: The state of the bullet environment, in the format:
-                {
-                    "objects": {
-                        "<oid>": {
-                            "shape": shape,
-                            "color": color,
-                            "radius": radius,
-                            "height": height,
-                            "position": [x, y, z],
-                            "orientation": [x, y, z, w],
-                        },
-                        ...
-                    },
-                    "robot": {
-                        "<joint_name>": <joint_angle>,
-                        ...
-                    }
-                }
-            Note that if no bullet world is created yet, oid is simply assigned
-            using zero-indexed assignment.
+            stage: The stage of the demo.
+            stage_s: The timestep of the current stage. 
         """
-        # If there is no bullet world, we simply return the input scene.
-        if self.w is None:
-            state = {"objects": {idx: odict for idx, odict in enumerate(self.scene)}}
-        else:
-            state = self.w.get_state()
+        if not self.planning_complete:
+            return "plan", 0
 
-        # Additionally, compute the up vector from the orientation.
-        for idx in state["objects"].keys():
-            orn = state["objects"][idx]["orientation"]
-            state["objects"][idx]["up_vector"] = util.orientation_to_up(orn)
-        return state
+        current_stage = None
+        for stage, ts_bounds in self.stage2ts_bounds.items():
+            start, end = ts_bounds
+            if start <= self.timestep < end:
+                stage_ts = self.timestep - start
+                current_stage = stage
+                break
+
+        if current_stage is None:
+            raise ValueError(f"No stage found for current timestep: {self.timestep}")
+        return current_stage, stage_ts
 
     def step(self):
         """Policy performs a single action based on the current state.
@@ -334,31 +219,169 @@ class DemoEnvironment:
         # Compute whether we have finished the entire sequence.
         return self.is_done(), step_succeeded
 
-    def cleanup(self):
-        p.disconnect()
-        del self
-
-    def get_current_stage(self) -> Tuple[str, int]:
-        """Retrieves the current stage of the demo.
+    def get_state(self):
+        """Retrieves the current state of the bullet world.
 
         Returns:
-            stage: The stage of the demo.
-            stage_s: The timestep of the current stage. 
+            state: The state of the bullet environment, in the format:
+                {
+                    "objects": {
+                        "<oid>": {
+                            "shape": shape,
+                            "color": color,
+                            "radius": radius,
+                            "height": height,
+                            "position": [x, y, z],
+                            "orientation": [x, y, z, w],
+                        },
+                        ...
+                    },
+                    "robot": {
+                        "<joint_name>": <joint_angle>,
+                        ...
+                    }
+                }
+            Note that if no bullet world is created yet, oid is simply assigned
+            using zero-indexed assignment.
         """
-        if not self.planning_complete:
-            return "plan", 0
+        # If there is no bullet world, we simply return the input scene.
+        if self.w is None:
+            state = {"objects": {idx: odict for idx, odict in enumerate(self.scene)}}
+        else:
+            state = self.w.get_state()
 
-        current_stage = None
-        for stage, ts_bounds in self.stage2ts_bounds.items():
-            start, end = ts_bounds
-            if start <= self.timestep < end:
-                stage_ts = self.timestep - start
-                current_stage = stage
-                break
+        # Additionally, compute the up vector from the orientation.
+        for idx in state["objects"].keys():
+            orn = state["objects"][idx]["orientation"]
+            state["objects"][idx]["up_vector"] = util.orientation_to_up(orn)
+        return state
 
-        if current_stage is None:
-            raise ValueError(f"No stage found for current timestep: {self.timestep}")
-        return current_stage, stage_ts
+    def plan(self):
+        # First, get the current observation which we will store as the initial
+        # observation for planning reach/transport and for grasping.
+        self.initial_obs = self.get_observation()
+        self.obs = copy.deepcopy(self.initial_obs)
+
+        # Determine the source / target pbject(s) and destination position.
+        task_params = self.compute_task_params(observation=self.initial_obs)
+        (self.src_idx, self.dst_idx, dst_xyz, self.is_sphere,) = task_params
+        self.policy_models = self.name2policy_models[
+            "sphere" if self.is_sphere else "universal"
+        ]
+
+        # obtained from initial_obs
+        self.dst_xy = dst_xyz[:2]  # used for policy as well
+        self.src_xy = self.initial_obs[self.src_idx]["position"][
+            :2
+        ]  # used for policy as well
+
+        # Compute the goal arm poses for reaching and transport.
+        self.q_reach_dst, self.q_transport_dst = self.compute_qs(
+            src_xy=self.src_xy, dst_xyz=dst_xyz,
+        )
+
+        # Create the bullet world now that we've finished our imaginary
+        # sessions.
+        self.w = BulletWorld(
+            opt=self.bullet_opt,
+            policy_opt=self.policy_opt,
+            p=p,
+            scene=self.scene,
+            visualize=self.opt.render_bullet,
+            use_control_skip=self.opt.use_control_skip,
+        )
+
+        # If reaching is disabled, set the robot arm directly to the dstination
+        # of reaching.
+        if self.opt.enable_reaching:
+            q_zero = [0.0] * len(self.q_reach_dst)
+            self.w.robot_env.robot.reset_with_certain_arm_q(q_zero)
+        else:
+            self.w.robot_env.robot.reset_with_certain_arm_q(self.q_reach_dst)
+
+        # Flag planning as complete.
+        self.planning_complete = True
+
+    def compute_task_params(self, observation: Dict):
+        """Parses a language command in the context of an observation of a
+        scene and computes the source and target objects and location for a 
+        pick-and-place task.
+
+        Args:
+            command: The command to execute.
+            observation: A list of object dictionaries defining the tabletop 
+                objects in a scene.
+        
+        Returns:
+            src_idx: The index of the source object.
+            dst_idx: The index of the destination object.
+            dst_xyz: The (x, y, z) location to end transport at / start placing.
+        """
+        dst_idx = None
+
+        # In the absence of language, we determine the task parameters by assuming that
+        # we know the attributes of the objects that are to be manipulated.
+        if self.command is None:
+            # We assume that the first object in the ground truth scene is the
+            # source object.
+            if self.opt.obs_mode == "gt":
+                if self.task == "place":
+                    src_idx = self.opt.scene_place_src_idx
+                elif self.task == "stack":
+                    src_idx = self.opt.scene_stack_src_idx
+                    dst_idx = self.opt.scene_stack_dst_idx
+            elif self.opt.obs_mode == "vision":
+                # Compute the mapping from GT indexes to predicted indexes.
+                gt2pred_idxs = self.match_objects(
+                    src_odicts=self.scene, dst_odicts=observation
+                )
+                if self.task == "place":
+                    src_idx = gt2pred_idxs[self.opt.scene_place_src_idx]
+                elif self.task == "stack":
+                    src_idx = gt2pred_idxs[self.opt.scene_stack_src_idx]
+                    dst_idx = gt2pred_idxs[self.opt.scene_stack_dst_idx]
+            else:
+                raise ValueError(f"Invalid observation mode: {self.opt.obs_mode}.")
+            if self.task == "place":
+                assert self.place_dst_xy is not None
+                dst_x, dst_y = self.place_dst_xy
+            elif self.task == "stack":
+                dst_x, dst_y, _ = observation[dst_idx]["position"]
+        else:
+            if self.task == "place":
+                raise NotImplementedError
+            elif self.task == "stack":
+                # Zero-pad the scene's position with fourth dimension because that's
+                # what the language module expects.
+                language_input = copy.deepcopy(observation)
+                for idx, odict in enumerate(language_input):
+                    language_input[idx]["position"] = odict["position"] + [0.0]
+
+                # Feed through the language module.
+                src_idx, (dst_x, dst_y), dst_idx = NLPmod(
+                    sentence=self.command, vision_output=language_input
+                )
+
+        # We currently only support placing spheres, not stacking them.
+        if self.task == "stack":
+            for oidx in [src_idx, dst_idx]:
+                if observation[oidx]["shape"] == "sphere":
+                    raise NotImplementedError
+
+        is_sphere = observation[src_idx]["shape"] == "sphere"
+
+        # Compute the destination z based on whether there is a destination
+        # object that we are placing on top of (stacking).
+        if dst_idx is None:
+            z = 0.0
+        else:
+            if self.policy_opt.use_height:
+                z = observation[dst_idx]["height"]
+            else:
+                z = utils.H_MAX
+
+        dst_xyz = [dst_x, dst_y, z + utils.PLACE_START_CLEARANCE]
+        return src_idx, dst_idx, dst_xyz, is_sphere
 
     def compute_qs(self, src_xy: List[float], dst_xyz: List[float]) -> Tuple:
         """Computes the arm joint angles that will be used to determine the
@@ -392,17 +415,30 @@ class DemoEnvironment:
         p.resetSimulation()
 
         # Compute the destination arm pose for transport.
-        # self.a.seed(self.opt.seed)
         table_id = utils.create_table(self.bullet_opt.floor_mu)
         (o_pos_pf_ave, o_quat_pf_ave, _,) = utils.read_grasp_final_states_from_pickle(
-            self.policy_opt.grasp_pi
+            self.policy_models.grasp_pi
         )
         p_pos_of_ave, p_quat_of_ave = p.invertTransform(o_pos_pf_ave, o_quat_pf_ave)
         robot = InmoovShadowNew(
             init_noise=False, timestep=utils.TS, np_random=np.random,
         )
+        if self.is_sphere:
+            _, desired_oquat = p.multiplyTransforms(
+                [0, 0, 0],
+                p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
+                [0, 0, 0],
+                o_quat_pf_ave,
+            )
+        else:
+            desired_oquat = [0.0, 0.0, 0.0, 1.0]
         q_transport_dst = utils.get_n_optimal_init_arm_qs(
-            robot, p_pos_of_ave, p_quat_of_ave, dst_xyz, table_id
+            robot,
+            p_pos_of_ave,
+            p_quat_of_ave,
+            dst_xyz,
+            table_id,
+            desired_obj_quat=desired_oquat,
         )[0]
         p.resetSimulation()
         return q_reach_dst, q_transport_dst
@@ -450,7 +486,7 @@ class DemoEnvironment:
         # Load the grasping actor critic model.
         if stage_ts == 0:
             (self.policy, _, self.hidden_states, self.masks,) = system.policy.load(
-                policy_dir=self.policy_opt.grasp_dir,
+                policy_dir=self.policy_models.grasp_dir,
                 env_name=self.policy_opt.grasp_env_name,
                 is_cuda=self.opt.is_cuda,
             )
@@ -472,7 +508,7 @@ class DemoEnvironment:
                 c_skip=self.policy_opt.control_skip
             )
             (self.policy, _, self.hidden_states, self.masks,) = system.policy.load(
-                policy_dir=self.policy_opt.place_dir,
+                policy_dir=self.policy_models.place_dir,
                 env_name=self.policy_opt.place_env_name,
                 is_cuda=self.opt.is_cuda,
             )
@@ -642,18 +678,7 @@ class DemoEnvironment:
 
         Returns:
             observation: A list of dictionaries storing object observations 
-                for the current world state, in the format: 
-                [
-                    {
-                        "shape": shape,
-                        "color": color,
-                        "radius": radius,
-                        "height": height,
-                        "position": [x, y, z],
-                        "orientation": [x, y, z, w],
-                    },
-                    ...
-                ]
+                for the current world state.
         """
         if self.opt.obs_mode == "gt":
             # The ground truth observation is simply the same as the true
@@ -663,6 +688,20 @@ class DemoEnvironment:
             obs = self.get_vision_observation()
         else:
             raise ValueError("Unsupported observation mode: {self.opt.obs_mode}")
+
+        if self.opt.obs_noise:
+            for idx in range(len(obs)):
+                noisy_odict = copy.deepcopy(obs[idx])
+                noisy_odict["position"] = utils.perturb(
+                    np.random, noisy_odict["position"], r=self.opt.position_noise
+                )
+                noisy_odict["up_vector"] = utils.perturb(
+                    np.random, noisy_odict["up_vector"], r=self.opt.upv_noise
+                )
+                noisy_odict["height"] = utils.perturb_scalar(
+                    np.random, noisy_odict["height"], r=self.opt.height_noise
+                )
+                obs[idx] = noisy_odict
         return copy.deepcopy(obs)
 
     def get_vision_observation(self):
@@ -670,18 +709,7 @@ class DemoEnvironment:
         module.
         
         Returns:
-            obs: The vision observation, in the format:
-                [
-                    {
-                        "shape": shape,  # First prediction
-                        "color": color,  # First prediction
-                        "radius": radius,  # First prediction
-                        "height": height,  # First prediction
-                        "position": [x, y, z],  # Current prediction
-                        "up_vector": [u1, u2, u3],  # Current prediction
-                    },
-                    ...
-                ], 
+            obs: The vision observation.
         """
         # Select the vision module based on the current stage.
         stage, _ = self.get_current_stage()
@@ -863,12 +891,3 @@ class DemoEnvironment:
                 }        
         """
         self.unity_data = data
-
-    def is_done(self) -> bool:
-        """Determines whether we have finished the sequence.
-
-        Returns:
-            done: Whether the sequence has finished.
-        """
-        # If we executed all steps, we are done.
-        return self.timestep == self.n_total_steps

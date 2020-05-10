@@ -114,7 +114,8 @@ class SceneGenerator:
         radius = self.sample_float(self.opt.radius)
         height = self.sample_float(self.opt.height)
         if shape == "sphere":
-            height = radius * 2
+            height *= 0.75
+            radius = height / 2
         if shape == "box":
             radius *= 0.8
         return radius, height
@@ -140,8 +141,8 @@ class SceneGenerator:
             raise ValueError(f"Invalid position mode: {self.opt.position_mode}")
         return xyz
 
-    def generate_orientation(self):
-        if self.opt.z_rot is None:
+    def generate_orientation(self, shape):
+        if self.opt.z_rot is None or shape == "sphere":
             orientation = [0.0, 0.0, 0.0, 1.0]
         else:
             orientation = pybullet.getQuaternionFromEuler(

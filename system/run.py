@@ -5,6 +5,9 @@ import copy
 import pprint
 import argparse
 from typing import *
+import warnings
+
+warnings.filterwarnings("ignore")
 
 import system.base_scenes
 import bullet2unity.states
@@ -18,6 +21,7 @@ from system.options import (
     SYSTEM_OPTIONS,
     BULLET_OPTIONS,
     POLICY_OPTIONS,
+    NAME2POLICY_MODELS,
     VISION_OPTIONS,
 )
 
@@ -42,31 +46,33 @@ async def send_to_client(websocket, path):
         path: The URI path.
     """
     start_time = time.time()
+    n_trials = 0
+
     # Run all sets in experiment.
     opt = SYSTEM_OPTIONS[args.exp]
     sets = list(EXPERIMENT_OPTIONS[args.exp].keys())
     for set_name in sets:
-        print(f"Running experiment: {args.exp} set: {set_name}")
         set_opt = EXPERIMENT_OPTIONS[args.exp][set_name]
         scenes = scene_loader.load_scenes(exp=args.exp, set_name=set_name)
         task = set_opt["task"]
 
         for scene_idx in range(len(scenes)):
             scene = scenes[scene_idx]
-            avg_time = 0 if scene_idx == 0 else (time.time() - start_time) / scene_idx
+            avg_time = 0 if n_trials == 0 else (time.time() - start_time) / n_trials
             print(
                 f"Exp: {args.exp}\t"
                 f"Set: {set_name}\t"
                 f"Task: {task}\t"
                 f"Scene ID: {scene_idx}\t"
-                f"Avg Trial Time: {avg_time:.2f}"
+                f"Trial: {n_trials}\t"
+                f"Avg Time: {avg_time:.2f}"
             )
 
             # Modify the scene for placing, and determine placing destination.
             place_dst_xy, place_dest_object = None, None
             if task == "place":
                 scene, place_dst_xy, place_dest_object = convert_scene_for_placing(
-                    scene
+                    opt, scene
                 )
 
             # Initialize the environment.
@@ -74,6 +80,7 @@ async def send_to_client(websocket, path):
                 opt=opt,
                 bullet_opt=BULLET_OPTIONS,
                 policy_opt=POLICY_OPTIONS,
+                name2policy_models=NAME2POLICY_MODELS,
                 vision_opt=VISION_OPTIONS,
                 trial=scene_idx,
                 scene=scene,
@@ -138,11 +145,12 @@ async def send_to_client(websocket, path):
                 # Break out if we're done with the sequence, or it failed.
                 if is_done or not success:
                     env.cleanup()
+                    n_trials += 1
                     break
     sys.exit(0)
 
 
-def convert_scene_for_placing(scene: List) -> Tuple:
+def convert_scene_for_placing(opt, scene: List) -> Tuple:
     """Converts the scene into a modified scene for placing, with the following steps:
         1. Denote the (x, y) location of object index 0 as the placing destination (x, y).
         2. Remove object index 0 from the scene list.
@@ -154,14 +162,21 @@ def convert_scene_for_placing(scene: List) -> Tuple:
         new_scene: The scene modified for placing.
         place_dst_xy: The (x, y) placing destination for the placing task.
     """
-    # Remove object index 0 from the scene.
-    new_scene = copy.deepcopy(scene[1:])
+    # Make sure that removing the destination object from the scene won't modify the
+    # source object index.
+    assert opt.scene_place_src_idx < opt.scene_place_dst_idx
 
-    # Use the location of object index 0 as the (x, y) placing destination.
-    place_dst_xy = scene[0]["position"][:2]
+    # Remove the destination object from the scene.
+    new_scene = copy.deepcopy(
+        scene[: opt.scene_place_dst_idx] + scene[opt.scene_place_dst_idx + 1 :]
+    )
 
-    # Construct an imaginary object to visualize the placing destination.
-    place_dest_object = copy.deepcopy(scene[1])
+    # Use the location of the destination object as the (x, y) placing destination.
+    place_dst_xy = scene[opt.scene_place_dst_idx]["position"][:2]
+
+    # Construct an imaginary object with the same shape attribute as the source object
+    # to visualize the placing destination.
+    place_dest_object = copy.deepcopy(scene[opt.scene_place_src_idx])
     place_dest_object["position"] = place_dst_xy + [0.0]
     place_dest_object["height"] = 0.005
     return new_scene, place_dst_xy, place_dest_object
