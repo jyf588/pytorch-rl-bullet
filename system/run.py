@@ -6,18 +6,19 @@ import pprint
 import sys
 from typing import *
 
-import bullet2unity.interface as interface
-import bullet2unity.states
+import scene.loader
 import system.base_scenes
-from system.env import DemoEnvironment
+import bullet2unity.states
 from system.options import OPTIONS
+from system.env import DemoEnvironment
 import my_pybullet_envs.utils as utils
+import ns_vqa_dart.bullet.util as util
+import bullet2unity.interface as interface
+from exp.options import EXPERIMENT_OPTIONS
 
 global args
 
 
-ADD_SURROUNDING_OBJECTS = True
-OBJECT_DIST_THRESH = 0.25
 PLAN_TARGET_POSITION = [-0.06, 0.3, 0.0]
 STAGE2ANIMATION_Z_OFFSET = {
     "plan": 0.3,
@@ -27,8 +28,6 @@ STAGE2ANIMATION_Z_OFFSET = {
 }
 TASK2ANIMATION_Z_OFFSET = {"place": 0.1, "stack": 0.2}
 
-DEMO_SCENE_IDS = [5, 6, 7, 9, 10, 11, 12, 13, 14]
-
 
 async def send_to_client(websocket, path):
     """Sends and receives data to and from Unity.
@@ -37,207 +36,81 @@ async def send_to_client(websocket, path):
         websocket: The websocket protocol instance.
         path: The URI path.
     """
-    scenes = generate_scenes(
-        seed=args.seed,
-        n_scenes=args.n_scenes,
-        disable_orientation=args.disable_orientation,
-    )
+    # Load the scenes, and get options for the experiment / set.
+    scenes = scene.loader.load_scenes(exp=args.exp, set_name=args.set_name)
+    set_opt = EXPERIMENT_OPTIONS[args.exp][args.set_name]
+    task = set_opt.task
+    obs_mode = set_opt.obs_mode
 
-    use_control_skip = args.fast_mode
-
-    # Used to initialize the pose of each trial with the pose of the last trial.
-    init_fin_q, init_arm_q = None, None
-    FAIL_SCENES = []  # [7, 8]
-    for scene_idx in range(0, len(scenes)):
-        # Skip failed scenes.
-        if scene_idx in FAIL_SCENES:
-            continue
-
-        if args.demo_scenes and scene_idx not in DEMO_SCENE_IDS:
-            continue
+    for scene_idx in range(len(scenes)):
         scene = scenes[scene_idx]
-
-        # Hard code top object to be green, and bottom object to be blue.
-        scene[0]["color"] = "blue"
-        scene[1]["color"] = "green"
-        dst_shape = scene[0]["shape"]
-        src_shape = scene[1]["shape"]
-        command = f"Put the green {src_shape} on top of the blue {dst_shape}"
-
         print(f"scene {scene_idx}:")
         pprint.pprint(scene)
 
-        # task = "stack" if scene_idx % 2 == 0 else "place"
-        task = "stack"
-        for obs_mode in ["vision"]:
-            # Modify the scene for placing. We keep only the first object for
-            # now, and set the placing destination xy location to be the
-            # location of the original blue object (deleted).
-            if task == "place":
-                task_scene = copy.deepcopy(scene[1:])
-                dest_object = copy.deepcopy(scene[1])
-                place_dst_xy = scene[0]["position"][:2]
-                dest_object["position"][0] = place_dst_xy[0]
-                dest_object["position"][1] = place_dst_xy[1]
-            elif task == "stack":
-                task_scene = copy.deepcopy(scene)
-                place_dst_xy = None
-            env = DemoEnvironment(
-                opt=OPTIONS,
-                trial=scene_idx,
-                scene=task_scene,
-                task=task,
-                command=command,
-                observation_mode=obs_mode,
-                renderer="unity",
-                visualize_bullet=args.render_bullet,
-                visualize_unity=False,
-                place_dst_xy=place_dst_xy,
-                init_fin_q=init_fin_q,
-                init_arm_q=init_arm_q,
-                use_control_skip=use_control_skip,
-            )
-            cam_target = None
+        # Modify the scene for placing, and determine placing destination.
+        place_dst_xy, place_dest_object = None, None
+        if task == "place":
+            scene, place_dst_xy, place_dest_object = convert_scene_for_placing(scene)
 
-            # Send states one by one.
-            i = 0
-            while 1:
-                stage, stage_ts = env.get_current_stage()
+        # Initialize the environment.
+        env = DemoEnvironment(
+            opt=OPTIONS,
+            trial=scene_idx,
+            scene=scene,
+            task=task,
+            observation_mode=obs_mode,
+            renderer="unity",
+            visualize_bullet=args.render_bullet,
+            visualize_unity=False,
+            place_dst_xy=place_dst_xy,
+            use_control_skip=args.use_control_skip,
+        )
 
-                # Add options for early stopping during placing (since it's
-                # slow for vision).
-                # if (
-                #     obs_mode == "vision"
-                #     and stage == "place"
-                #     and stage_ts % 25 == 0
-                # ):
-                #     response = input("Continue? [Y/N] ")
-                #     if response == "N":
-                #         break
+        while 1:
+            stage, _ = env.get_current_stage()
+            state = env.get_state()
 
-                state = env.get_state()
-
-                # Temporarily remove robot state.
-                # state = {"objects": state["objects"]}
+            is_render_step = False
+            if args.render_unity:
                 render_frequency = args.render_frequency
-                # Only have lucas look at / send images back when planning or placing.
                 if obs_mode == "vision" and stage in ["plan", "place"]:
                     render_frequency = OPTIONS.vision_delay
-                    unity_options = [(False, False, True, True)]
-                    if args.render_obs:
-                        unity_options += [(True, True, False, False)]
 
-                    if stage == "plan":
-                        cam_target = PLAN_TARGET_POSITION
-                    elif stage == "place" and stage_ts == 0:
-                        if task == "place":
-                            cam_target = place_dst_xy + [
-                                env.initial_obs[env.src_idx]["height"]
-                            ]
-                        elif task == "stack":
-                            pprint.pprint(env.initial_obs)
-                            cam_target = bullet2unity.states.get_object_camera_target(
-                                bullet_odicts=env.initial_obs, oidx=env.dst_idx
-                            )
-
-                    # Set the camera target.
-                    last_bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
-                        camera_control="position",
-                        bullet_odicts=env.initial_obs,
-                        use_oids=False,
-                        should_save=False,
-                        should_send=True,
-                        position=cam_target,
-                    )
-                else:
-                    if args.disable_unity:
-                        render_frequency = None
-                    elif args.fast_mode:
-                        render_frequency = 70
-                    if obs_mode == "vision":
-                        unity_options = [(args.render_obs, True, False, True)]
-                    elif obs_mode == "gt":
-                        unity_options = [(False, True, False, True)]
-
-                # Compute the animation target.
-                if stage in ["plan", "retract"]:
-                    b_ani_tar = None
-                else:
-                    if stage in ["reach", "grasp"]:
-                        b_ani_tar = env.initial_obs[env.src_idx]["position"]
-                    elif stage in ["transport", "place", "release"]:
-                        if task == "place":
-                            b_ani_tar = place_dst_xy + [
-                                env.initial_obs[env.src_idx]["height"]
-                            ]
-                        elif task == "stack":
-                            b_ani_tar = env.initial_obs[env.dst_idx][
-                                "position"
-                            ]
-                        else:
-                            raise ValueError(f"Unsupported task: {task}")
-                    else:
-                        raise ValueError(f"Unsupported stage: {stage}.")
-                    b_ani_tar = copy.deepcopy(b_ani_tar)
-                    if stage in STAGE2ANIMATION_Z_OFFSET:
-                        z_offset = STAGE2ANIMATION_Z_OFFSET[stage]
-                    elif task in TASK2ANIMATION_Z_OFFSET:
-                        z_offset = TASK2ANIMATION_Z_OFFSET[task]
-                    b_ani_tar[2] += z_offset
-                # b_ani_tar = None
-                # Rendering block.
-                if render_frequency is not None and i % render_frequency == 0:
-                    for (
-                        render_obs,
-                        render_hallucinations,
-                        send_image,
-                        should_step,
-                    ) in unity_options:
-                        # If we are rendering observations, add them to the
-                        # render state.
-                        render_state = copy.deepcopy(state)
-                        if render_obs:
-                            # h_odicts = compute_obs_w_gt_orn(
-                            #     obs=env.obs, gt_odicts=scene
-                            # )
-                            h_odicts = env.obs
-                            render_state = add_hallucinations_to_state(
-                                state=render_state,
-                                h_odicts=h_odicts,
-                                color=None,
-                            )
-                        if render_hallucinations:
-                            if task == "place":
-                                place_target = copy.deepcopy(dest_object)
-                                place_target["position"][2] -= (
-                                    place_target["height"] / 2
-                                )
-                                place_target["height"] = 0.005
-                                render_state = add_hallucinations_to_state(
-                                    state=render_state,
-                                    h_odicts=[place_target],
-                                    color="clear",
-                                )
-                        if send_image:
-                            bullet_camera_targets = last_bullet_camera_targets
-                        else:
-                            bullet_camera_targets = {}
-
+                # Renders unity and steps.
+                if env.timestep % render_frequency == 0:
+                    is_render_step = True
+                    unity_opt = get_unity_options(env, args.render_obs)
+                    for (rend_obs, rend_place, send_image, should_step) in unity_opt:
                         state_id = f"{scene_idx:06}_{env.timestep:06}"
+                        render_state = compute_render_state(
+                            state, env.obs, place_dest_object, rend_obs, rend_place
+                        )
+                        new_bullet_camera_targets = compute_bullet_camera_targets(
+                            env=env
+                        )
+                        if new_bullet_camera_targets is not None:
+                            bullet_cam_targets = copy.deepcopy(
+                                new_bullet_camera_targets
+                            )
+
+                        # Compute the animation target.
+                        b_ani_tar = (
+                            compute_b_ani_target(env=env) if args.animate_head else None
+                        )
 
                         # Encode, send, receive, and decode.
                         message = interface.encode(
                             state_id=state_id,
                             bullet_state=render_state,
                             bullet_animation_target=b_ani_tar,
-                            bullet_camera_targets=bullet_camera_targets,
+                            bullet_cam_targets=bullet_cam_targets
+                            if send_image
+                            else None,
                         )
                         await websocket.send(message)
                         reply = await websocket.recv()
                         data = interface.decode(
-                            state_id,
-                            reply,
-                            bullet_camera_targets=bullet_camera_targets,
+                            state_id, reply, bullet_cam_targets=bullet_cam_targets,
                         )
 
                         # Hand the data to the env for processing.
@@ -245,34 +118,127 @@ async def send_to_client(websocket, path):
                             env.set_unity_data(data)
                         if should_step:
                             is_done, success = env.step()
-                else:
-                    is_done, success = env.step()
+            if not is_render_step:
+                is_done, success = env.step()
 
-                # Break out if we're done with the sequence, or it failed.
-                if is_done or not success:
-                    # Only use qs for next trial if we finished the entire
-                    # sequence and it was successful.
-                    if is_done and success:
-                        init_arm_q, init_fin_q = env.w.get_robot_q()
-                    else:
-                        init_arm_q, init_fin_q = None, None
-                    env.cleanup()
-                    break
-
-                if stage != "plan":
-                    i += 1
-            # print(f"end of scene:")
-            # pprint.pprint(scene)
-            # input("Press enter to continue")
-            # del env
+            # Break out if we're done with the sequence, or it failed.
+            if is_done or not success:
+                env.cleanup()
+                break
     sys.exit(0)
+
+
+def convert_scene_for_placing(scene: List) -> Tuple:
+    """Converts the scene into a modified scene for placing, with the following steps:
+        1. Denote the (x, y) location of object index 0 as the placing destination (x, y).
+        2. Remove object index 0 from the scene list.
+    
+    Args:
+        scene: The original scene.
+    
+    Returns:
+        new_scene: The scene modified for placing.
+        place_dst_xy: The (x, y) placing destination for the placing task.
+    """
+    # Remove object index 0 from the scene.
+    new_scene = copy.deepcopy(scene[1:])
+
+    # Use the location of object index 0 as the (x, y) placing destination.
+    place_dst_xy = scene[0]["position"][:2]
+
+    # Construct an imaginary object to visualize the placing destination.
+    place_dest_object = copy.deepcopy(scene[1])
+    place_dest_object["position"] = place_dst_xy + [0.0]
+    place_dest_object["height"] = 0.005
+    return new_scene, place_dst_xy, place_dest_object
+
+
+def get_unity_options(env, render_obs):
+    render_place = render_obs and env.task == "place"
+    if env.obs_mode == "vision" and env.stage in ["plan", "place"]:
+        unity_options = [(False, False, True, True)]
+        if args.render_obs:
+            unity_options += [(True, render_place, False, False)]
+    else:
+        if env.obs_mode == "vision":
+            unity_options = [(args.render_obs, render_place, False, True)]
+        elif env.obs_mode == "gt":
+            unity_options = [(False, render_place, False, True)]
+    return unity_options
+
+
+def compute_bullet_camera_targets(env):
+    stage, stage_ts = env.get_current_stage()
+    task = env.task
+    if stage == "plan":
+        cam_target = PLAN_TARGET_POSITION
+    elif stage == "place" and stage_ts == 0:
+        if task == "place":
+            cam_target = env.place_dst_xy + [env.initial_obs[env.src_idx]["height"]]
+        elif task == "stack":
+            pprint.pprint(env.initial_obs)
+            cam_target = bullet2unity.states.get_object_camera_target(
+                bullet_odicts=env.initial_obs, oidx=env.dst_idx
+            )
+    else:
+        return None
+
+    # Set the camera target.
+    bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
+        camera_control="position",
+        bullet_odicts=env.initial_obs,
+        use_oids=False,
+        should_save=False,
+        should_send=True,
+        position=cam_target,
+    )
+    return bullet_camera_targets
+
+
+def compute_b_ani_target(env):
+    stage, _ = env.get_current_stage()
+    task = env.task
+    if stage in ["plan", "retract"]:
+        b_ani_tar = None
+    else:
+        if stage in ["reach", "grasp"]:
+            b_ani_tar = env.initial_obs[env.src_idx]["position"]
+        elif stage in ["transport", "place", "release"]:
+            if task == "place":
+                b_ani_tar = env.place_dst_xy + [env.initial_obs[env.src_idx]["height"]]
+            elif task == "stack":
+                b_ani_tar = env.initial_obs[env.dst_idx]["position"]
+            else:
+                raise ValueError(f"Unsupported task: {task}")
+        else:
+            raise ValueError(f"Unsupported stage: {stage}.")
+        b_ani_tar = copy.deepcopy(b_ani_tar)
+        if stage in STAGE2ANIMATION_Z_OFFSET:
+            z_offset = STAGE2ANIMATION_Z_OFFSET[stage]
+        elif task in TASK2ANIMATION_Z_OFFSET:
+            z_offset = TASK2ANIMATION_Z_OFFSET[task]
+        b_ani_tar[2] += z_offset
+    return b_ani_tar
+
+
+def compute_render_state(state, obs, place_dest_object, render_obs, render_place):
+    # If we are rendering observations, add them to the
+    # render state.
+    render_state = copy.deepcopy(state)
+    if render_obs:
+        render_state = add_hallucinations_to_state(
+            state=render_state, h_odicts=obs, color=None,
+        )
+    if render_place:
+        render_state = add_hallucinations_to_state(
+            state=render_state, h_odicts=[place_dest_object], color="clear",
+        )
+    return render_state
 
 
 def add_hallucinations_to_state(state: Dict, h_odicts: Dict, color: str):
     state = copy.deepcopy(state)
     h_odicts = copy.deepcopy(h_odicts)
-    # print(f"h_odicts:")
-    # pprint.pprint(h_odicts)
     n_existing_objects = len(state["objects"])
     for oi, odict in enumerate(h_odicts):
         # Set the color to be the clear version of the object color.
@@ -283,15 +249,16 @@ def add_hallucinations_to_state(state: Dict, h_odicts: Dict, color: str):
             hallu_color = color
         odict["color"] = hallu_color
         state["objects"][f"h_{n_existing_objects + oi}"] = odict
-    # input("x")
-    # print("state:")
-    # pprint.pprint(state)
     return state
 
 
 if __name__ == "__main__":
     global args
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "experiment", type=str, help="The name of the experiment to run."
+    )
+    parser.add_argument("set_name", type=str, help="The name of the set to run.")
     parser.add_argument(
         "--hostname",
         type=str,
@@ -303,9 +270,7 @@ if __name__ == "__main__":
         "--port", type=int, default=8000, help="The port of the server."
     )
     parser.add_argument(
-        "--disable_unity",
-        action="store_true",
-        help="Whether to disable unity.",
+        "--render_unity", action="store_true", help="Whether to render unity.",
     )
     parser.add_argument(
         "--render_bullet",
@@ -313,26 +278,7 @@ if __name__ == "__main__":
         help="Whether to render PyBullet using OpenGL.",
     )
     parser.add_argument(
-        "--seed",
-        type=int,
-        default=101,
-        help="Seed to use for scene generation.",
-    )
-    parser.add_argument(
-        "--n_scenes",
-        type=int,
-        default=100,
-        help="Number of scenes to generate.",
-    )
-    parser.add_argument(
-        "--demo_scenes",
-        action="store_true",
-        help="Whether to use the demo scenes.",
-    )
-    parser.add_argument(
-        "--disable_orientation",
-        action="store_true",
-        help="Whether to disable randomizing orientation.",
+        "--seed", type=int, default=101, help="Seed to use for scene generation.",
     )
     parser.add_argument(
         "--render_frequency",
@@ -341,21 +287,9 @@ if __name__ == "__main__":
         help="The rendering frequency to use.",
     )
     parser.add_argument(
-        "--fast_mode",
-        action="store_true",
-        help="Whether to use fast mode. Useful for evaluation, not demo.",
-    )
-    parser.add_argument(
-        "--render_obs",
-        action="store_true",
-        help="Whether to render the observations.",
+        "--render_obs", action="store_true", help="Whether to render the observations.",
     )
     args = parser.parse_args()
 
-    if args.disable_unity:
-        args.hostname = "localhost"
-
     # Start the python server.
-    interface.run_server(
-        hostname=args.hostname, port=args.port, handler=send_to_client
-    )
+    interface.run_server(hostname=args.hostname, port=args.port, handler=send_to_client)

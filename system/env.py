@@ -129,7 +129,9 @@ class DemoEnvironment:
             self.segmentation_module = DASHSegModule(
                 mode="eval",
                 checkpoint_path=self.opt.seg_checkpoint_path,
-                vis_dir=None if self.opt.debug_dir is None else os.path.join(self.opt.debug_dir, f"{trial:04}"),
+                vis_dir=None
+                if self.opt.debug_dir is None
+                else os.path.join(self.opt.debug_dir, f"{trial:04}"),
             )
 
         if visualize_bullet:
@@ -282,9 +284,7 @@ class DemoEnvironment:
                 )
                 src_idx = gt2pred_idxs[self.opt.gt_place_idx]
             else:
-                raise ValueError(
-                    f"Invalid observation mode: {self.observation_mode}."
-                )
+                raise ValueError(f"Invalid observation mode: {self.observation_mode}.")
             dst_idx = None
             assert self.place_dst_xy is not None
             dst_x, dst_y = self.place_dst_xy
@@ -331,9 +331,7 @@ class DemoEnvironment:
         """
         # If there is no bullet world, we simply return the input scene.
         if self.w is None:
-            state = {
-                "objects": {idx: odict for idx, odict in enumerate(self.scene)}
-            }
+            state = {"objects": {idx: odict for idx, odict in enumerate(self.scene)}}
         else:
             state = self.w.get_state()
 
@@ -360,27 +358,25 @@ class DemoEnvironment:
         step_succeeded = True
         if stage == "plan":
             self.plan()
+        elif stage == "reach":
+            step_succeeded = self.execute_plan(stage=stage, stage_ts=stage_ts)
+        elif stage == "grasp":
+            self.grasp(stage_ts=stage_ts)
+        elif stage == "transport":
+            step_succeeded = self.execute_plan(stage=stage, stage_ts=stage_ts)
+        elif stage == "place":
+            self.place(stage_ts=stage_ts)
+        elif stage == "retract":
+            step_succeeded = self.execute_plan(
+                stage=stage,
+                stage_ts=stage_ts,
+                restore_fingers=self.opt.restore_fingers,
+            )
         else:
-            if stage == "reach":
-                step_succeeded = self.execute_plan(
-                    stage=stage, stage_ts=stage_ts
-                )
-            elif stage == "grasp":
-                self.grasp(stage_ts=stage_ts)
-            elif stage == "transport":
-                step_succeeded = self.execute_plan(
-                    stage=stage, stage_ts=stage_ts
-                )
-            elif stage == "place":
-                self.place(stage_ts=stage_ts)
-            elif stage == "retract":
-                step_succeeded = self.execute_plan(
-                    stage=stage,
-                    stage_ts=stage_ts,
-                    restore_fingers=self.opt.restore_fingers,
-                )
-            else:
-                raise ValueError(f"Invalid stage: {stage}")
+            raise ValueError(f"Invalid stage: {stage}")
+
+        # We don't step in the planning stage.
+        if stage != "plan":
             self.timestep += 1
 
         # Compute whether we have finished the entire sequence.
@@ -409,9 +405,7 @@ class DemoEnvironment:
                 break
 
         if current_stage is None:
-            raise ValueError(
-                f"No stage found for current timestep: {self.timestep}"
-            )
+            raise ValueError(f"No stage found for current timestep: {self.timestep}")
         return current_stage, stage_ts
 
     def compute_qs(self, src_xy: List[float], dst_xyz: List[float]) -> Tuple:
@@ -457,14 +451,10 @@ class DemoEnvironment:
         # Compute the destination arm pose for transport.
         # self.a.seed(self.opt.seed)
         table_id = utils.create_table(self.opt.floor_mu)
-        (
-            o_pos_pf_ave,
-            o_quat_pf_ave,
-            _,
-        ) = utils.read_grasp_final_states_from_pickle(self.opt.grasp_pi)
-        p_pos_of_ave, p_quat_of_ave = p.invertTransform(
-            o_pos_pf_ave, o_quat_pf_ave
+        (o_pos_pf_ave, o_quat_pf_ave, _,) = utils.read_grasp_final_states_from_pickle(
+            self.opt.grasp_pi
         )
+        p_pos_of_ave, p_quat_of_ave = p.invertTransform(o_pos_pf_ave, o_quat_pf_ave)
         robot = InmoovShadowNew(
             init_noise=False, timestep=utils.TS, np_random=np.random,
         )
@@ -491,21 +481,18 @@ class DemoEnvironment:
             # observation.
             if self.observation_mode == "gt":
                 odicts = self.get_observation(
-                    observation_mode=self.observation_mode,
-                    renderer=self.renderer,
+                    observation_mode=self.observation_mode, renderer=self.renderer,
                 )
             elif self.observation_mode == "vision":
                 odicts = self.last_pred_obs
             else:
-                raise ValueError(
-                    f"Invalid observation mode: {self.observation_mode}."
-                )
+                raise ValueError(f"Invalid observation mode: {self.observation_mode}.")
             if self.task == "place":
                 expected_src_base_z_post_placing = 0.0
             elif self.task == "stack":
-                expected_src_base_z_post_placing = self.initial_obs[
-                    self.dst_idx
-                ]["height"]
+                expected_src_base_z_post_placing = self.initial_obs[self.dst_idx][
+                    "height"
+                ]
         else:
             raise ValueError(f"Invalid stage: {stage}.")
         trajectory = openrave.compute_trajectory(
@@ -521,12 +508,7 @@ class DemoEnvironment:
     def grasp(self, stage_ts: int):
         # Load the grasping actor critic model.
         if stage_ts == 0:
-            (
-                self.policy,
-                _,
-                self.hidden_states,
-                self.masks,
-            ) = system.policy.load(
+            (self.policy, _, self.hidden_states, self.masks,) = system.policy.load(
                 policy_dir=self.opt.grasp_dir,
                 env_name=self.opt.grasp_env_name,
                 is_cuda=self.opt.is_cuda,
@@ -539,23 +521,14 @@ class DemoEnvironment:
                 obs, self.hidden_states, self.masks, deterministic=self.opt.det
             )
         self.w.step_robot(
-            action=system.policy.unwrap_action(
-                action=action, is_cuda=self.opt.is_cuda
-            )
+            action=system.policy.unwrap_action(action=action, is_cuda=self.opt.is_cuda)
         )
         self.masks.fill_(1.0)
 
     def place(self, stage_ts: int):
         if stage_ts == 0:
-            self.w.robot_env.change_control_skip_scaling(
-                c_skip=self.opt.control_skip
-            )
-            (
-                self.policy,
-                _,
-                self.hidden_states,
-                self.masks,
-            ) = system.policy.load(
+            self.w.robot_env.change_control_skip_scaling(c_skip=self.opt.control_skip)
+            (self.policy, _, self.hidden_states, self.masks,) = system.policy.load(
                 policy_dir=self.opt.place_dir,
                 env_name=self.opt.place_env_name,
                 is_cuda=self.opt.is_cuda,
@@ -571,16 +544,11 @@ class DemoEnvironment:
             )
 
         self.w.step_robot(
-            action=system.policy.unwrap_action(
-                action=action, is_cuda=self.opt.is_cuda
-            )
+            action=system.policy.unwrap_action(action=action, is_cuda=self.opt.is_cuda)
         )
 
     def execute_plan(
-        self,
-        stage: str,
-        stage_ts: int,
-        restore_fingers: Optional[bool] = False,
+        self, stage: str, stage_ts: int, restore_fingers: Optional[bool] = False,
     ) -> bool:
         """
         Returns:
@@ -614,25 +582,21 @@ class DemoEnvironment:
 
         if restore_fingers and stage_ts >= len(self.trajectory) * 0.1:
             blending = np.clip(
-                (stage_ts - len(self.trajectory) * 0.1)
-                / (len(self.trajectory) * 0.6),
+                (stage_ts - len(self.trajectory) * 0.1) / (len(self.trajectory) * 0.6),
                 0.0,
                 1.0,
             )
             cur_fin_q = self.w.robot_env.robot.get_q_dq(
                 self.w.robot_env.robot.fin_actdofs
             )[0]
-            tar_fin_q = (
-                self.w.robot_env.robot.init_fin_q * blending
-                + cur_fin_q * (1 - blending)
+            tar_fin_q = self.w.robot_env.robot.init_fin_q * blending + cur_fin_q * (
+                1 - blending
             )
         else:
             # try to keep fin q close to init_fin_q (keep finger pose)
             # add at most offset 0.05 in init_tar_fin_q direction so that grasp is tight
             tar_fin_q = np.clip(
-                self.init_tar_fin_q,
-                self.init_fin_q - 0.05,
-                self.init_fin_q + 0.05,
+                self.init_tar_fin_q, self.init_fin_q - 0.05, self.init_fin_q + 0.05,
             )
 
         # clip to joint limit
@@ -654,24 +618,19 @@ class DemoEnvironment:
             jointIndices=self.w.robot_env.robot.fin_zerodofs,
             controlMode=p.POSITION_CONTROL,
             targetPositions=[0.0] * len(self.w.robot_env.robot.fin_zerodofs),
-            forces=[max_force / 4.0]
-            * len(self.w.robot_env.robot.fin_zerodofs),
+            forces=[max_force / 4.0] * len(self.w.robot_env.robot.fin_zerodofs),
         )
 
         if stage_ts == len(self.trajectory) + 4:
             diff = np.linalg.norm(
-                self.w.robot_env.robot.get_q_dq(
-                    self.w.robot_env.robot.arm_dofs
-                )[0]
+                self.w.robot_env.robot.get_q_dq(self.w.robot_env.robot.arm_dofs)[0]
                 - tar_arm_q
             )
             print("diff final", diff)
             print(
                 "vel final",
                 np.linalg.norm(
-                    self.w.robot_env.robot.get_q_dq(
-                        self.w.robot_env.robot.arm_dofs
-                    )[1]
+                    self.w.robot_env.robot.get_q_dq(self.w.robot_env.robot.arm_dofs)[1]
                 ),
             )
             print("fin dofs")
@@ -684,12 +643,7 @@ class DemoEnvironment:
                 ]
             )
             print("cur_fin_tar_q")
-            print(
-                [
-                    "{0:0.3f}".format(n)
-                    for n in self.w.robot_env.robot.tar_fin_q
-                ]
-            )
+            print(["{0:0.3f}".format(n) for n in self.w.robot_env.robot.tar_fin_q])
 
         self.last_tar_arm_q = tar_arm_q
         self.w.step()
@@ -707,9 +661,7 @@ class DemoEnvironment:
                 x, y, 0.0, half_height, is_box
             )
         else:
-            obs = self.w.robot_env.get_robot_contact_txty_shape_obs_no_dup(
-                x, y, is_box
-            )
+            obs = self.w.robot_env.get_robot_contact_txty_shape_obs_no_dup(x, y, is_box)
         return obs
 
     def get_place_observation(self):
@@ -730,9 +682,7 @@ class DemoEnvironment:
         tdict = self.obs[self.src_idx]
         t_pos = tdict["position"]
         t_up = tdict["up_vector"]
-        is_box = (
-            tdict["shape"] == "box"
-        )  # should not matter if use init_obs or obs
+        is_box = tdict["shape"] == "box"  # should not matter if use init_obs or obs
 
         if self.task == "stack":
             bdict = self.obs[self.dst_idx]
@@ -798,9 +748,7 @@ class DemoEnvironment:
         elif observation_mode == "vision":
             obs = self.get_vision_observation(renderer=renderer)
         else:
-            raise ValueError(
-                "Unsupported observation mode: {self.observation_mode}"
-            )
+            raise ValueError("Unsupported observation mode: {self.observation_mode}")
         return copy.deepcopy(obs)
 
     def get_vision_observation(self, renderer: str):
@@ -837,9 +785,7 @@ class DemoEnvironment:
         rgb, masks, cam_position, cam_orientation = self.get_images()
 
         # Predict attributes for all the segmentations.
-        pred = vision_module.predict(
-            rgb=rgb, masks=masks, debug_id=self.timestep
-        )
+        pred = vision_module.predict(rgb=rgb, masks=masks, debug_id=self.timestep)
 
         pred_odicts = []
         for y in pred:
@@ -859,9 +805,7 @@ class DemoEnvironment:
         if self.initial_obs is None:
             pred_obs = pred_odicts
         else:
-            pred_obs = self.match_predictions_with_initial_obs(
-                pred_odicts=pred_odicts
-            )
+            pred_obs = self.match_predictions_with_initial_obs(pred_odicts=pred_odicts)
         # Store the computed observation for future computation.
         self.last_pred_obs = copy.deepcopy(pred_obs)
 
@@ -878,9 +822,7 @@ class DemoEnvironment:
         #     )
         return pred_obs
 
-    def match_predictions_with_initial_obs(
-        self, pred_odicts: List[Dict]
-    ) -> List:
+    def match_predictions_with_initial_obs(self, pred_odicts: List[Dict]) -> List:
         """Matches predictions with `self.initial_obs`.
 
         Args:
@@ -930,9 +872,7 @@ class DemoEnvironment:
                     pred_obs[s][attr] = dst_odict[attr]
         return pred_obs
 
-    def match_objects(
-        self, src_odicts: List[Dict], dst_odicts: List[Dict]
-    ) -> Tuple:
+    def match_objects(self, src_odicts: List[Dict], dst_odicts: List[Dict]) -> Tuple:
         """
         Args:
             src_odicts: The source object dictionaries to match from.
