@@ -1,20 +1,31 @@
 """Generates pickle files of scenes. Used to generate scenes to run the full system on."""
+import os
 import argparse
 from typing import *
 from tqdm import tqdm
 
 import scenes.options as OPT
 from scenes.generator import SceneGenerator
+import ns_vqa_dart.bullet.util as util
 
 
 def main(args: argparse.Namespace):
-    for task in OPT.TASK_LIST:
-        print(f"Generating scenes for task: {task}...")
-        exp_options = OPT.EXPERIMENT_OPTIONS[args.experiment][task]
+    print(f"Generating scenes for experiment: {args.experiment}...")
+    exp_opt = OPT.EXPERIMENT_OPTIONS[args.experiment]
+    for set_name, set_opt in exp_opt.items():
         generators = create_generators(
-            seed=exp_options["seed"], generator_options=OPT.TASK2OPTIONS[task],
+            seed=set_opt["seed"], generator_options=OPT.TASK2OPTIONS[set_opt["task"]],
         )
-        _ = generate_scenes(n_scenes=exp_options["n_scenes"], generators=generators)
+        scenes = generate_scenes(n_scenes=set_opt["n_scenes"], generators=generators)
+
+        # Saving.
+        set_dir = os.path.join(
+            util.get_user_homedir(), "data/dash", args.experiment, set_name
+        )
+        util.delete_and_create_dir(set_dir)
+        path = os.path.join(set_dir, "scenes.p")
+        util.save_pickle(path=path, data=scenes)
+        print(f"Saved scenes to: {path}.")
 
 
 def create_generators(seed: int, generator_options: List) -> List:
@@ -57,10 +68,7 @@ def generate_scenes(n_scenes: int, generators: List):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "experiment",
-        type=str,
-        choices=list(OPT.EXPERIMENT2SEED.keys()),
-        help="The name of the experiment to run.",
+        "experiment", type=str, help="The name of the experiment to run.",
     )
     args = parser.parse_args()
     main(args)
