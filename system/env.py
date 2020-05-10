@@ -21,8 +21,7 @@ from NLP_module import NLPmod
 
 import ns_vqa_dart.bullet.seg
 import my_pybullet_envs.utils as utils
-from ns_vqa_dart.bullet.metrics import Metrics
-from ns_vqa_dart.bullet import dash_object, gen_dataset, util
+from ns_vqa_dart.bullet import dash_object, util
 from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
 
 
@@ -30,139 +29,100 @@ class DemoEnvironment:
     def __init__(
         self,
         opt: argparse.Namespace,
+        bullet_opt: argparse.Namespace,
+        policy_opt: argparse.Namespace,
+        vision_opt: argparse.Namespace,
         trial: int,
         scene: List[Dict],
         task: str,
-        command: str,
-        observation_mode: str,
-        visualize_bullet: bool,
-        visualize_unity: bool,
-        renderer: Optional[str] = None,
+        command: Optional[str] = None,
         place_dst_xy: Optional[List[float]] = None,
-        init_fin_q: Optional[np.ndarray] = None,
-        init_arm_q: Optional[np.ndarray] = None,
-        use_control_skip: Optional[bool] = False,
     ):
         """
         Args:
             opt: Various demo configurations/options.
             trial: The trial number.
             scene: A list of object dictionaries defining the starting
-                configuration of tabletop objects in the scene, in the format:
-                [
-                    {
-                        "shape": <shape>,
-                        "color": <color>,
-                        "position": <position>,
-                        "orientation": <orientation>,
-                        "radius": <radius>,
-                        "height": <height>,
-                    },
-                    ...
-                ].
-                For placing, the first object in the scene is assumed to be the
-                source object.
-            task: The task to execute, either pick or place.
+                configuration of tabletop objects in the scene.
+            task: The task to execute, either place or stack.
             command: The command that the robot should execute.
-            observation_mode: Source of observation, which can either be from
-                ground truth (`gt`) or vision (`vision`).
-            visualize_bullet: Whether to visualize the demo in pybullet in 
-                real-time in an OpenGL window.
-            visualize_unity: Whether to visualize the unity image stream sent
-                from unity to the current class in a live OpenCV window.
-            renderer: The renderer to use to generate images, if 
-                `observation_mode` is `vision`.
             place_dst_xy: The destination (x, y) location to place at. Used 
                 only if `task` is `place`.
-            init_fin_q: Used to initialize the pose of the fingers, if 
-                `opt.init_pose` is enabled.
-            init_arm_q: Used to initialize the pose of the arm, if 
-                `opt.init_pose` is enabled.
-            use_control_skip: Whether to use control skipping when stepping
-                the bullet world. If enabled, we take `opt.control_skip` steps
-                instead of a single step.
         """
+        print("**********CREATING DEMO ENVIRONMENT**********")
         self.opt = opt
+        self.bullet_opt = bullet_opt
+        self.policy_opt = policy_opt
+        self.vision_opt = vision_opt
         self.trial = trial
         self.scene = scene
         self.task = task
         self.command = command
-        self.observation_mode = observation_mode
-        self.visualize_bullet = visualize_bullet
-        self.visualize_unity = visualize_unity
-        self.renderer = renderer
         self.place_dst_xy = place_dst_xy
-        self.init_fin_q = init_fin_q
-        self.init_arm_q = init_arm_q
-        self.use_control_skip = use_control_skip
 
-        print("**********DEMO ENVIRONMENT**********")
-
-        self.stage2ts_bounds, self.n_total_steps = self.compute_stages()
-
-        # Whether we've finished planning.
+        self.timestep = 0
         self.planning_complete = False
         self.initial_obs = None
         self.obs = None
         self.w = None
 
+        self.stage2ts_bounds, self.n_total_steps = self.compute_stages()
+
         # Initialize the vision module if we are using vision for our
         # observations.
-        if self.observation_mode == "vision":
+        if self.opt.obs_mode == "vision":
             if task == "stack":
-                place_checkpoint_path = self.opt.stacking_checkpoint_path
+                place_checkpoint_path = self.vision_opt.stacking_checkpoint_path
             elif task == "place":
-                place_checkpoint_path = self.opt.placing_checkpoint_path
+                place_checkpoint_path = self.vision_opt.placing_checkpoint_path
             else:
                 raise ValueError(f"Invalid task: {task}")
             self.planning_vision_module = VisionModule(
-                load_checkpoint_path=self.opt.planning_checkpoint_path,
-                debug_dir=self.opt.debug_dir,
+                load_checkpoint_path=self.vision_opt.planning_checkpoint_path,
+                debug_dir=self.vision_opt.debug_dir,
             )
             self.placing_vision_module = VisionModule(
                 load_checkpoint_path=place_checkpoint_path,
-                debug_dir=self.opt.debug_dir,
+                debug_dir=self.vision_opt.debug_dir,
             )
 
-        # Initialize the segmentation module if requested.
-        if self.opt.use_segmentation_module:
-            self.segmentation_module = DASHSegModule(
-                mode="eval",
-                checkpoint_path=self.opt.seg_checkpoint_path,
-                vis_dir=None
-                if self.opt.debug_dir is None
-                else os.path.join(self.opt.debug_dir, f"{trial:04}"),
-            )
+            # Initialize the segmentation module if requested.
+            if self.vision_opt.use_segmentation_module:
+                self.segmentation_module = DASHSegModule(
+                    mode="eval",
+                    checkpoint_path=self.vision_opt.seg_checkpoint_path,
+                    vis_dir=None
+                    if self.vision_opt.debug_dir is None
+                    else os.path.join(self.vision_opt.debug_dir, f"{trial:04}"),
+                )
 
-        if visualize_bullet:
+        if self.opt.render_bullet:
             p.connect(p.GUI)
         else:
             p.connect(p.DIRECT)
 
-        self.timestep = 0
-
     def compute_stages(self):
         if self.opt.enable_reaching:
             reach_start = 0
-            reach_end = reach_start + self.opt.n_plan_steps
+            reach_end = reach_start + self.policy_opt.n_plan_steps
             grasp_start = reach_end
         else:
             grasp_start = 0
 
-        n_grasp = self.opt.grasp_control_steps
-        n_place = self.opt.place_control_steps
+        n_grasp = self.policy_opt.grasp_control_steps
+        n_place = self.policy_opt.place_control_steps
 
-        if not self.use_control_skip:
+        if not self.opt.use_control_skip:
             n_grasp *= self.opt.control_skip
             n_place *= self.opt.control_skip
 
         grasp_end = grasp_start + n_grasp
         transport_start = grasp_end
-        transport_end = transport_start + self.opt.n_plan_steps
+        transport_end = transport_start + self.policy_opt.n_plan_steps
         place_start = transport_end
         place_end = place_start + n_place
         retract_start = place_end
-        retract_end = retract_start + self.opt.n_plan_steps
+        retract_end = retract_start + self.policy_opt.n_plan_steps
 
         stage2ts_bounds = {
             "grasp": (grasp_start, grasp_end),
@@ -182,9 +142,7 @@ class DemoEnvironment:
     def plan(self):
         # First, get the current observation which we will store as the initial
         # observation for planning reach/transport and for grasping.
-        self.initial_obs = self.get_observation(
-            observation_mode=self.observation_mode, renderer=self.renderer
-        )
+        self.initial_obs = self.get_observation()
         self.obs = copy.deepcopy(self.initial_obs)
 
         # Use language module to determine the source / target objects and
@@ -207,11 +165,12 @@ class DemoEnvironment:
         # Create the bullet world now that we've finished our imaginary
         # sessions.
         self.w = BulletWorld(
-            opt=self.opt,
+            opt=self.bullet_opt,
+            policy_opt=self.policy_opt,
             p=p,
             scene=self.scene,
-            visualize=self.visualize_bullet,
-            use_control_skip=self.use_control_skip,
+            visualize=self.opt.render_bullet,
+            use_control_skip=self.opt.use_control_skip,
         )
 
         # If reaching is disabled, set the robot arm directly to the dstination
@@ -221,13 +180,6 @@ class DemoEnvironment:
             self.w.robot_env.robot.reset_with_certain_arm_q(q_zero)
         else:
             self.w.robot_env.robot.reset_with_certain_arm_q(self.q_reach_dst)
-        # if self.opt.init_pose:
-        #     if self.init_fin_q is not None:
-        #         self.w.robot_env.change_init_fin_q(self.init_fin_q)
-        #     if self.init_arm_q is not None:
-        #         self.w.robot_env.robot.reset_with_certain_arm_q(
-        #             self.init_arm_q
-        #         )
 
         # Flag planning as complete.
         self.planning_complete = True
@@ -273,9 +225,9 @@ class DemoEnvironment:
         elif self.task == "place":
             # We assume that the first object in the ground truth scene is the
             # source object.
-            if self.observation_mode == "gt":
+            if self.opt.obs_mode == "gt":
                 src_idx = self.opt.gt_place_idx
-            elif self.observation_mode == "vision":
+            elif self.opt.obs_mode == "vision":
                 # We need to find the index of the vision predicted object that
                 # is the closest neighbor to the ground truth.
                 # Compute the mapping from GT indexes to predicted indexes.
@@ -284,7 +236,7 @@ class DemoEnvironment:
                 )
                 src_idx = gt2pred_idxs[self.opt.gt_place_idx]
             else:
-                raise ValueError(f"Invalid observation mode: {self.observation_mode}.")
+                raise ValueError(f"Invalid observation mode: {self.opt.obs_mode}.")
             dst_idx = None
             assert self.place_dst_xy is not None
             dst_x, dst_y = self.place_dst_xy
@@ -296,7 +248,7 @@ class DemoEnvironment:
         if dst_idx is None:
             z = 0.0
         else:
-            if self.opt.use_height:
+            if self.policy_opt.use_height:
                 z = observation[dst_idx]["height"]
             else:
                 z = utils.H_MAX
@@ -370,7 +322,7 @@ class DemoEnvironment:
             step_succeeded = self.execute_plan(
                 stage=stage,
                 stage_ts=stage_ts,
-                restore_fingers=self.opt.restore_fingers,
+                restore_fingers=self.policy_opt.restore_fingers,
             )
         else:
             raise ValueError(f"Invalid stage: {stage}")
@@ -425,19 +377,10 @@ class DemoEnvironment:
         """
         # Compute the destination arm pose for reaching.
         src_xyz = [src_xy[0], src_xy[1], 0.0]
-        table_id = utils.create_table(self.opt.floor_mu)
+        table_id = utils.create_table(self.bullet_opt.floor_mu)
         robot = InmoovShadowNew(
             init_noise=False, timestep=utils.TS, np_random=np.random,
         )
-        # debug = utils.get_n_optimal_init_arm_qs(
-        #     robot,
-        #     utils.PALM_POS_OF_INIT,
-        #     p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
-        #     src_xyz,
-        #     table_id,
-        #     wrist_gain=3.0,
-        # )
-        # print(f"get_n_optimal_init_arm_qs: {debug}")
         q_reach_dst = utils.get_n_optimal_init_arm_qs(
             robot,
             utils.PALM_POS_OF_INIT,
@@ -450,9 +393,9 @@ class DemoEnvironment:
 
         # Compute the destination arm pose for transport.
         # self.a.seed(self.opt.seed)
-        table_id = utils.create_table(self.opt.floor_mu)
+        table_id = utils.create_table(self.bullet_opt.floor_mu)
         (o_pos_pf_ave, o_quat_pf_ave, _,) = utils.read_grasp_final_states_from_pickle(
-            self.opt.grasp_pi
+            self.policy_opt.grasp_pi
         )
         p_pos_of_ave, p_quat_of_ave = p.invertTransform(o_pos_pf_ave, o_quat_pf_ave)
         robot = InmoovShadowNew(
@@ -479,14 +422,12 @@ class DemoEnvironment:
 
             # Instead of using the initial observation, we use the latest
             # observation.
-            if self.observation_mode == "gt":
-                odicts = self.get_observation(
-                    observation_mode=self.observation_mode, renderer=self.renderer,
-                )
-            elif self.observation_mode == "vision":
+            if self.opt.obs_mode == "gt":
+                odicts = self.get_observation()
+            elif self.opt.obs_mode == "vision":
                 odicts = self.last_pred_obs
             else:
-                raise ValueError(f"Invalid observation mode: {self.observation_mode}.")
+                raise ValueError(f"Invalid observation mode: {self.opt.obs_mode}.")
             if self.task == "place":
                 expected_src_base_z_post_placing = 0.0
             elif self.task == "stack":
@@ -509,8 +450,8 @@ class DemoEnvironment:
         # Load the grasping actor critic model.
         if stage_ts == 0:
             (self.policy, _, self.hidden_states, self.masks,) = system.policy.load(
-                policy_dir=self.opt.grasp_dir,
-                env_name=self.opt.grasp_env_name,
+                policy_dir=self.policy_opt.grasp_dir,
+                env_name=self.policy_opt.grasp_env_name,
                 is_cuda=self.opt.is_cuda,
             )
         obs = system.policy.wrap_obs(
@@ -518,7 +459,7 @@ class DemoEnvironment:
         )
         with torch.no_grad():
             _, action, _, self.hidden_states = self.policy.act(
-                obs, self.hidden_states, self.masks, deterministic=self.opt.det
+                obs, self.hidden_states, self.masks, deterministic=self.bullet_opt.det
             )
         self.w.step_robot(
             action=system.policy.unwrap_action(action=action, is_cuda=self.opt.is_cuda)
@@ -527,10 +468,12 @@ class DemoEnvironment:
 
     def place(self, stage_ts: int):
         if stage_ts == 0:
-            self.w.robot_env.change_control_skip_scaling(c_skip=self.opt.control_skip)
+            self.w.robot_env.change_control_skip_scaling(
+                c_skip=self.policy_opt.control_skip
+            )
             (self.policy, _, self.hidden_states, self.masks,) = system.policy.load(
-                policy_dir=self.opt.place_dir,
-                env_name=self.opt.place_env_name,
+                policy_dir=self.policy_opt.place_dir,
+                env_name=self.policy_opt.place_env_name,
                 is_cuda=self.opt.is_cuda,
             )
 
@@ -540,7 +483,7 @@ class DemoEnvironment:
         )
         with torch.no_grad():
             _, action, _, self.hidden_states = self.policy.act(
-                obs, self.hidden_states, self.masks, deterministic=self.opt.det
+                obs, self.hidden_states, self.masks, deterministic=self.bullet_opt.det
             )
 
         self.w.step_robot(
@@ -568,7 +511,7 @@ class DemoEnvironment:
         else:
             tar_arm_q = self.trajectory[stage_ts]
 
-        tar_arm_vel = (tar_arm_q - self.last_tar_arm_q) / self.opt.ts
+        tar_arm_vel = (tar_arm_q - self.last_tar_arm_q) / self.bullet_opt.ts
         max_force = self.w.robot_env.robot.maxForce
 
         p.setJointMotorControlArray(
@@ -621,30 +564,6 @@ class DemoEnvironment:
             forces=[max_force / 4.0] * len(self.w.robot_env.robot.fin_zerodofs),
         )
 
-        if stage_ts == len(self.trajectory) + 4:
-            diff = np.linalg.norm(
-                self.w.robot_env.robot.get_q_dq(self.w.robot_env.robot.arm_dofs)[0]
-                - tar_arm_q
-            )
-            print("diff final", diff)
-            print(
-                "vel final",
-                np.linalg.norm(
-                    self.w.robot_env.robot.get_q_dq(self.w.robot_env.robot.arm_dofs)[1]
-                ),
-            )
-            print("fin dofs")
-            print(
-                [
-                    "{0:0.3f}".format(n)
-                    for n in self.w.robot_env.robot.get_q_dq(
-                        self.w.robot_env.robot.fin_actdofs
-                    )[0]
-                ]
-            )
-            print("cur_fin_tar_q")
-            print(["{0:0.3f}".format(n) for n in self.w.robot_env.robot.tar_fin_q])
-
         self.last_tar_arm_q = tar_arm_q
         self.w.step()
         return True
@@ -656,7 +575,7 @@ class DemoEnvironment:
         half_height = odict["height"] / 2
         is_box = odict["shape"] == "box"
 
-        if self.opt.use_height:
+        if self.policy_opt.use_height:
             obs = self.w.robot_env.get_robot_contact_txtytz_halfh_shape_obs_no_dup(
                 x, y, 0.0, half_height, is_box
             )
@@ -666,10 +585,8 @@ class DemoEnvironment:
 
     def get_place_observation(self):
         # Update the observation only every `vision_delay` steps.
-        if self.timestep % self.opt.vision_delay == 0:
-            self.obs = self.get_observation(
-                observation_mode=self.observation_mode, renderer=self.renderer
-            )
+        if self.timestep % self.policy_opt.vision_delay == 0:
+            self.obs = self.get_observation()
 
         # Compute the observation vector from object poses and placing position.
         tx, ty = self.dst_xy  # this should be dst xy rather than src xy
@@ -692,7 +609,7 @@ class DemoEnvironment:
             b_pos = [0.0, 0.0, 0.0]
             b_up = [0.0, 0.0, 1.0]
 
-        if self.opt.use_height:
+        if self.policy_opt.use_height:
             p_obs = self.w.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
                 tx=tx,
                 ty=ty,
@@ -716,15 +633,12 @@ class DemoEnvironment:
             )
         return p_obs
 
-    def get_observation(self, observation_mode: str, renderer: str):
+    def get_observation(self):
         """Gets an observation from the current state.
         
         Args:
             observation_mode: The mode of observation, e.g. using ground truth 
                 or vision.
-            renderer: If we are using vision as our observation model, this
-                specifies the renderer we are using to render images that are
-                input to vision.
 
         Returns:
             observation: A list of dictionaries storing object observations 
@@ -741,22 +655,19 @@ class DemoEnvironment:
                     ...
                 ]
         """
-        if observation_mode == "gt":
+        if self.opt.obs_mode == "gt":
             # The ground truth observation is simply the same as the true
             # state of the world.
             obs = list(self.get_state()["objects"].values())
-        elif observation_mode == "vision":
-            obs = self.get_vision_observation(renderer=renderer)
+        elif self.opt.obs_mode == "vision":
+            obs = self.get_vision_observation()
         else:
-            raise ValueError("Unsupported observation mode: {self.observation_mode}")
+            raise ValueError("Unsupported observation mode: {self.opt.obs_mode}")
         return copy.deepcopy(obs)
 
-    def get_vision_observation(self, renderer: str):
+    def get_vision_observation(self):
         """Computes the observation of the bullet world using the vision 
         module.
-
-        Args:
-            renderer: The renderer of the input images to the vision module.
         
         Returns:
             obs: The vision observation, in the format:
@@ -793,7 +704,7 @@ class DemoEnvironment:
             # predicted pose is also transformed using camera information.
             odict = dash_object.y_vec_to_dict(
                 y=list(y),
-                coordinate_frame=self.opt.coordinate_frame,
+                coordinate_frame=self.vision_opt.coordinate_frame,
                 cam_position=cam_position,
                 cam_orientation=cam_orientation,
             )
@@ -899,10 +810,6 @@ class DemoEnvironment:
     def get_images(self) -> Tuple:
         """Retrieves the images that are input to the vision module.
 
-        Args:
-            oid: The object ID to retrieve images for.
-            renderer: The renderer that the images are rendered with.
-        
         Returns:
             rgb: The RGB image of the object.
             masks: A numpy array of shape (N, H, W) of instance masks.
@@ -911,11 +818,7 @@ class DemoEnvironment:
             camera_orientation: The orientation of the camera used to capture 
                 the image.
         """
-        if self.renderer == "opengl":
-            raise NotImplementedError
-        elif self.renderer == "tiny_renderer":
-            raise NotImplementedError
-        elif self.renderer == "unity":
+        if self.vision_opt.renderer == "unity":
             # Unity should have already called set_unity_data before this.
             rgb = self.unity_data[0]["rgb"]
             seg_img = self.unity_data[0]["seg_img"]
@@ -931,10 +834,10 @@ class DemoEnvironment:
                 cv2.imshow("seg", seg_bgr)
                 cv2.waitKey(5)
         else:
-            raise ValueError(f"Invalid renderer: {self.renderer}")
+            raise ValueError(f"Invalid renderer: {self.vision_opt.renderer}")
 
         # Either predict segmentations or use ground truth.
-        if self.opt.use_segmentation_module:
+        if self.vision_opt.use_segmentation_module:
             bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
             masks = self.segmentation_module.eval_example(
                 img=bgr, vis_id=self.timestep,

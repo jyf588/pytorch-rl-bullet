@@ -10,9 +10,7 @@ import torch
 from typing import *
 
 import system.policy
-from my_pybullet_envs.inmoov_shadow_demo_env_v4 import (
-    InmoovShadowHandDemoEnvV4,
-)
+from my_pybullet_envs.inmoov_shadow_demo_env_v4 import InmoovShadowHandDemoEnvV4
 import my_pybullet_envs.utils as utils
 from ns_vqa_dart.bullet.renderer import BulletRenderer
 import ns_vqa_dart.bullet.util
@@ -22,6 +20,7 @@ class BulletWorld:
     def __init__(
         self,
         opt: argparse.Namespace,
+        policy_opt: argparse.Namespace,
         scene: List[Dict],
         visualize: bool,
         p: Optional = None,
@@ -47,6 +46,7 @@ class BulletWorld:
             visualize: Whether to visualize the world in OpenGL.
         """
         self.opt = opt
+        self.policy_opt = policy_opt
         self.scene = scene
         self.visualize = visualize
         self.use_control_skip = use_control_skip
@@ -122,12 +122,12 @@ class BulletWorld:
         # Load the robot.
         robot_env = InmoovShadowHandDemoEnvV4(
             # seed=self.opt.seed,
-            init_noise=self.opt.init_noise,
+            init_noise=self.policy_opt.init_noise,
             timestep=self.opt.ts,
             withVel=False,
             diffTar=True,
             robot_mu=self.opt.hand_mu,
-            control_skip=self.opt.control_skip,
+            control_skip=self.policy_opt.control_skip,
         )
         init_fin_q = np.array(
             [0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.1]
@@ -162,9 +162,7 @@ class BulletWorld:
                 input scene.
         """
         renderer = BulletRenderer(p=self.bc)
-        oids = renderer.load_objects_from_state(
-            odicts=scene, position_mode="com"
-        )
+        oids = renderer.load_objects_from_state(odicts=scene, position_mode="com")
         return oids
 
     def load_table(self):
@@ -178,9 +176,7 @@ class BulletWorld:
             utils.TABLE_OFFSET,
             useFixedBase=1,
         )
-        self.bc.changeVisualShape(
-            table_id, -1, rgbaColor=utils.COLOR2RGBA["grey"]
-        )
+        self.bc.changeVisualShape(table_id, -1, rgbaColor=utils.COLOR2RGBA["grey"])
         self.bc.changeDynamics(table_id, -1, lateralFriction=self.opt.floor_mu)
         return table_id
 
@@ -290,9 +286,7 @@ class BulletWorld:
         robot_state = {}
         robot_id = self.robot_env.robot.arm_id
         for joint_idx in range(self.bc.getNumJoints(robot_id)):
-            joint_name = self.bc.getJointInfo(robot_id, joint_idx)[1].decode(
-                "utf-8"
-            )
+            joint_name = self.bc.getJointInfo(robot_id, joint_idx)[1].decode("utf-8")
             joint_angle = self.bc.getJointState(
                 bodyUniqueId=robot_id, jointIndex=joint_idx
             )[0]
@@ -314,9 +308,7 @@ class BulletWorld:
             fin_q: The finger pose.
         """
         arm_q = self.robot_env.robot.get_q_dq(self.robot_env.robot.arm_dofs)[0]
-        fin_q = self.robot_env.robot.get_q_dq(
-            self.robot_env.robot.fin_actdofs
-        )[0]
+        fin_q = self.robot_env.robot.get_q_dq(self.robot_env.robot.fin_actdofs)[0]
         return arm_q, fin_q
 
     def act(self):
@@ -337,7 +329,7 @@ class BulletWorld:
         # Here we have the option to step `control_skip` instead, if the flag
         # is enabled.
         if self.use_control_skip:
-            for _ in range(self.opt.control_skip):
+            for _ in range(self.policy_opt.control_skip):
                 self.robot_env.step_sim(action=action)
         else:
             self.robot_env.step_sim(action=action)

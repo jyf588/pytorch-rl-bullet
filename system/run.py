@@ -1,20 +1,25 @@
 """Runs a bullet + unity demo."""
-
-import argparse
+import sys
+import time
 import copy
 import pprint
-import sys
+import argparse
 from typing import *
 
-import scene.loader
 import system.base_scenes
 import bullet2unity.states
-from system.options import OPTIONS
+import scene.loader as scene_loader
 from system.env import DemoEnvironment
 import my_pybullet_envs.utils as utils
 import ns_vqa_dart.bullet.util as util
 import bullet2unity.interface as interface
 from exp.options import EXPERIMENT_OPTIONS
+from system.options import (
+    SYSTEM_OPTIONS,
+    BULLET_OPTIONS,
+    POLICY_OPTIONS,
+    VISION_OPTIONS,
+)
 
 global args
 
@@ -36,95 +41,104 @@ async def send_to_client(websocket, path):
         websocket: The websocket protocol instance.
         path: The URI path.
     """
-    # Load the scenes, and get options for the experiment / set.
-    scenes = scene.loader.load_scenes(exp=args.exp, set_name=args.set_name)
-    set_opt = EXPERIMENT_OPTIONS[args.exp][args.set_name]
-    task = set_opt.task
-    obs_mode = set_opt.obs_mode
+    start_time = time.time()
+    # Run all sets in experiment.
+    opt = SYSTEM_OPTIONS[args.exp]
+    sets = list(EXPERIMENT_OPTIONS[args.exp].keys())
+    for set_name in sets:
+        print(f"Running experiment: {args.exp} set: {set_name}")
+        set_opt = EXPERIMENT_OPTIONS[args.exp][set_name]
+        scenes = scene_loader.load_scenes(exp=args.exp, set_name=set_name)
+        task = set_opt["task"]
 
-    for scene_idx in range(len(scenes)):
-        scene = scenes[scene_idx]
-        print(f"scene {scene_idx}:")
-        pprint.pprint(scene)
+        for scene_idx in range(len(scenes)):
+            scene = scenes[scene_idx]
+            avg_time = 0 if scene_idx == 0 else (time.time() - start_time) / scene_idx
+            print(
+                f"Exp: {args.exp}\t"
+                f"Set: {set_name}\t"
+                f"Task: {task}\t"
+                f"Scene ID: {scene_idx}\t"
+                f"Avg Trial Time: {avg_time:.2f}"
+            )
 
-        # Modify the scene for placing, and determine placing destination.
-        place_dst_xy, place_dest_object = None, None
-        if task == "place":
-            scene, place_dst_xy, place_dest_object = convert_scene_for_placing(scene)
+            # Modify the scene for placing, and determine placing destination.
+            place_dst_xy, place_dest_object = None, None
+            if task == "place":
+                scene, place_dst_xy, place_dest_object = convert_scene_for_placing(
+                    scene
+                )
 
-        # Initialize the environment.
-        env = DemoEnvironment(
-            opt=OPTIONS,
-            trial=scene_idx,
-            scene=scene,
-            task=task,
-            observation_mode=obs_mode,
-            renderer="unity",
-            visualize_bullet=args.render_bullet,
-            visualize_unity=False,
-            place_dst_xy=place_dst_xy,
-            use_control_skip=args.use_control_skip,
-        )
+            # Initialize the environment.
+            env = DemoEnvironment(
+                opt=opt,
+                bullet_opt=BULLET_OPTIONS,
+                policy_opt=POLICY_OPTIONS,
+                vision_opt=VISION_OPTIONS,
+                trial=scene_idx,
+                scene=scene,
+                task=task,
+                place_dst_xy=place_dst_xy,
+            )
 
-        while 1:
-            stage, _ = env.get_current_stage()
-            state = env.get_state()
+            while 1:
+                stage, _ = env.get_current_stage()
+                state = env.get_state()
 
-            is_render_step = False
-            if args.render_unity:
-                render_frequency = args.render_frequency
-                if obs_mode == "vision" and stage in ["plan", "place"]:
-                    render_frequency = OPTIONS.vision_delay
+                is_render_step = False
+                if opt.render_unity:
+                    render_frequency = opt.render_frequency
+                    if opt.obs_mode == "vision" and stage in ["plan", "place"]:
+                        render_frequency = POLICY_OPTIONS.vision_delay
 
-                # Renders unity and steps.
-                if env.timestep % render_frequency == 0:
-                    is_render_step = True
-                    unity_opt = get_unity_options(env, args.render_obs)
-                    for (rend_obs, rend_place, send_image, should_step) in unity_opt:
-                        state_id = f"{scene_idx:06}_{env.timestep:06}"
-                        render_state = compute_render_state(
-                            state, env.obs, place_dest_object, rend_obs, rend_place
-                        )
-                        new_bullet_camera_targets = compute_bullet_camera_targets(
-                            env=env
-                        )
-                        if new_bullet_camera_targets is not None:
-                            bullet_cam_targets = copy.deepcopy(
-                                new_bullet_camera_targets
+                    # Renders unity and steps.
+                    if env.timestep % render_frequency == 0:
+                        is_render_step = True
+                        u_opt = get_unity_options(env, opt.render_obs)
+                        for (rend_obs, rend_place, send_image, should_step,) in u_opt:
+                            state_id = f"{scene_idx:06}_{env.timestep:06}"
+                            render_state = compute_render_state(
+                                state, env.obs, place_dest_object, rend_obs, rend_place
                             )
 
-                        # Compute the animation target.
-                        b_ani_tar = (
-                            compute_b_ani_target(env=env) if args.animate_head else None
-                        )
+                            # Compute camera targets.
+                            if send_image:
+                                new_targets = compute_bullet_camera_targets(env=env)
+                                if new_targets is not None:
+                                    bullet_cam_targets = copy.deepcopy(new_targets)
 
-                        # Encode, send, receive, and decode.
-                        message = interface.encode(
-                            state_id=state_id,
-                            bullet_state=render_state,
-                            bullet_animation_target=b_ani_tar,
-                            bullet_cam_targets=bullet_cam_targets
-                            if send_image
-                            else None,
-                        )
-                        await websocket.send(message)
-                        reply = await websocket.recv()
-                        data = interface.decode(
-                            state_id, reply, bullet_cam_targets=bullet_cam_targets,
-                        )
+                            # Compute the animation target.
+                            b_ani_tar = (
+                                compute_b_ani_target(env=env)
+                                if opt.animate_head
+                                else None
+                            )
 
-                        # Hand the data to the env for processing.
-                        if send_image:
-                            env.set_unity_data(data)
-                        if should_step:
-                            is_done, success = env.step()
-            if not is_render_step:
-                is_done, success = env.step()
+                            # Encode, send, receive, and decode.
+                            message = interface.encode(
+                                state_id=state_id,
+                                bullet_state=render_state,
+                                bullet_animation_target=b_ani_tar,
+                                bullet_cam_targets=bullet_cam_targets,
+                            )
+                            await websocket.send(message)
+                            reply = await websocket.recv()
+                            data = interface.decode(
+                                state_id, reply, bullet_cam_targets=bullet_cam_targets,
+                            )
 
-            # Break out if we're done with the sequence, or it failed.
-            if is_done or not success:
-                env.cleanup()
-                break
+                            # Hand the data to the env for processing.
+                            if send_image:
+                                env.set_unity_data(data)
+                            if should_step:
+                                is_done, success = env.step()
+                if not is_render_step:
+                    is_done, success = env.step()
+
+                # Break out if we're done with the sequence, or it failed.
+                if is_done or not success:
+                    env.cleanup()
+                    break
     sys.exit(0)
 
 
@@ -255,10 +269,7 @@ def add_hallucinations_to_state(state: Dict, h_odicts: Dict, color: str):
 if __name__ == "__main__":
     global args
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "experiment", type=str, help="The name of the experiment to run."
-    )
-    parser.add_argument("set_name", type=str, help="The name of the set to run.")
+    parser.add_argument("exp", type=str, help="The name of the experiment to run.")
     parser.add_argument(
         "--hostname",
         type=str,
@@ -268,26 +279,6 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--port", type=int, default=8000, help="The port of the server."
-    )
-    parser.add_argument(
-        "--render_unity", action="store_true", help="Whether to render unity.",
-    )
-    parser.add_argument(
-        "--render_bullet",
-        action="store_true",
-        help="Whether to render PyBullet using OpenGL.",
-    )
-    parser.add_argument(
-        "--seed", type=int, default=101, help="Seed to use for scene generation.",
-    )
-    parser.add_argument(
-        "--render_frequency",
-        type=int,
-        default=2,
-        help="The rendering frequency to use.",
-    )
-    parser.add_argument(
-        "--render_obs", action="store_true", help="Whether to render the observations.",
     )
     args = parser.parse_args()
 

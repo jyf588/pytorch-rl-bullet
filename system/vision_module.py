@@ -9,7 +9,7 @@ import torch
 import torchvision.transforms as transforms
 
 import ns_vqa_dart.bullet.seg
-from ns_vqa_dart.bullet import dash_object, gen_dataset
+from ns_vqa_dart.bullet import dash_object
 from ns_vqa_dart.scene_parse.attr_net.model import get_model
 from ns_vqa_dart.scene_parse.attr_net.options import BaseOptions
 
@@ -41,9 +41,7 @@ class VisionModule:
         options = BaseOptions().parse(opt=options, save_options=False)
         return options
 
-    def predict(
-        self, rgb: np.ndarray, masks: np.ndarray, debug_id: int
-    ) -> np.ndarray:
+    def predict(self, rgb: np.ndarray, masks: np.ndarray, debug_id: int) -> np.ndarray:
         """Runs inference on an image to get vision predictions.
 
         Args:
@@ -100,13 +98,9 @@ class VisionModule:
         """
         rows = []
         for object_data in data:
-            rows.append(
-                np.hstack([object_data[:, :, :3], object_data[:, :, 3:6]])
-            )
+            rows.append(np.hstack([object_data[:, :, :3], object_data[:, :, 3:6]]))
         image = np.vstack(rows)
-        path = os.path.join(
-            self.debug_dir, f"{debug_id:04}", "vision_input.png"
-        )
+        path = os.path.join(self.debug_dir, f"{debug_id:04}", "vision_input.png")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         imageio.imwrite(path, image)
         print(f"Wrote debug image to: {path}")

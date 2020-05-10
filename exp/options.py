@@ -1,8 +1,10 @@
 import copy
+import argparse
 
 N_VISION_SCENES = 2500
-N_TINY_VISION_SCENES = 25
+N_TINY_VISION_SCENES = 1
 N_TABLE1_SCENES = 100
+
 
 EXPERIMENT_OPTIONS = {
     "vision": {

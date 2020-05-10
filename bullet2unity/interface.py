@@ -28,6 +28,7 @@ def run_server(hostname: str, port: int, handler: Callable):
         handler: The handler coroutine to run for each websocket connection.
     """
     print(f"Running server on {hostname}:{port}")
+    print("Awaiting client connection...")
 
     start_server = websockets.serve(handler, hostname, port)
     asyncio.get_event_loop().run_until_complete(start_server)

@@ -11,15 +11,15 @@ import scene.loader
 
 
 def main(args: argparse.Namespace):
-    print(f"Generating scenes for experiment: {args.experiment}...")
-    exp_opt = exp.options.EXPERIMENT_OPTIONS[args.experiment]
+    print(f"Generating scenes for experiment: {args.exp}...")
+    exp_opt = exp.options.EXPERIMENT_OPTIONS[args.exp]
     for set_name, set_opt in exp_opt.items():
         generators = create_generators(
             seed=set_opt["seed"],
             generator_options=scene.options.TASK2OPTIONS[set_opt["task"]],
         )
         scenes = generate_scenes(n_scenes=set_opt["n_scenes"], generators=generators)
-        scene.loader.save_scenes(scenes, experiment=args.experiment, set_name=set_name)
+        scene.loader.save_scenes(scenes, exp=args.exp, set_name=set_name)
 
 
 def create_generators(seed: int, generator_options: List) -> List:
@@ -62,7 +62,7 @@ def generate_scenes(n_scenes: int, generators: List):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "experiment", type=str, help="The name of the experiment to run.",
+        "exp", type=str, help="The name of the experiment to run.",
     )
     args = parser.parse_args()
     main(args)
