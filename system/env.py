@@ -38,6 +38,7 @@ class DemoEnvironment:
         task: str,
         command: Optional[str] = None,
         place_dst_xy: Optional[List[float]] = None,
+        states_path=None,
     ):
         """
         Args:
@@ -61,6 +62,7 @@ class DemoEnvironment:
         self.task = task
         self.command = command
         self.place_dst_xy = place_dst_xy
+        self.states_path = states_path
 
         np.random.seed(self.opt.seed)
 
@@ -289,6 +291,8 @@ class DemoEnvironment:
             scene=self.scene,
             visualize=self.opt.render_bullet,
             use_control_skip=self.opt.use_control_skip,
+            save_states=self.opt.save_states,
+            states_path=self.states_path,
         )
 
         # If reaching is disabled, set the robot arm directly to the dstination
@@ -498,7 +502,8 @@ class DemoEnvironment:
                 obs, self.hidden_states, self.masks, deterministic=self.bullet_opt.det
             )
         self.w.step_robot(
-            action=system.policy.unwrap_action(action=action, is_cuda=self.opt.is_cuda)
+            action=system.policy.unwrap_action(action=action, is_cuda=self.opt.is_cuda),
+            timestep=self.timestep,
         )
         self.masks.fill_(1.0)
 
@@ -523,7 +528,8 @@ class DemoEnvironment:
             )
 
         self.w.step_robot(
-            action=system.policy.unwrap_action(action=action, is_cuda=self.opt.is_cuda)
+            action=system.policy.unwrap_action(action=action, is_cuda=self.opt.is_cuda),
+            timestep=self.timestep,
         )
 
     def execute_plan(
@@ -601,7 +607,7 @@ class DemoEnvironment:
         )
 
         self.last_tar_arm_q = tar_arm_q
-        self.w.step()
+        self.w.step(timestep=self.timestep)
         return True
 
     def get_grasp_observation(self) -> torch.Tensor:

@@ -13,7 +13,7 @@ import system.policy
 from my_pybullet_envs.inmoov_shadow_demo_env_v4 import InmoovShadowHandDemoEnvV4
 import my_pybullet_envs.utils as utils
 from ns_vqa_dart.bullet.renderer import BulletRenderer
-import ns_vqa_dart.bullet.util
+import ns_vqa_dart.bullet.util as util
 
 
 class BulletWorld:
@@ -23,8 +23,10 @@ class BulletWorld:
         policy_opt: argparse.Namespace,
         scene: List[Dict],
         visualize: bool,
+        save_states: bool,
         p: Optional = None,
         use_control_skip: Optional[bool] = False,
+        states_path=None,
     ):
         """
         Args:
@@ -50,6 +52,8 @@ class BulletWorld:
         self.scene = scene
         self.visualize = visualize
         self.use_control_skip = use_control_skip
+        self.save_states = save_states
+        self.states_path = states_path
 
         if p is None:
             self.bc = self.create_bullet_client()
@@ -63,6 +67,8 @@ class BulletWorld:
         # Construct the state dictionary.
         self.state = self.construct_state()
 
+        self.states = {}
+
     def create_bullet_client(self):
         """Creates the bullet client for the world.
 
@@ -70,7 +76,7 @@ class BulletWorld:
             bc: The bullet client.
         """
         mode = "gui" if self.visualize else "direct"
-        bc = ns_vqa_dart.bullet.util.create_bullet_client(mode=mode)
+        bc = util.create_bullet_client(mode=mode)
         return bc
 
     def set_parameters(self):
@@ -260,9 +266,7 @@ class BulletWorld:
             position, orientation = self.bc.getBasePositionAndOrientation(oid)
             odict["position"] = list(position)
             odict["orientation"] = list(orientation)
-            odict["up_vector"] = ns_vqa_dart.bullet.util.orientation_to_up(
-                orientation=orientation
-            )
+            odict["up_vector"] = util.orientation_to_up(orientation=orientation)
             oid2dict[oid] = odict
             # new_position = np.array(odict["position"])
             # old_position = np.array(old_position)
@@ -311,14 +315,13 @@ class BulletWorld:
         fin_q = self.robot_env.robot.get_q_dq(self.robot_env.robot.fin_actdofs)[0]
         return arm_q, fin_q
 
-    def act(self):
-        pass
-
-    def step(self):
+    def step(self, timestep: int):
         self.bc.stepSimulation()
         time.sleep(self.opt.ts)
 
-    def step_robot(self, action: np.ndarray):
+        self.save_current_state(timestep=timestep)
+
+    def step_robot(self, action: np.ndarray, timestep: int):
         """Applies the robot action and steps a single simulation step.
 
         Args:
@@ -333,3 +336,10 @@ class BulletWorld:
                 self.robot_env.step_sim(action=action)
         else:
             self.robot_env.step_sim(action=action)
+        self.save_current_state(timestep=timestep)
+
+    def save_current_state(self, timestep: int):
+        if self.save_states:
+            assert timestep not in self.states
+            self.states[timestep] = self.get_state()
+            util.save_pickle(path=self.states_path, data=self.states)

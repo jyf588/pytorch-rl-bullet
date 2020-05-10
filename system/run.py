@@ -1,4 +1,5 @@
-"""Runs a bullet + unity demo."""
+"""Runs the bullet-unity system."""
+import os
 import sys
 import time
 import copy
@@ -9,6 +10,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
+import exp.loader
 import system.base_scenes
 import bullet2unity.states
 import scene.loader as scene_loader
@@ -55,6 +57,9 @@ async def send_to_client(websocket, path):
         set_opt = EXPERIMENT_OPTIONS[args.exp][set_name]
         scenes = scene_loader.load_scenes(exp=args.exp, set_name=set_name)
         task = set_opt["task"]
+        states_path = os.path.join(
+            exp.loader.get_exp_set_dir(exp=args.exp, set_name=set_name), "states.p"
+        )
 
         for scene_idx in range(len(scenes)):
             scene = scenes[scene_idx]
@@ -86,6 +91,7 @@ async def send_to_client(websocket, path):
                 scene=scene,
                 task=task,
                 place_dst_xy=place_dst_xy,
+                states_path=states_path,
             )
 
             while 1:
