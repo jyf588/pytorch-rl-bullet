@@ -11,6 +11,7 @@ KEY2EXT = {"cam": "json", "img": "png", "masks": "npy"}
 class ExpLoader:
     def __init__(self, exp_name: str):
         self.set_names = list(EXPERIMENT_OPTIONS[exp_name].keys())
+        self.opt = EXPERIMENT_OPTIONS[exp_name]
 
 
 class SetLoader:
@@ -22,12 +23,26 @@ class SetLoader:
         self.root_dir = root_dir
 
         self.set_dir = self.construct_set_dir()
+        self.scenes_dir = os.path.join(self.set_dir, "scenes")
 
     def construct_set_dir(self):
         set_dir = os.path.join(
             util.get_user_homedir(), self.root_dir, self.exp_name, self.set_name
         )
         return set_dir
+
+    def get_scene_path(self, scene_id: str):
+        path = os.path.join(self.scenes_dir, f"{scene_id}.p")
+        return path
+
+    def save_scenes(self, scenes: List):
+        # Create the scenes directory.
+        os.makedirs(self.scenes_dir)
+
+        # Save scenes one by one.
+        for idx, scene in enumerate(scenes):
+            path = self.get_scene_path(scene_id=f"{idx:04}")
+            util.save_pickle(path=path, data=scene)
 
     def get_key_dir(self, key: str):
         key_dir = os.path.join(self.set_dir, key)

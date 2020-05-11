@@ -4,22 +4,26 @@ import argparse
 from typing import *
 from tqdm import tqdm
 
+import exp.loader
 import scene.options
 import exp.options
 from scene.generator import SceneGenerator
-import scene.loader
 
 
 def main(args: argparse.Namespace):
     print(f"Generating scenes for experiment: {args.exp}...")
-    exp_opt = exp.options.EXPERIMENT_OPTIONS[args.exp]
+    exp_opt = exp.loader.ExpLoader(exp_name=args.exp).opt
     for set_name, set_opt in exp_opt.items():
+        # Generate scenes.
         generators = create_generators(
             seed=set_opt["seed"],
             generator_options=scene.options.TASK2OPTIONS[set_opt["task"]],
         )
         scenes = generate_scenes(n_scenes=set_opt["n_scenes"], generators=generators)
-        scene.loader.save_scenes(scenes, exp=args.exp, set_name=set_name)
+
+        # Save the scenes.
+        set_loader = exp.loader.SetLoader(exp_name=args.exp, set_name=set_name)
+        set_loader.save_scenes(scenes)
 
 
 def create_generators(seed: int, generator_options: List) -> List:
