@@ -291,7 +291,6 @@ class DemoEnvironment:
             scene=self.scene,
             visualize=self.opt.render_bullet,
             use_control_skip=self.opt.use_control_skip,
-            save_states=self.opt.save_states,
             states_path=self.states_path,
         )
 
@@ -531,6 +530,9 @@ class DemoEnvironment:
             action=system.policy.unwrap_action(action=action, is_cuda=self.opt.is_cuda),
             timestep=self.timestep,
         )
+        # We only save in placing.
+        if self.opt.save_states:
+            self.w.save_current_state(timestep=self.timestep)
 
     def execute_plan(
         self, stage: str, stage_ts: int, restore_fingers: Optional[bool] = False,
@@ -696,18 +698,7 @@ class DemoEnvironment:
             raise ValueError("Unsupported observation mode: {self.opt.obs_mode}")
 
         if self.opt.obs_noise:
-            for idx in range(len(obs)):
-                noisy_odict = copy.deepcopy(obs[idx])
-                noisy_odict["position"] = utils.perturb(
-                    np.random, noisy_odict["position"], r=self.opt.position_noise
-                )
-                noisy_odict["up_vector"] = utils.perturb(
-                    np.random, noisy_odict["up_vector"], r=self.opt.upv_noise
-                )
-                noisy_odict["height"] = utils.perturb_scalar(
-                    np.random, noisy_odict["height"], r=self.opt.height_noise
-                )
-                obs[idx] = noisy_odict
+            obs = apply_obs_noise(opt=self.opt, obs=obs)
         return copy.deepcopy(obs)
 
     def get_vision_observation(self):
@@ -897,3 +888,20 @@ class DemoEnvironment:
                 }        
         """
         self.unity_data = data
+
+
+def apply_obs_noise(opt, obs):
+    noisy_obs = copy.deepcopy(obs)
+    for idx in range(len(obs)):
+        noisy_odict = noisy_obs[idx]
+        noisy_odict["position"] = utils.perturb(
+            np.random, noisy_odict["position"], r=opt.position_noise
+        )
+        noisy_odict["up_vector"] = utils.perturb(
+            np.random, noisy_odict["up_vector"], r=opt.upv_noise
+        )
+        noisy_odict["height"] = utils.perturb_scalar(
+            np.random, noisy_odict["height"], r=opt.height_noise
+        )
+        noisy_obs[idx] = noisy_odict
+    return noisy_obs

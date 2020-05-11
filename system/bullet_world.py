@@ -23,7 +23,6 @@ class BulletWorld:
         policy_opt: argparse.Namespace,
         scene: List[Dict],
         visualize: bool,
-        save_states: bool,
         p: Optional = None,
         use_control_skip: Optional[bool] = False,
         states_path=None,
@@ -52,7 +51,6 @@ class BulletWorld:
         self.scene = scene
         self.visualize = visualize
         self.use_control_skip = use_control_skip
-        self.save_states = save_states
         self.states_path = states_path
 
         if p is None:
@@ -319,8 +317,6 @@ class BulletWorld:
         self.bc.stepSimulation()
         time.sleep(self.opt.ts)
 
-        self.save_current_state(timestep=timestep)
-
     def step_robot(self, action: np.ndarray, timestep: int):
         """Applies the robot action and steps a single simulation step.
 
@@ -336,10 +332,8 @@ class BulletWorld:
                 self.robot_env.step_sim(action=action)
         else:
             self.robot_env.step_sim(action=action)
-        self.save_current_state(timestep=timestep)
 
     def save_current_state(self, timestep: int):
-        if self.save_states:
-            assert timestep not in self.states
-            self.states[timestep] = self.get_state()
-            util.save_pickle(path=self.states_path, data=self.states)
+        assert timestep not in self.states
+        self.states[timestep] = self.get_state()
+        util.save_pickle(path=self.states_path, data=self.states)

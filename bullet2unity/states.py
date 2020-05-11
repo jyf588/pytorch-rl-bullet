@@ -17,8 +17,6 @@ import ns_vqa_dart.bullet.util as util
 
 def create_bullet_camera_targets(
     camera_control: str,
-    bullet_odicts: Dict,
-    use_oids: bool,
     should_save: bool,
     should_send: bool,
     position: Optional[List[float]] = None,
@@ -165,9 +163,7 @@ def bullet2unity_state(
     unity_robot_state = bullet2unity_robot(bullet_state=bullet_robot_state)
 
     # Convert object state from bullet to unity.
-    unity_object_states = bullet2unity_objects(
-        bullet_state=bullet_state["objects"],
-    )
+    unity_object_states = bullet2unity_objects(bullet_state=bullet_state["objects"],)
 
     # Compute the target position in Unity coordinates.
     if bullet_animation_target:
@@ -186,12 +182,8 @@ def bullet2unity_state(
     unity_cam_targets = []
     for tid, target_info in bullet_camera_targets.items():
         bullet_pos = target_info["position"]
-        bullet_pos_shoulder = bullet_world2shoulder_position(
-            pos_world=bullet_pos
-        )
-        unity_rel_position = bullet2unity_position(
-            bullet_position=bullet_pos_shoulder
-        )
+        bullet_pos_shoulder = bullet_world2shoulder_position(pos_world=bullet_pos)
+        unity_rel_position = bullet2unity_position(bullet_position=bullet_pos_shoulder)
         unity_cam_targets += [
             tid,
             int(target_info["should_save"]),

@@ -13,7 +13,7 @@ EXPERIMENT_OPTIONS = {
         "seg_stack": {
             "seed": 3,
             "task": "stack",
-            "stage": "stack",
+            "stage": "place",
             "n_scenes": N_VISION_SCENES,
         },
         # "vision_plan": {"seed": 4, "task": "place", "n_scenes": N_VISION_SCENES},

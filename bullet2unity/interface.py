@@ -135,8 +135,6 @@ def decode(message_id: str, reply: str, bullet_cam_targets):
 
     # Split components by comma.
     reply = reply.split(",")
-    print(f"Number of reply components: {len(reply)}")
-    print(f"Attempting to parse unity data for {len(bullet_cam_targets)} objects...")
 
     # Extract the state ID, and verify that the message IDs are equivalent,
     received_id = reply[0]

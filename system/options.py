@@ -36,7 +36,7 @@ VISION_STATES_OPTIONS.save_states = True
 UNITY_DATASET_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 UNITY_DATASET_OPTIONS.render_unity = True
 UNITY_DATASET_OPTIONS.render_frequency = 1
-UNITY_DATASET_OPTIONS.animate_head = 1
+UNITY_DATASET_OPTIONS.animate_head = False
 
 
 SYSTEM_OPTIONS = {
