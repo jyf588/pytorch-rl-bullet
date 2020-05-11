@@ -24,18 +24,24 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     animate_head=None,
     save_states=None,
 )
-VISION_DATASET_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
-VISION_DATASET_OPTIONS.enable_reaching = False
-VISION_DATASET_OPTIONS.enable_retract = False
-VISION_DATASET_OPTIONS.render_unity = False
-VISION_DATASET_OPTIONS.use_control_skip = True
-VISION_DATASET_OPTIONS.obs_mode = "gt"
-VISION_DATASET_OPTIONS.obs_noise = True
-VISION_DATASET_OPTIONS.save_states = True
+VISION_STATES_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
+VISION_STATES_OPTIONS.enable_reaching = False
+VISION_STATES_OPTIONS.enable_retract = False
+VISION_STATES_OPTIONS.render_unity = False
+VISION_STATES_OPTIONS.use_control_skip = True
+VISION_STATES_OPTIONS.obs_mode = "gt"
+VISION_STATES_OPTIONS.obs_noise = True
+VISION_STATES_OPTIONS.save_states = True
+
+UNITY_DATASET_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
+UNITY_DATASET_OPTIONS.render_unity = True
+UNITY_DATASET_OPTIONS.render_frequency = 1
+UNITY_DATASET_OPTIONS.animate_head = 1
+
 
 SYSTEM_OPTIONS = {
-    "vision_tiny": VISION_DATASET_OPTIONS,
-    "vision": VISION_DATASET_OPTIONS,
+    "vision_states": VISION_STATES_OPTIONS,
+    "unity_dataset": UNITY_DATASET_OPTIONS,
     "test": None,
     "demo": None,
 }

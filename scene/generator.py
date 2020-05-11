@@ -81,7 +81,7 @@ class SceneGenerator:
             "radius": radius,
             "height": height,
             "position": position,
-            "orientation": self.generate_orientation(),
+            "orientation": self.generate_orientation(shape=shape),
             "mass": self.sample_float(self.opt.mass),
             "mu": self.sample_float(self.opt.mu),
         }

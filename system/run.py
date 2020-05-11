@@ -13,6 +13,7 @@ warnings.filterwarnings("ignore")
 import exp.loader
 import system.base_scenes
 import bullet2unity.states
+from states_env import StatesEnv
 import scene.loader as scene_loader
 from system.env import DemoEnvironment
 import my_pybullet_envs.utils as utils
@@ -51,18 +52,21 @@ async def send_to_client(websocket, path):
     n_trials = 0
 
     # Run all sets in experiment.
-    opt = SYSTEM_OPTIONS[args.exp]
+    opt = SYSTEM_OPTIONS[args.mode]
     sets = list(EXPERIMENT_OPTIONS[args.exp].keys())
     for set_name in sets:
         set_opt = EXPERIMENT_OPTIONS[args.exp][set_name]
-        scenes = scene_loader.load_scenes(exp=args.exp, set_name=set_name)
-        task = set_opt["task"]
-        states_path = os.path.join(
-            exp.loader.get_exp_set_dir(exp=args.exp, set_name=set_name), "states.p"
+        set_states_dir = os.path.join(
+            exp.loader.get_exp_set_dir(exp=args.exp, set_name=set_name), "states"
         )
+        if args.mode == "unity_dataset":
+            n_set_scenes = len(os.listdir(set_states_dir))
+        else:
+            scenes = scene_loader.load_scenes(exp=args.exp, set_name=set_name)
+            task = set_opt["task"]
+            n_set_scenes = len(scenes)
 
-        for scene_idx in range(len(scenes)):
-            scene = scenes[scene_idx]
+        for scene_idx in range(n_set_scenes):
             avg_time = 0 if n_trials == 0 else (time.time() - start_time) / n_trials
             print(
                 f"Exp: {args.exp}\t"
@@ -73,59 +77,61 @@ async def send_to_client(websocket, path):
                 f"Avg Time: {avg_time:.2f}"
             )
 
-            # Modify the scene for placing, and determine placing destination.
-            place_dst_xy, place_dest_object = None, None
-            if task == "place":
-                scene, place_dst_xy, place_dest_object = convert_scene_for_placing(
-                    opt, scene
+            states_path = os.path.join(set_states_dir, f"{scene_idx:04}.p")
+
+            if args.mode == "unity_dataset":
+                env = StatesEnv(
+                    opt=opt, task=task, stage=set_opt["stage"], states_path=states_path
                 )
+            else:
+                scene = scenes[scene_idx]
 
-            # Initialize the environment.
-            env = DemoEnvironment(
-                opt=opt,
-                bullet_opt=BULLET_OPTIONS,
-                policy_opt=POLICY_OPTIONS,
-                name2policy_models=NAME2POLICY_MODELS,
-                vision_opt=VISION_OPTIONS,
-                trial=scene_idx,
-                scene=scene,
-                task=task,
-                place_dst_xy=place_dst_xy,
-                states_path=states_path,
-            )
+                # Modify the scene for placing, and determine placing destination.
+                place_dst_xy, place_dest_object = None, None
+                if task == "place":
+                    scene, place_dst_xy, place_dest_object = convert_scene_for_placing(
+                        opt, scene
+                    )
 
+                # Initialize the environment.
+                env = DemoEnvironment(
+                    opt=opt,
+                    bullet_opt=BULLET_OPTIONS,
+                    policy_opt=POLICY_OPTIONS,
+                    name2policy_models=NAME2POLICY_MODELS,
+                    vision_opt=VISION_OPTIONS,
+                    trial=scene_idx,
+                    scene=scene,
+                    task=task,
+                    place_dst_xy=place_dst_xy,
+                    states_path=states_path,
+                )
             while 1:
-                stage, _ = env.get_current_stage()
-                state = env.get_state()
-
                 is_render_step = False
                 if opt.render_unity:
                     render_frequency = opt.render_frequency
-                    if opt.obs_mode == "vision" and stage in ["plan", "place"]:
-                        render_frequency = POLICY_OPTIONS.vision_delay
+                    if args.mode != "unity_dataset":
+                        stage, _ = env.get_current_stage()
+                        if opt.obs_mode == "vision" and stage in ["plan", "place"]:
+                            render_frequency = POLICY_OPTIONS.vision_delay
 
-                    # Renders unity and steps.
+                    # Render unity and step.
                     if env.timestep % render_frequency == 0:
                         is_render_step = True
-                        u_opt = get_unity_options(env, opt.render_obs)
-                        for (rend_obs, rend_place, send_image, should_step,) in u_opt:
-                            state_id = f"{scene_idx:06}_{env.timestep:06}"
+                        state_id = f"{scene_idx:06}_{env.timestep:06}"
+                        u_opt = get_unity_options(args.mode, opt, env)
+                        for (rend_obs, rend_place, send_image, should_step) in u_opt:
                             render_state = compute_render_state(
-                                state, env.obs, place_dest_object, rend_obs, rend_place
+                                env, place_dest_object, rend_obs, rend_place
                             )
 
                             # Compute camera targets.
-                            if send_image:
-                                new_targets = compute_bullet_camera_targets(env=env)
-                                if new_targets is not None:
-                                    bullet_cam_targets = copy.deepcopy(new_targets)
+                            new_targets = compute_bullet_camera_targets(env, send_image)
+                            if new_targets is not None:
+                                bullet_cam_targets = copy.deepcopy(new_targets)
 
                             # Compute the animation target.
-                            b_ani_tar = (
-                                compute_b_ani_target(env=env)
-                                if opt.animate_head
-                                else None
-                            )
+                            b_ani_tar = compute_b_ani_tar(opt, env)
 
                             # Encode, send, receive, and decode.
                             message = interface.encode(
@@ -188,21 +194,27 @@ def convert_scene_for_placing(opt, scene: List) -> Tuple:
     return new_scene, place_dst_xy, place_dest_object
 
 
-def get_unity_options(env, render_obs):
-    render_place = render_obs and env.task == "place"
-    if env.obs_mode == "vision" and env.stage in ["plan", "place"]:
+def get_unity_options(mode, opt, env):
+    if mode == "unity_dataset":
         unity_options = [(False, False, True, True)]
-        if args.render_obs:
-            unity_options += [(True, render_place, False, False)]
     else:
-        if env.obs_mode == "vision":
-            unity_options = [(args.render_obs, render_place, False, True)]
-        elif env.obs_mode == "gt":
-            unity_options = [(False, render_place, False, True)]
+        render_place = opt.render_obs and env.task == "place"
+        if opt.obs_mode == "vision" and env.stage in ["plan", "place"]:
+            unity_options = [(False, False, True, True)]
+            if opt.render_obs:
+                unity_options += [(True, render_place, False, False)]
+        else:
+            if opt.obs_mode == "vision":
+                unity_options = [(opt.render_obs, render_place, False, True)]
+            elif opt.obs_mode == "gt":
+                unity_options = [(False, render_place, False, True)]
     return unity_options
 
 
-def compute_bullet_camera_targets(env):
+def compute_bullet_camera_targets(env, send_image):
+    if not send_image:
+        return None
+
     stage, stage_ts = env.get_current_stage()
     task = env.task
     if stage == "plan":
@@ -211,7 +223,6 @@ def compute_bullet_camera_targets(env):
         if task == "place":
             cam_target = env.place_dst_xy + [env.initial_obs[env.src_idx]["height"]]
         elif task == "stack":
-            pprint.pprint(env.initial_obs)
             cam_target = bullet2unity.states.get_object_camera_target(
                 bullet_odicts=env.initial_obs, oidx=env.dst_idx
             )
@@ -221,16 +232,16 @@ def compute_bullet_camera_targets(env):
     # Set the camera target.
     bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
         camera_control="position",
-        bullet_odicts=env.initial_obs,
-        use_oids=False,
         should_save=False,
-        should_send=True,
+        should_send=send_image,
         position=cam_target,
     )
     return bullet_camera_targets
 
 
-def compute_b_ani_target(env):
+def compute_b_ani_tar(opt, env):
+    if not opt.animate_head:
+        return None
     stage, _ = env.get_current_stage()
     task = env.task
     if stage in ["plan", "retract"]:
@@ -256,13 +267,15 @@ def compute_b_ani_target(env):
     return b_ani_tar
 
 
-def compute_render_state(state, obs, place_dest_object, render_obs, render_place):
+def compute_render_state(env, place_dest_object, render_obs, render_place):
+    state = env.get_state()
+
     # If we are rendering observations, add them to the
     # render state.
     render_state = copy.deepcopy(state)
     if render_obs:
         render_state = add_hallucinations_to_state(
-            state=render_state, h_odicts=obs, color=None,
+            state=render_state, h_odicts=env.obs, color=None,
         )
     if render_place:
         render_state = add_hallucinations_to_state(
@@ -291,6 +304,7 @@ if __name__ == "__main__":
     global args
     parser = argparse.ArgumentParser()
     parser.add_argument("exp", type=str, help="The name of the experiment to run.")
+    parser.add_argument("mode", type=str, help="The mode of the system to run.")
     parser.add_argument(
         "--hostname",
         type=str,
