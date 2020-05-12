@@ -33,7 +33,9 @@ class DemoEnvironment:
         policy_opt: argparse.Namespace,
         name2policy_models: Dict,
         vision_opt: argparse.Namespace,
-        trial: int,
+        exp_name: str,
+        set_name: str,
+        scene_id: int,
         scene: List[Dict],
         task: str,
         command: Optional[str] = None,
@@ -56,7 +58,9 @@ class DemoEnvironment:
         self.policy_opt = policy_opt
         self.name2policy_models = name2policy_models
         self.vision_opt = vision_opt
-        self.trial = trial
+        self.exp_name = exp_name
+        self.set_name = set_name
+        self.scene_id = scene_id
         self.scene = scene
         self.task = task
         self.command = command
@@ -69,6 +73,7 @@ class DemoEnvironment:
         self.initial_obs = None
         self.obs = None
         self.w = None
+        self.src_idx, self.dst_idx = None, None
 
         self.stage2ts_bounds, self.n_total_steps = self.compute_stages()
         self.stage, self.stage_ts = self.get_current_stage()
@@ -714,10 +719,15 @@ class DemoEnvironment:
         elif self.stage == "place":
             vision_module = self.placing_vision_module
         else:
-            raise ValueError(f"No vision module for stage: {stage}.")
+            raise ValueError(f"No vision module for stage: {self.stage}.")
 
         # Retrieves the image, camera pose, and object segmentation masks.
-        rgb, masks, cam_position, cam_orientation = self.get_images()
+        rgb, oid2mask, cam_position, cam_orientation = self.get_images()
+        # Either predict segmentations or use ground truth.
+        if self.vision_opt.use_segmentation_module:
+            masks = self.segmentation_module.eval_example(bgr=rgb[:, :, ::-1])
+        else:
+            masks = oid2mask.values()
 
         # Predict attributes for all the segmentations.
         pred = vision_module.predict(rgb=rgb, masks=masks, debug_id=self.timestep)
@@ -739,22 +749,38 @@ class DemoEnvironment:
         # initial observation.
         if self.initial_obs is None:
             pred_obs = pred_odicts
+            s2d_idxs = None
         else:
-            pred_obs = self.match_predictions_with_initial_obs(pred_odicts=pred_odicts)
+            pred_obs, s2d_idxs = self.match_predictions_with_initial_obs(
+                pred_odicts=pred_odicts
+            )
+
         # Store the computed observation for future computation.
         self.last_pred_obs = copy.deepcopy(pred_obs)
 
         # Save the predicted and ground truth object dictionaries.
-        # if self.opt.save_predictions:
-        #     path = os.path.join(
-        #         self.opt.save_preds_dir,
-        #         f"{self.trial:02}",
-        #         f"{self.timestep:04}.p",
-        #     )
-        #     os.makedirs(os.path.dirname(path), exist_ok=True)
-        #     util.save_pickle(
-        #         path=path, data={"gt": gt_odicts, "pred": pred_odicts}
-        #     )
+        if self.vision_opt.save_predictions:
+            path = os.path.join(
+                "/home/mguo/outputs/system",
+                self.exp_name,
+                self.set_name,
+                self.scene_id,
+                f"{self.timestep:06}.p",
+            )
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            util.save_pickle(
+                path=path,
+                data={
+                    "gt": {
+                        "oid2odict": self.get_state()["objects"],
+                        "oid2mask": oid2mask,
+                    },
+                    "pred": {"odicts": pred_obs, "masks": masks,},
+                    "s2d_idxs": s2d_idxs,
+                    "src_idx": self.src_idx,
+                    "dst_idx": self.dst_idx,
+                },
+            )
         return pred_obs
 
     def match_predictions_with_initial_obs(self, pred_odicts: List[Dict]) -> List:
@@ -805,7 +831,7 @@ class DemoEnvironment:
                 dst_odict = pred_odicts[d]
                 for attr in ["position", "up_vector"]:
                     pred_obs[s][attr] = dst_odict[attr]
-        return pred_obs
+        return pred_obs, s2d_idxs
 
     def match_objects(self, src_odicts: List[Dict], dst_odicts: List[Dict]) -> Tuple:
         """
@@ -858,17 +884,9 @@ class DemoEnvironment:
         else:
             raise ValueError(f"Invalid renderer: {self.vision_opt.renderer}")
 
-        # Either predict segmentations or use ground truth.
-        if self.vision_opt.use_segmentation_module:
-            bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-            masks = self.segmentation_module.eval_example(
-                bgr=bgr, vis_id=self.timestep,
-            )
-        else:
-            # If using ground truth, convert the segmentation image into a
-            # segmentation map.
-            masks, _ = ns_vqa_dart.bullet.seg.seg_img_to_map(seg_img)
-        return rgb, masks, camera_position, camera_orientation
+        masks, oids = ns_vqa_dart.bullet.seg.seg_img_to_map(seg_img)
+        oid2mask = {oid: mask for mask, oid in zip(masks, oids)}
+        return rgb, oid2mask, camera_position, camera_orientation
 
     def set_unity_data(self, data: Dict):
         """Sets the data received from Unity.

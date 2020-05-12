@@ -48,6 +48,8 @@ TEST_VISION_OPTIONS.visualize_unity = True
 
 TEST_GT_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_GT_OPTIONS.obs_mode = "gt"
+TEST_GT_OPTIONS.obs_noise = True
+
 
 SYSTEM_OPTIONS = {
     "vision_states": VISION_STATES_OPTIONS,
