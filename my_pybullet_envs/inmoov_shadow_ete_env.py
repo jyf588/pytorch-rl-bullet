@@ -12,7 +12,7 @@ import inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 
 
-class InmoovShadowHandReachGraspEnv(gym.Env):
+class InmoovShadowHandEteEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
@@ -43,6 +43,8 @@ class InmoovShadowHandReachGraspEnv(gym.Env):
 
         self.has_test_phase = has_test_phase
         self.test_start = 80        # longer than grasping only, TODO
+
+        self.test_end = 95      # grasp test end
 
         # self.n_best_cand = int(n_best_cand)
 
@@ -115,6 +117,8 @@ class InmoovShadowHandReachGraspEnv(gym.Env):
 
         assert self.grasp_floor
 
+        self.grasp_stage = True
+
         mu_f = self.np_random.uniform(utils.MU_MIN, utils.MU_MAX)
         self.table_id = utils.create_table(mu_f)
 
@@ -155,8 +159,14 @@ class InmoovShadowHandReachGraspEnv(gym.Env):
 
         return np.array(self.observation)
 
-    def step(self, action):
+    # def step():
+    # if t<95:
+    # keep the current
+    # if t>95:
+    # if not in hand done
+    # calc move and place reward
 
+    def step_reach_grasp(self, action):
         bottom_id = self.table_id if self.grasp_floor else self.btm_obj['id']
 
         if self.has_test_phase:
@@ -195,7 +205,7 @@ class InmoovShadowHandReachGraspEnv(gym.Env):
         dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(top_pos_1)), 1.0)
 
         # TODO: grasp does not have this term, add this term to reaching
-        tip_pos = []                   # 4 finger tips & thumb tip
+        tip_pos = []  # 4 finger tips & thumb tip
         tip_dists = []
         dist_diffs = []
         for i in self.robot.fin_tips[:5]:
@@ -203,9 +213,9 @@ class InmoovShadowHandReachGraspEnv(gym.Env):
             tip_pos.append(cur_tip_pos)
             cur_tip_dist = np.linalg.norm(np.array(cur_tip_pos) - np.array(top_pos_1))
             tip_dists.append(cur_tip_dist)
-            dist_diffs.append(dist - cur_tip_dist)      # this number should be larger, finger closer to obj center
+            dist_diffs.append(dist - cur_tip_dist)  # this number should be larger, finger closer to obj center
 
-        # TODO: make this always negative so always beneficial to enter stage 2
+        # make this always negative so always beneficial to enter stage 2
         reward += (np.sum(dist_diffs[:-1]) + dist_diffs[-1] * 5.0) * 10.0
 
         if dist > 0.3:
@@ -226,13 +236,13 @@ class InmoovShadowHandReachGraspEnv(gym.Env):
             # reward += 5.0 - np.minimum(xy_dist, 0.4) * 8.0     # TODO: make this always positive
 
             for i in range(4):
-                reward += 0.5 - np.minimum(tip_dists[i], 0.5)       # 4 fin tips
-            reward += 2.5 - np.minimum(tip_dists[4], 0.5) * 5.0     # thumb tip
+                reward += 0.5 - np.minimum(tip_dists[i], 0.5)  # 4 fin tips
+            reward += 2.5 - np.minimum(tip_dists[4], 0.5) * 5.0  # thumb tip
 
-            cps = p.getContactPoints(self.top_obj['id'], self.robot.arm_id, -1, self.robot.ee_id)    # palm
+            cps = p.getContactPoints(self.top_obj['id'], self.robot.arm_id, -1, self.robot.ee_id)  # palm
             if len(cps) > 0:
                 reward += 10.0
-            f_bp = [0, 3, 6, 9, 12, 17]     # 3*4+5
+            f_bp = [0, 3, 6, 9, 12, 17]  # 3*4+5
             for ind_f in range(5):
                 con = False
                 for dof in self.robot.fin_actdofs[(f_bp[ind_f + 1] - 3):f_bp[ind_f + 1]]:
@@ -242,16 +252,140 @@ class InmoovShadowHandReachGraspEnv(gym.Env):
                 if con:
                     reward += 5.0
                 if con and ind_f == 4:
-                    reward += 20.0        # reward thumb even more
+                    reward += 20.0  # reward thumb even more
+
+        # reward -= self.robot.get_4_finger_deviation() * 1.5 # TODO: and for placing
 
         # "phase three", test phase, it is there no matter enter phase two or not
         # object dropped during testing
         if top_pos[2] < (self.tz_act + 0.04) and self.timer > self.test_start * self.control_skip:
             reward += -15.
 
+        return reward, False    # not done
+
+    def step_move_place(self, action):
+
+        for _ in range(self.control_skip):
+            # action is in not -1,1
+            if action is not None:
+                # action = np.clip(np.array(action), -1, 1)
+                self.act = action
+                act_array = self.act * self.action_scale
+
+                self.robot.apply_action(act_array)
+            p.stepSimulation()
+            if self.renders:
+                time.sleep(self._timeStep * 0.5)
+            self.timer += 1
+
+        reward = 0.0
+
+        top_pos, top_quat = p.getBasePositionAndOrientation(self.top_obj['id'])
+        top_vels = p.getBaseVelocity(self.top_obj['id'])
+        top_lin_v = np.array(top_vels[0])
+        top_ang_v = np.array(top_vels[1])
+
+        dist = np.linalg.norm(np.array(self.desired_obj_pos_final) - np.array(top_pos))
+        xyz_metric = 1 - (
+            np.minimum(
+                dist,
+                1.0,
+            )
+            / 1.0
+        )
+        reward += xyz_metric * 30.0      # when dist < 0.15, will be almost equivalent as term in placing
+
+        if dist < 0.15:
+            # good enough, phase place, focus on other things
+
+            # we only care about the upright(z) direction
+            z_axis, _ = p.multiplyTransforms(
+                [0, 0, 0], top_quat, [0, 0, 1], [0, 0, 0, 1]
+            )  # R_cl * unitz[0,0,1]
+            rot_metric = np.array(z_axis).dot(np.array([0, 0, 1]))
+
+            lin_v_r = np.linalg.norm(top_lin_v)
+            # print("lin_v", lin_v_r)
+            ang_v_r = np.linalg.norm(top_ang_v)
+            # print("ang_v", ang_v_r)
+            vel_metric = 1 - np.minimum(lin_v_r * 4.0 + ang_v_r, 5.0) / 5.0
+
+            reward += np.maximum(rot_metric * 20 - 15, 0.0)
+            # print(np.maximum(rot_metric * 20 - 15, 0.))
+
+            reward += vel_metric * 5
+            # print(vel_metric * 5)
+            # print("upright", reward)
+
+            diff_norm = self.robot.get_norm_diff_tar()
+            reward += 10.0 / (diff_norm + 1.0)
+            # # print(10. / (diff_norm + 1.))
+
+            any_hand_contact = False
+            hand_r = 0
+            for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):
+                cps = p.getContactPoints(bodyA=self.robot.arm_id, linkIndexA=i)
+                con_this_link = False
+                for cp in cps:
+                    if cp[1] != cp[2]:  # not self-collision of the robot
+                        con_this_link = True
+                        break
+                if con_this_link:
+                    any_hand_contact = True
+                else:
+                    hand_r += 0.5
+            reward += hand_r
+
+            # reward -= self.robot.get_4_finger_deviation() * 0.3   # TODO: make sure all terms positive
+            #
+            # if self.timer == 99 * self.control_skip:
+            #     print(rot_metric, xyz_metric, vel_metric, any_hand_contact)
+            #     # print(any_hand_contact)
+
+            if (
+                rot_metric > 0.9
+                and xyz_metric > 0.6
+                and vel_metric > 0.6
+                # and meaningful_c
+            ):  # close to placing
+                reward += 5.0
+                # print("upright")
+                if not any_hand_contact:
+                    reward += 20.0
+                    # print("no hand con")
+        # print("p", reward)
+        return reward, False
+
+    def step(self, action):
+        bottom_id = self.table_id if self.grasp_floor else self.btm_obj['id']
+        top_pos, _ = p.getBasePositionAndOrientation(self.top_obj['id'])
+
+        if self.timer <= self.test_end * self.control_skip:
+            reward, done = self.step_reach_grasp(action)
+        else:
+            if top_pos[2] > (self.tz_act + 0.04):
+                # enter moving stage
+                # sample tx ty again as destination
+
+                if self.grasp_stage:
+                    self.sample_valid_arm_q()
+                    self.desired_obj_pos_final = [
+                        self.tx_act,
+                        self.ty_act,
+                        self.top_obj["height"] / 2.0 + self.tz_act,
+                    ]
+                    p.setCollisionFilterPair(self.top_obj['id'], bottom_id, -1, -1, enableCollision=1)
+
+                self.grasp_stage = False
+                reward, done = self.step_move_place(action)
+
+            else:
+                reward = -30
+                done = True
+
         #     print(self.robot.get_q_dq(range(29, 34))[0])
 
-        return self.getExtendedObservation(), reward, False, {}
+        return self.getExtendedObservation(), reward, done, {}
 
     def obj6DtoObs_UpVec(self, o_pos, o_orn, is_sph=False):
         o_pos = np.array(o_pos)
@@ -313,6 +447,11 @@ class InmoovShadowHandReachGraspEnv(gym.Env):
         self.observation.extend(
             self.obj6DtoObs_UpVec(top_pos, top_orn)
         )
+
+        stage = 1. if self.grasp_stage else -1.
+        self.observation.extend([stage + self.np_random.uniform(low=-0.01, high=0.01),
+                                 stage + self.np_random.uniform(low=-0.01, high=0.01),
+                                 stage])
 
         return self.observation
 
