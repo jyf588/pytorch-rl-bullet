@@ -119,13 +119,11 @@ async def send_to_client(websocket, path):
             n_frames = 0
             frames_start = time.time()
             while 1:
-                # Get the current stage of execution.
-                stage, _ = env.get_current_stage()
-
+                stage = env.stage
                 # Save the current state, if the current stage is a stage that should
                 # be saved for the current set. The state is the state of the world
                 # BEFORE apply the action at the current timestep.
-                if opt.save_states and stage == set_opt["stage"]:
+                if opt.save_states and env.stage == set_opt["stage"]:
                     scene_loader.save_state(
                         scene_id=scene_id, timestep=env.timestep, state=env.get_state()
                     )
@@ -137,9 +135,9 @@ async def send_to_client(websocket, path):
                     render_frequency = opt.render_frequency
                     if args.mode != "unity_dataset":
                         if opt.obs_mode == "vision":
-                            if stage in "plan":
+                            if env.stage in "plan":
                                 render_frequency = 1
-                            elif stage == "place":
+                            elif env.stage == "place":
                                 render_frequency = POLICY_OPTIONS.vision_delay
 
                     # Render unity and step.
@@ -198,16 +196,19 @@ def get_unity_options(mode, opt, env):
     if mode == "unity_dataset":
         unity_options = [(False, False, True, True)]
     else:
-        render_place = opt.render_obs and env.task == "place"
-        if opt.obs_mode == "vision" and env.stage in ["plan", "place"]:
-            unity_options = [(False, False, True, True)]
-            if opt.render_obs:
-                unity_options += [(True, render_place, False, False)]
-        else:
-            if opt.obs_mode == "vision":
+        render_place = env.task == "place"
+        if opt.obs_mode == "vision":
+            # render_place = opt.render_obs and env.task == "place"
+            if env.stage in ["plan", "place"]:
+                unity_options = [(False, False, True, True)]
+                if opt.render_obs:
+                    unity_options += [(True, render_place, False, False)]
+            else:
                 unity_options = [(opt.render_obs, render_place, False, True)]
-            elif opt.obs_mode == "gt":
-                unity_options = [(False, render_place, False, True)]
+        elif opt.obs_mode == "gt":
+            unity_options = [(False, render_place, False, True)]
+        else:
+            raise ValueError(f"Invalid obs mode: {opt.obs_mode}")
     return unity_options
 
 
@@ -215,11 +216,10 @@ def compute_bullet_camera_targets(env, send_image):
     if not send_image:
         return None
 
-    stage, stage_ts = env.get_current_stage()
     task = env.task
-    if stage == "plan":
+    if env.stage == "plan":
         cam_target = PLAN_TARGET_POSITION
-    elif stage == "place" and stage_ts == 0:
+    elif env.stage == "place" and env.stage_ts == 0:
         if task == "place":
             cam_target = env.place_dst_xy + [env.initial_obs[env.src_idx]["height"]]
         elif task == "stack":
@@ -242,14 +242,13 @@ def compute_bullet_camera_targets(env, send_image):
 def compute_b_ani_tar(opt, env):
     if not opt.animate_head:
         return None
-    stage, _ = env.get_current_stage()
     task = env.task
-    if stage in ["plan", "retract"]:
+    if env.stage in ["plan", "retract"]:
         b_ani_tar = None
     else:
-        if stage in ["reach", "grasp"]:
+        if env.stage in ["reach", "grasp"]:
             b_ani_tar = env.initial_obs[env.src_idx]["position"]
-        elif stage in ["transport", "place", "release"]:
+        elif env.stage in ["transport", "place", "release"]:
             if task == "place":
                 b_ani_tar = env.place_dst_xy + [env.initial_obs[env.src_idx]["height"]]
             elif task == "stack":
@@ -257,10 +256,10 @@ def compute_b_ani_tar(opt, env):
             else:
                 raise ValueError(f"Unsupported task: {task}")
         else:
-            raise ValueError(f"Unsupported stage: {stage}.")
+            raise ValueError(f"Unsupported stage: {env.stage}.")
         b_ani_tar = copy.deepcopy(b_ani_tar)
-        if stage in STAGE2ANIMATION_Z_OFFSET:
-            z_offset = STAGE2ANIMATION_Z_OFFSET[stage]
+        if env.stage in STAGE2ANIMATION_Z_OFFSET:
+            z_offset = STAGE2ANIMATION_Z_OFFSET[env.stage]
         elif task in TASK2ANIMATION_Z_OFFSET:
             z_offset = TASK2ANIMATION_Z_OFFSET[task]
         b_ani_tar[2] += z_offset

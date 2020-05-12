@@ -71,6 +71,7 @@ class DemoEnvironment:
         self.w = None
 
         self.stage2ts_bounds, self.n_total_steps = self.compute_stages()
+        self.stage, self.stage_ts = self.get_current_stage()
 
         # Initialize the vision module if we are using vision for our
         # observations.
@@ -93,7 +94,7 @@ class DemoEnvironment:
             # Initialize the segmentation module if requested.
             if self.vision_opt.use_segmentation_module:
                 self.segmentation_module = DASHSegModule(
-                    mode="eval",
+                    mode="eval_single",
                     checkpoint_path=self.vision_opt.seg_checkpoint_path,
                     vis_dir=None
                     if self.vision_opt.debug_dir is None
@@ -185,8 +186,6 @@ class DemoEnvironment:
         Returns:
             is_done: Whether we are done with the demo.
         """
-        stage, stage_ts = self.get_current_stage()
-
         # print(f"Step info:")
         # print(f"\tTimestep: {self.timestep}")
         # print(f"\tStage: {stage}")
@@ -194,31 +193,37 @@ class DemoEnvironment:
 
         # By default we assume that the stepping succeeds.
         step_succeeded = True
-        if stage == "plan":
+        if self.stage == "plan":
             self.plan()
-        elif stage == "reach":
-            step_succeeded = self.execute_plan(stage=stage, stage_ts=stage_ts)
-        elif stage == "grasp":
-            self.grasp(stage_ts=stage_ts)
-        elif stage == "transport":
-            step_succeeded = self.execute_plan(stage=stage, stage_ts=stage_ts)
-        elif stage == "place":
-            self.place(stage_ts=stage_ts)
-        elif stage == "retract":
+        elif self.stage == "reach":
+            step_succeeded = self.execute_plan(stage=self.stage, stage_ts=self.stage_ts)
+        elif self.stage == "grasp":
+            self.grasp(stage_ts=self.stage_ts)
+        elif self.stage == "transport":
+            step_succeeded = self.execute_plan(stage=self.stage, stage_ts=self.stage_ts)
+        elif self.stage == "place":
+            self.place(stage_ts=self.stage_ts)
+        elif self.stage == "retract":
             step_succeeded = self.execute_plan(
-                stage=stage,
-                stage_ts=stage_ts,
+                stage=self.stage,
+                stage_ts=self.stage_ts,
                 restore_fingers=self.policy_opt.restore_fingers,
             )
         else:
-            raise ValueError(f"Invalid stage: {stage}")
+            raise ValueError(f"Invalid stage: {self.stage}")
 
         # We don't step in the planning stage.
-        if stage != "plan":
+        if self.stage != "plan":
             self.timestep += 1
 
+        done = self.is_done()
+
+        # Update the stage.
+        if not done:
+            self.stage, self.stage_ts = self.get_current_stage()
+
         # Compute whether we have finished the entire sequence.
-        return self.is_done(), step_succeeded
+        return done, step_succeeded
 
     def get_state(self):
         """Retrieves the current state of the bullet world.
@@ -704,10 +709,9 @@ class DemoEnvironment:
             obs: The vision observation.
         """
         # Select the vision module based on the current stage.
-        stage, _ = self.get_current_stage()
-        if stage == "plan":
+        if self.stage == "plan":
             vision_module = self.planning_vision_module
-        elif stage == "place":
+        elif self.stage == "place":
             vision_module = self.placing_vision_module
         else:
             raise ValueError(f"No vision module for stage: {stage}.")
@@ -847,11 +851,9 @@ class DemoEnvironment:
             camera_orientation = self.unity_data[0]["camera_orientation"]
 
             # Optionally we can visualize unity images using OpenCV.
-            if self.visualize_unity:
-                bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-                seg_bgr = cv2.cvtColor(seg_img, cv2.COLOR_RGB2BGR)
-                cv2.imshow("rgb", bgr)
-                cv2.imshow("seg", seg_bgr)
+            if self.opt.visualize_unity:
+                cv2.imshow("rgb", rgb[:, :, ::-1])
+                cv2.imshow("seg", seg_img[:, :, ::-1])
                 cv2.waitKey(5)
         else:
             raise ValueError(f"Invalid renderer: {self.vision_opt.renderer}")
@@ -860,7 +862,7 @@ class DemoEnvironment:
         if self.vision_opt.use_segmentation_module:
             bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
             masks = self.segmentation_module.eval_example(
-                img=bgr, vis_id=self.timestep,
+                bgr=bgr, vis_id=self.timestep,
             )
         else:
             # If using ground truth, convert the segmentation image into a

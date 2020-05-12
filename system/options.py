@@ -5,44 +5,55 @@ import argparse
 BASE_SYSTEM_OPTIONS = argparse.Namespace(
     seed=101,
     is_cuda=True,
-    enable_reaching=None,
-    enable_retract=None,
+    enable_reaching=True,
+    enable_retract=True,
     scene_place_src_idx=0,
     scene_place_dst_idx=1,
     scene_stack_src_idx=0,
     scene_stack_dst_idx=1,
     obs_mode=None,
-    obs_noise=None,
+    obs_noise=False,
     position_noise=0.03,
     upv_noise=0.04,
     height_noise=0.02,
-    render_unity=None,
+    render_unity=True,
     render_bullet=False,
-    use_control_skip=None,
-    render_frequency=None,
-    render_obs=None,
-    animate_head=None,
-    save_states=None,
+    visualize_unity=False,
+    use_control_skip=True,
+    render_frequency=70,
+    render_obs=False,
+    animate_head=False,
+    save_states=False,
 )
+
 VISION_STATES_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 VISION_STATES_OPTIONS.enable_reaching = False
 VISION_STATES_OPTIONS.enable_retract = False
 VISION_STATES_OPTIONS.render_unity = False
-VISION_STATES_OPTIONS.use_control_skip = True
 VISION_STATES_OPTIONS.obs_mode = "gt"
 VISION_STATES_OPTIONS.obs_noise = True
 VISION_STATES_OPTIONS.save_states = True
 
 UNITY_DATASET_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
-UNITY_DATASET_OPTIONS.render_unity = True
-UNITY_DATASET_OPTIONS.render_frequency = 1
-UNITY_DATASET_OPTIONS.animate_head = False
+UNITY_DATASET_OPTIONS.render_frequency = 1  # Render and save every state.
 
+TEST_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
+TEST_OPTIONS.enable_reaching = False
+TEST_OPTIONS.enable_retract = False
+
+TEST_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
+TEST_VISION_OPTIONS.obs_mode = "vision"
+TEST_VISION_OPTIONS.render_obs = True
+TEST_VISION_OPTIONS.visualize_unity = True
+
+TEST_GT_OPTIONS = copy.deepcopy(TEST_OPTIONS)
+TEST_GT_OPTIONS.obs_mode = "gt"
 
 SYSTEM_OPTIONS = {
     "vision_states": VISION_STATES_OPTIONS,
     "unity_dataset": UNITY_DATASET_OPTIONS,
-    "test": None,
+    "test_vision": TEST_VISION_OPTIONS,
+    "test_gt": TEST_GT_OPTIONS,
     "demo": None,
 }
 

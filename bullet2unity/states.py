@@ -360,7 +360,12 @@ def bullet2unity_objects(bullet_state: Dict[int, Dict]):
         # The object id must be defined in the Unity RGB mapping. Otherwise, Unity will
         # not be able to encode the object segmentation in the segmentation image it
         # produces.
-        assert oid in UNITY_OIDS
+        if type(oid) == str and oid.startswith("h_"):
+            otag = oid
+        elif oid in UNITY_OIDS:
+            otag = f"{oid:02}"
+        elif oid not in UNITY_OIDS:
+            raise ValueError(f"Object ID not supported by Unity: {oid}")
 
         shape = odict["shape"]
         color = odict["color"]
@@ -386,9 +391,6 @@ def bullet2unity_objects(bullet_state: Dict[int, Dict]):
 
         # Convert the object orientation.
         unity_rotation = bullet2unity_euler(bullet_orn=bullet_orientation)
-
-        # Create the state for the current object.
-        otag = f"{oid:02}"
 
         # look_at_flag = int(idx in look_at_idxs)
         ostate = (
