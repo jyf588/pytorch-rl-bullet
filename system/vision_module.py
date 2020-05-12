@@ -63,8 +63,12 @@ class VisionModule:
             data.append(X)
 
         # Writing images for debugging.
-        if self.debug_dir is not None:
-            self.gen_debug_images(data=data, debug_id=debug_id)
+        self.gen_debug_images(
+            data=data,
+            show_window=False,
+            save_image=self.debug_dir is not None,
+            debug_id=debug_id,
+        )
 
         # Predict.
         data = np.array(data)
@@ -91,7 +95,9 @@ class VisionModule:
         pred = self.model.get_pred()
         return pred
 
-    def gen_debug_images(self, data: List[np.ndarray], debug_id: int):
+    def gen_debug_images(
+        self, data: List[np.ndarray], show_window=False, save_image=False, debug_id=None
+    ):
         """
         Args:
             data: A list of data tensors, one for each object.
@@ -100,7 +106,14 @@ class VisionModule:
         for object_data in data:
             rows.append(np.hstack([object_data[:, :, :3], object_data[:, :, 3:6]]))
         image = np.vstack(rows)
-        path = os.path.join(self.debug_dir, f"{debug_id:04}", "vision_input.png")
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        imageio.imwrite(path, image)
-        print(f"Wrote debug image to: {path}")
+
+        if show_window:
+            image = cv2.resize(image, (0, 0), fx=0.5, fy=0.5)
+            cv2.imshow("data", image[:, :, ::-1])
+            cv2.waitKey(0)
+
+        if save_image:
+            path = os.path.join(self.debug_dir, f"{debug_id:04}", "vision_input.png")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            imageio.imwrite(path, image)
+            print(f"Wrote debug image to: {path}")

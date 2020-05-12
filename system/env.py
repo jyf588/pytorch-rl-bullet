@@ -11,6 +11,7 @@ import pybullet as p
 from typing import *
 from scipy.optimize import linear_sum_assignment
 
+import exp.loader
 import system.policy
 from system import openrave
 from system.bullet_world import BulletWorld
@@ -81,20 +82,26 @@ class DemoEnvironment:
         # Initialize the vision module if we are using vision for our
         # observations.
         if self.opt.obs_mode == "vision":
-            if task == "stack":
-                place_checkpoint_path = self.vision_opt.stacking_checkpoint_path
-            elif task == "place":
-                place_checkpoint_path = self.vision_opt.placing_checkpoint_path
+            if self.vision_opt.separate_vision_modules:
+                if task == "stack":
+                    place_checkpoint_path = self.vision_opt.stacking_checkpoint_path
+                elif task == "place":
+                    place_checkpoint_path = self.vision_opt.placing_checkpoint_path
+                else:
+                    raise ValueError(f"Invalid task: {task}")
+                self.planning_vision_module = VisionModule(
+                    load_checkpoint_path=self.vision_opt.planning_checkpoint_path,
+                    debug_dir=self.vision_opt.debug_dir,
+                )
+                self.placing_vision_module = VisionModule(
+                    load_checkpoint_path=place_checkpoint_path,
+                    debug_dir=self.vision_opt.debug_dir,
+                )
             else:
-                raise ValueError(f"Invalid task: {task}")
-            self.planning_vision_module = VisionModule(
-                load_checkpoint_path=self.vision_opt.planning_checkpoint_path,
-                debug_dir=self.vision_opt.debug_dir,
-            )
-            self.placing_vision_module = VisionModule(
-                load_checkpoint_path=place_checkpoint_path,
-                debug_dir=self.vision_opt.debug_dir,
-            )
+                self.vision_module = VisionModule(
+                    load_checkpoint_path=self.vision_opt.attr_checkpoint_path,
+                    debug_dir=self.vision_opt.debug_dir,
+                )
 
             # Initialize the segmentation module if requested.
             if self.vision_opt.use_segmentation_module:
@@ -105,6 +112,14 @@ class DemoEnvironment:
                     if self.vision_opt.debug_dir is None
                     else os.path.join(self.vision_opt.debug_dir, f"{trial:04}"),
                 )
+            self.scene_loader = exp.loader.SceneLoader(
+                exp_name=f"system_{self.exp_name}",
+                set_name=self.set_name,
+                scene_id=self.scene_id,
+            )
+            if vision_opt.save_predictions:
+                os.makedirs(self.scene_loader.rgb_dir)
+            self.exp_time_dirname = util.get_time_dirname()
 
         if self.opt.render_bullet:
             p.connect(p.GUI)
@@ -343,7 +358,7 @@ class DemoEnvironment:
                     dst_idx = self.opt.scene_stack_dst_idx
             elif self.opt.obs_mode == "vision":
                 # Compute the mapping from GT indexes to predicted indexes.
-                gt2pred_idxs = self.match_objects(
+                gt2pred_idxs = match_objects(
                     src_odicts=self.scene, dst_odicts=observation
                 )
                 if self.task == "place":
@@ -713,13 +728,21 @@ class DemoEnvironment:
         Returns:
             obs: The vision observation.
         """
+        if self.stage == "plan" and self.vision_opt.disable_planning:
+            obs = list(self.get_state()["objects"].values())
+            self.last_pred_obs = copy.deepcopy(obs)
+            return obs
+
         # Select the vision module based on the current stage.
-        if self.stage == "plan":
-            vision_module = self.planning_vision_module
-        elif self.stage == "place":
-            vision_module = self.placing_vision_module
+        if self.vision_opt.separate_vision_modules:
+            if self.stage == "plan":
+                vision_module = self.planning_vision_module
+            elif self.stage == "place":
+                vision_module = self.placing_vision_module
+            else:
+                raise ValueError(f"No vision module for stage: {self.stage}.")
         else:
-            raise ValueError(f"No vision module for stage: {self.stage}.")
+            vision_module = self.vision_module
 
         # Retrieves the image, camera pose, and object segmentation masks.
         rgb, oid2mask, cam_position, cam_orientation = self.get_images()
@@ -763,6 +786,7 @@ class DemoEnvironment:
             path = os.path.join(
                 "/home/mguo/outputs/system",
                 self.exp_name,
+                self.exp_time_dirname,
                 self.set_name,
                 self.scene_id,
                 f"{self.timestep:06}.p",
@@ -771,16 +795,18 @@ class DemoEnvironment:
             util.save_pickle(
                 path=path,
                 data={
-                    "gt": {
-                        "oid2odict": self.get_state()["objects"],
-                        "oid2mask": oid2mask,
-                    },
-                    "pred": {"odicts": pred_obs, "masks": masks,},
+                    "gt": {"oid2odict": self.get_state()["objects"],},
+                    "pred": {"odicts": pred_obs},
                     "s2d_idxs": s2d_idxs,
                     "src_idx": self.src_idx,
                     "dst_idx": self.dst_idx,
                 },
             )
+            # Save ground truth masks for evaluation later on.
+            self.scene_loader.save_rgb(timestep=self.timestep, rgb=rgb)
+            self.scene_loader.create_masks_dir(timestep=self.timestep)
+            for oid, mask in oid2mask.items():
+                self.scene_loader.save_mask(timestep=self.timestep, mask=mask, oid=oid)
         return pred_obs
 
     def match_predictions_with_initial_obs(self, pred_odicts: List[Dict]) -> List:
@@ -804,9 +830,7 @@ class DemoEnvironment:
         assert self.initial_obs is not None
 
         # Compute assignments.
-        s2d_idxs = self.match_objects(
-            src_odicts=self.initial_obs, dst_odicts=pred_odicts
-        )
+        s2d_idxs = match_objects(src_odicts=self.initial_obs, dst_odicts=pred_odicts)
 
         # If `self.initial_obs` has more elements than `pred_odicts`, then
         # there will be unassigned elements in `self.initial_obs`. We assign
@@ -832,30 +856,6 @@ class DemoEnvironment:
                 for attr in ["position", "up_vector"]:
                     pred_obs[s][attr] = dst_odict[attr]
         return pred_obs, s2d_idxs
-
-    def match_objects(self, src_odicts: List[Dict], dst_odicts: List[Dict]) -> Tuple:
-        """
-        Args:
-            src_odicts: The source object dictionaries to match from.
-            dst_odicts: The destination object dictionaries to match to.
-
-        Returns:
-            src2dst_idxs: A mapping from src to dst index assignments.
-        """
-        # Construct the cost matrix.
-        cost = np.zeros((len(src_odicts), len(dst_odicts)))
-        for src_idx, src_y in enumerate(src_odicts):
-            for dst_idx, dst_y in enumerate(dst_odicts):
-                cell = 0
-                for attr in ["color", "shape"]:
-                    if src_y[attr] != dst_y[attr]:
-                        cell += 1
-                cost[src_idx][dst_idx] = cell
-
-        # Compute assignments.
-        src_idxs, dst_idxs = linear_sum_assignment(cost)
-        src2dst_idxs = {s: d for s, d in zip(src_idxs, dst_idxs)}
-        return src2dst_idxs
 
     def get_images(self) -> Tuple:
         """Retrieves the images that are input to the vision module.
@@ -920,3 +920,28 @@ def apply_obs_noise(opt, obs):
         )
         noisy_obs[idx] = noisy_odict
     return noisy_obs
+
+
+def match_objects(src_odicts: List[Dict], dst_odicts: List[Dict]) -> Tuple:
+    """
+    Args:
+        src_odicts: The source object dictionaries to match from.
+        dst_odicts: The destination object dictionaries to match to.
+
+    Returns:
+        src2dst_idxs: A mapping from src to dst index assignments.
+    """
+    # Construct the cost matrix.
+    cost = np.zeros((len(src_odicts), len(dst_odicts)))
+    for src_idx, src_y in enumerate(src_odicts):
+        for dst_idx, dst_y in enumerate(dst_odicts):
+            cell = 0
+            for attr in ["color", "shape"]:
+                if src_y[attr] != dst_y[attr]:
+                    cell += 1
+            cost[src_idx][dst_idx] = cell
+
+    # Compute assignments.
+    src_idxs, dst_idxs = linear_sum_assignment(cost)
+    src2dst_idxs = {s: d for s, d in zip(src_idxs, dst_idxs)}
+    return src2dst_idxs

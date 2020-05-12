@@ -143,7 +143,7 @@ class SceneLoader:
 
     def get_timesteps(self):
         timesteps = []
-        for fname in sorted(os.listdir(self.states_dir)):
+        for fname in sorted(os.listdir(self.rgb_dir)):
             ts = int(fname.split(".")[0])
             timesteps.append(ts)
         return timesteps
@@ -215,6 +215,13 @@ class SceneLoader:
     def get_mask_path(self, timestep: int, oid: int):
         path = os.path.join(self.get_masks_dir(timestep=timestep), f"{oid:02}.npy")
         return path
+
+    def get_mask_paths(self, timestep: int):
+        paths = []
+        masks_dir = self.get_masks_dir(timestep=timestep)
+        for fname in sorted(os.listdir(masks_dir)):
+            paths.append(os.path.join(masks_dir, fname))
+        return paths
 
     def get_detectron_masks_path(self, timestep: int):
         path = os.path.join(self.detectron_masks_dir, f"{timestep:06}.npy")
