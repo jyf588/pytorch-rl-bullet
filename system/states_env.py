@@ -23,7 +23,6 @@ class StatesEnv:
         task: str,
         place_dst_xy: Tuple,
     ):
-        print("Initializing StatesEnv")
         self.exp_name = experiment
         self.set_name = set_name
         self.scene_id = scene_id
@@ -58,7 +57,7 @@ class StatesEnv:
         for directory in [
             self.scene_loader.cam_dir,
             self.scene_loader.rgb_dir,
-            self.scene_loader.masks_dir,
+            self.scene_loader.masks_root_dir,
         ]:
             os.makedirs(directory)
 
@@ -86,11 +85,14 @@ class StatesEnv:
         rgb = image_dict["rgb"]
         seg_img = image_dict["seg_img"]
 
-        masks, _ = ns_vqa_dart.bullet.seg.seg_img_to_map(seg_img=seg_img)
+        masks, oids = ns_vqa_dart.bullet.seg.seg_img_to_map(seg_img=seg_img)
 
         self.scene_loader.save_cam(self.timestep, cam_dict)
         self.scene_loader.save_rgb(self.timestep, rgb)
-        self.scene_loader.save_masks(self.timestep, masks)
+
+        self.scene_loader.create_masks_dir(timestep=self.timestep)
+        for mask, oidx in zip(masks, oids):
+            self.scene_loader.save_mask(self.timestep, mask, oid)
 
     def cleanup(self):
         pass

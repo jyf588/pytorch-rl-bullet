@@ -13,6 +13,7 @@ from typing import *
 
 import bullet2unity.const as const
 import ns_vqa_dart.bullet.util as util
+from ns_vqa_dart.bullet.seg import UNITY_OIDS
 
 
 def create_bullet_camera_targets(
@@ -355,7 +356,12 @@ def bullet2unity_objects(bullet_state: Dict[int, Dict]):
     """
     n_objects = len(bullet_state)
     unity_state = [n_objects]
-    for idx, odict in enumerate(bullet_state.values()):
+    for oid, odict in bullet_state.items():
+        # The object id must be defined in the Unity RGB mapping. Otherwise, Unity will
+        # not be able to encode the object segmentation in the segmentation image it
+        # produces.
+        assert oid in UNITY_OIDS
+
         shape = odict["shape"]
         color = odict["color"]
         radius = odict["radius"]
@@ -382,7 +388,8 @@ def bullet2unity_objects(bullet_state: Dict[int, Dict]):
         unity_rotation = bullet2unity_euler(bullet_orn=bullet_orientation)
 
         # Create the state for the current object.
-        otag = f"{idx:02}"
+        otag = f"{oid:02}"
+
         # look_at_flag = int(idx in look_at_idxs)
         ostate = (
             [otag, shape, color]

@@ -3,8 +3,9 @@ import imageio
 import numpy as np
 from typing import *
 
-from exp.options import EXPERIMENT_OPTIONS
 import ns_vqa_dart.bullet.util as util
+from exp.options import EXPERIMENT_OPTIONS
+from ns_vqa_dart.bullet.seg import UNITY_OIDS
 
 
 KEY2EXT = {"cam": "json", "img": "png", "masks": "npy"}
@@ -12,8 +13,25 @@ KEY2EXT = {"cam": "json", "img": "png", "masks": "npy"}
 
 class ExpLoader:
     def __init__(self, exp_name: str):
+        self.exp_name = exp_name
+
         self.set_names = list(EXPERIMENT_OPTIONS[exp_name].keys())
         self.set_name2opt = EXPERIMENT_OPTIONS[exp_name]
+
+    def get_idx2info(self):
+        idx2info = {}
+        idx = 0
+        for set_name in self.set_names:
+            set_loader = SetLoader(exp_name=self.exp_name, set_name=set_name)
+            for scene_id in set_loader.get_scene_ids():
+                scene_loader = SceneLoader(
+                    exp_name=self.exp_name, set_name=set_name, scene_id=scene_id
+                )
+                for ts in scene_loader.get_timesteps():
+                    for oid in scene_loader.get_oids(timestep=ts):
+                        idx2info[idx] = (set_name, scene_id, ts, oid)
+                        idx += 1
+        return idx2info
 
 
 class SetLoader:
@@ -118,7 +136,7 @@ class SceneLoader:
         self.states_dir = os.path.join(set_loader.set_dir, "states", scene_id)
         self.cam_dir = os.path.join(set_loader.set_dir, "cam", scene_id)
         self.rgb_dir = os.path.join(set_loader.set_dir, "rgb", scene_id)
-        self.masks_dir = os.path.join(set_loader.set_dir, "masks", scene_id)
+        self.masks_root_dir = os.path.join(set_loader.set_dir, "masks", scene_id)
         self.detectron_masks_dir = os.path.join(
             set_loader.set_dir, "detectron_masks", scene_id
         )
@@ -137,6 +155,23 @@ class SceneLoader:
         return path
 
     def save_state(self, scene_id: str, timestep: int, state: Dict):
+        # Convert from Bullet object IDs to IDs we assign ourselves.
+        new_object_states = {}
+
+        # Here we assume a mapping that is determined by the order of the dictionary
+        # values. The main reason that we reassign the IDs here is that Unity only
+        # supports a few IDs; however, IDs can be arbitrarily large if several other
+        # objects were loaded in the bullet scene before the objects were.
+        for new_oid, odict in enumerate(state["objects"].values()):
+            # Check that the new ID is within the set of supported Unity IDs.
+            if new_oid in UNITY_OIDS:
+                pass
+            else:
+                raise ValueError(f"New oid: {new_oid} is not supported.")
+
+            new_object_states[new_oid] = odict
+        state["objects"] = new_object_states
+
         path = self.get_state_path(timestep=timestep)
         util.save_pickle(path=path, data=state)
 
@@ -153,7 +188,21 @@ class SceneLoader:
             ts_state_list.append((ts, state))
         return ts_state_list
 
-    """Frame-related functions"""
+    def get_oids(self, timestep: int):
+        oids = list(self.load_state(timestep=timestep)["objects"].keys())
+        return oids
+
+    def load_odict(self, timestep: int, oid: int):
+        odict = self.load_state(timestep=timestep)["objects"][oid]
+        return odict
+
+    def get_masks_dir(self, timestep: int):
+        masks_dir = os.path.join(self.masks_root_dir, f"{timestep:06}")
+        return masks_dir
+
+    def create_masks_dir(self, timestep: int):
+        masks_dir = self.get_masks_dir(timestep=timestep)
+        os.makedirs(masks_dir)
 
     def get_cam_path(self, timestep: int):
         path = os.path.join(self.cam_dir, f"{timestep:06}.json")
@@ -163,8 +212,8 @@ class SceneLoader:
         path = os.path.join(self.rgb_dir, f"{timestep:06}.png")
         return path
 
-    def get_masks_path(self, timestep: int):
-        path = os.path.join(self.masks_dir, f"{timestep:06}.npy")
+    def get_mask_path(self, timestep: int, oid: int):
+        path = os.path.join(self.get_masks_dir(timestep=timestep), f"{oid:02}.npy")
         return path
 
     def get_detectron_masks_path(self, timestep: int):
@@ -179,10 +228,30 @@ class SceneLoader:
         path = self.get_rgb_path(timestep=timestep)
         imageio.imwrite(path, rgb)
 
-    def save_masks(self, timestep: int, masks: np.ndarray):
-        path = self.get_masks_path(timestep=timestep)
-        np.save(path, masks)
+    def save_mask(self, timestep: int, mask: np.ndarray, oid: int):
+        path = self.get_mask_path(timestep=timestep, oid=oid)
+        np.save(path, mask)
 
     def save_detectron_masks(self, timestep: str, masks: np.ndarray):
         path = self.get_detectron_masks_path(timestep=timestep)
         np.save(path, masks)
+
+    def load_cam(self, timestep: int):
+        path = self.get_cam_path(timestep=timestep)
+        cam_dict = util.load_json(path=path)
+        return cam_dict
+
+    def load_rgb(self, timestep: int):
+        path = self.get_rgb_path(timestep=timestep)
+        rgb = imageio.imread(path)
+        return rgb
+
+    def load_mask(self, timestep: int, oid: int):
+        path = self.get_mask_path(timestep=timestep, oid=oid)
+        mask = np.load(path)
+        return mask
+
+    def load_detectron_masks(self, timestep: str):
+        path = self.get_detectron_masks_path(timestep=timestep)
+        masks = np.load(path)
+        return masks

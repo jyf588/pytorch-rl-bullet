@@ -111,7 +111,10 @@ async def send_to_client(websocket, path):
 
             # Initalize the directory if we are saving states.
             if opt.save_states:
-                set_loader.create_states_dir_for_scene(scene_id=scene_id)
+                scene_loader = exp.loader.SceneLoader(
+                    exp_name=args.exp, set_name=set_name, scene_id=scene_id
+                )
+                os.makedirs(scene_loader.states_dir)
 
             n_frames = 0
             frames_start = time.time()
@@ -123,7 +126,7 @@ async def send_to_client(websocket, path):
                 # be saved for the current set. The state is the state of the world
                 # BEFORE apply the action at the current timestep.
                 if opt.save_states and stage == set_opt["stage"]:
-                    set_loader.save_state(
+                    scene_loader.save_state(
                         scene_id=scene_id, timestep=env.timestep, state=env.get_state()
                     )
 
