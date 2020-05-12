@@ -1,4 +1,6 @@
 import os
+import imageio
+import numpy as np
 from typing import *
 
 from exp.options import EXPERIMENT_OPTIONS
@@ -21,6 +23,8 @@ class SetLoader:
         self.exp_name = exp_name
         self.set_name = set_name
         self.root_dir = root_dir
+
+        self.opt = ExpLoader(exp_name=exp_name).set_name2opt[set_name]
 
         self.set_dir = self.construct_set_dir()
         self.scenes_dir = os.path.join(self.set_dir, "scenes")
@@ -58,26 +62,6 @@ class SetLoader:
             id2scene[scene_id] = scene
         return id2scene
 
-    """State-related functions"""
-
-    def get_scene_states_dir(self, scene_id: str):
-        scene_states_dir = os.path.join(self.states_root_dir, scene_id)
-        return scene_states_dir
-
-    def create_states_dir_for_scene(self, scene_id: str):
-        scene_states_dir = self.get_scene_states_dir(scene_id=scene_id)
-        os.makedirs(scene_states_dir)
-
-    def get_state_path(self, scene_id: str, timestep: int):
-        path = os.path.join(
-            self.get_scene_states_dir(scene_id=scene_id), f"{timestep:06}.p"
-        )
-        return path
-
-    def save_state(self, scene_id: str, timestep: int, state: Dict):
-        path = self.get_state_path(scene_id=scene_id, timestep=timestep)
-        util.save_pickle(path=path, data=state)
-
     """Frame-level functions"""
 
     def get_key_dir(self, key: str):
@@ -86,12 +70,12 @@ class SetLoader:
 
     def get_scene2frames(self):
         scene2frames = {}
-        for scene_id in self.load_id2scene().keys():
-            frames = []
-            for fname in sorted(os.listdir(os.path.join(key_dir, scene_id))):
-                frame_id = int(fname.split(".")[0])
-                frames.append(frame_id)
-            scene2frames[int(scene_id)] = frames
+        for scene_id in self.get_scene_ids():
+            scene_loader = SceneLoader(
+                exp_name=self.exp_name, set_name=self.set_name, scene_id=scene_id
+            )
+            timesteps = scene_loader.get_timesteps()
+            scene2frames[int(scene_id)] = timesteps
         return scene2frames
 
     def get_frame_path(self, key: str, scene_id: int, frame_id: int):
@@ -126,3 +110,79 @@ class SetLoader:
 
     def __len__(self):
         return len(self.get_key2paths()["img"])
+
+
+class SceneLoader:
+    def __init__(self, exp_name: str, set_name: str, scene_id: str):
+        set_loader = SetLoader(exp_name=exp_name, set_name=set_name)
+        self.states_dir = os.path.join(set_loader.set_dir, "states", scene_id)
+        self.cam_dir = os.path.join(set_loader.set_dir, "cam", scene_id)
+        self.rgb_dir = os.path.join(set_loader.set_dir, "rgb", scene_id)
+        self.masks_dir = os.path.join(set_loader.set_dir, "masks", scene_id)
+        self.detectron_masks_dir = os.path.join(
+            set_loader.set_dir, "detectron_masks", scene_id
+        )
+
+    def get_timesteps(self):
+        timesteps = []
+        for fname in sorted(os.listdir(self.states_dir)):
+            ts = int(fname.split(".")[0])
+            timesteps.append(ts)
+        return timesteps
+
+    """State-related functions"""
+
+    def get_state_path(self, timestep: int):
+        path = os.path.join(self.states_dir, f"{timestep:06}.p")
+        return path
+
+    def save_state(self, scene_id: str, timestep: int, state: Dict):
+        path = self.get_state_path(timestep=timestep)
+        util.save_pickle(path=path, data=state)
+
+    def load_state(self, timestep: int):
+        path = self.get_state_path(timestep=timestep)
+        state = util.load_pickle(path=path)
+        return state
+
+    def load_scene_states(self):
+        ts_state_list = []
+        timesteps = self.get_timesteps()
+        for ts in timesteps:
+            state = self.load_state(timestep=ts)
+            ts_state_list.append((ts, state))
+        return ts_state_list
+
+    """Frame-related functions"""
+
+    def get_cam_path(self, timestep: int):
+        path = os.path.join(self.cam_dir, f"{timestep:06}.json")
+        return path
+
+    def get_rgb_path(self, timestep: int):
+        path = os.path.join(self.rgb_dir, f"{timestep:06}.png")
+        return path
+
+    def get_masks_path(self, timestep: int):
+        path = os.path.join(self.masks_dir, f"{timestep:06}.npy")
+        return path
+
+    def get_detectron_masks_path(self, timestep: int):
+        path = os.path.join(self.detectron_masks_dir, f"{timestep:06}.npy")
+        return path
+
+    def save_cam(self, timestep: int, cam_dict: Dict):
+        path = self.get_cam_path(timestep=timestep)
+        util.save_json(path=path, data=cam_dict)
+
+    def save_rgb(self, timestep: int, rgb: np.ndarray):
+        path = self.get_rgb_path(timestep=timestep)
+        imageio.imwrite(path, rgb)
+
+    def save_masks(self, timestep: int, masks: np.ndarray):
+        path = self.get_masks_path(timestep=timestep)
+        np.save(path, masks)
+
+    def save_detectron_masks(self, timestep: str, masks: np.ndarray):
+        path = self.get_detectron_masks_path(timestep=timestep)
+        np.save(path, masks)

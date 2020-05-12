@@ -1,10 +1,10 @@
 import os
+import copy
 import pprint
 import imageio
 import numpy as np
 from typing import *
 
-from exp.options import EXPERIMENT_OPTIONS
 import exp.loader
 import system.env
 import scene.util
@@ -23,38 +23,26 @@ class StatesEnv:
         task: str,
         place_dst_xy: Tuple,
     ):
-        self.exp = experiment
+        print("Initializing StatesEnv")
+        self.exp_name = experiment
         self.set_name = set_name
         self.scene_id = scene_id
-
-        exp_options = EXPERIMENT_OPTIONS[self.exp][set_name]
         self.task = task
-        self.stage = exp_options["stage"]
 
-        # Get the relevant paths for the experiment / set.
-        self.set_dir = exp.loader.get_exp_set_dir(exp=self.exp, set_name=set_name)
-        # scenes_path = exp.loader.get_scenes_path(exp=self.exp, set_name=set_name)
-        states_path = exp.loader.get_states_path(
-            exp=self.exp, set_name=set_name, scene_id=scene_id
+        self.set_loader = exp.loader.SetLoader(exp_name=experiment, set_name=set_name)
+        self.stage = self.set_loader.opt["stage"]
+
+        self.scene_loader = exp.loader.SceneLoader(
+            exp_name=experiment, set_name=set_name, scene_id=scene_id
         )
-
-        # scene = util.load_pickle(path=scenes_path)[scene_id]
-        self.states = util.load_pickle(path=states_path)
+        self.ts_state_list = self.scene_loader.load_scene_states()
 
         # Initialize the index and timestep.
-        self.idx2timestep = {idx: ts for idx, ts in enumerate(self.states.keys())}
         self.idx = 0
-        self.timestep = self.idx2timestep[self.idx]
-
-        # Convert the scene for placing, and determine the placing destination.
-        # self.place_dst_xy = None
-        # if self.task == "place":
-        #     scene, self.place_dst_xy, _ = scene.util.convert_scene_for_placing(
-        #         opt=opt, scene=scene
-        #     )
+        self.timestep = self.ts_state_list[self.idx][0]
 
         # Get the initial observation.
-        self.initial_obs = scene
+        self.initial_obs = copy.deepcopy(scene)
         if opt.obs_noise:
             self.initial_obs = system.env.apply_obs_noise(opt=opt, obs=self.initial_obs)
 
@@ -66,17 +54,24 @@ class StatesEnv:
             self.src_idx = opt.scene_place_src_idx
             self.dst_idx = None
 
+        # Create the directories which we will save Unity data to.
+        for directory in [
+            self.scene_loader.cam_dir,
+            self.scene_loader.rgb_dir,
+            self.scene_loader.masks_dir,
+        ]:
+            os.makedirs(directory)
+
     def step(self):
         self.idx += 1
-        is_done = self.idx == len(self.states)
+        is_done = self.idx == len(self.ts_state_list)
         if not is_done:
-            self.timestep = self.idx2timestep[self.idx]
+            self.timestep = self.ts_state_list[self.idx][0]
         success = True
         return is_done, success
 
     def get_state(self):
-        ts = self.idx2timestep[self.idx]
-        state = self.states[ts]
+        _, state = self.ts_state_list[self.idx]
         return state
 
     def get_current_stage(self):
@@ -93,17 +88,9 @@ class StatesEnv:
 
         masks, _ = ns_vqa_dart.bullet.seg.seg_img_to_map(seg_img=seg_img)
 
-        cam_path, rgb_path, masks_path = exp.loader.get_frame_paths(
-            exp=self.exp,
-            set_name=self.set_name,
-            scene_id=self.scene_id,
-            timestep=self.timestep,
-            keys=["cam", "rgb", "masks"],
-            create_dir=self.idx == 0,
-        )
-        util.save_json(path=cam_path, data=cam_dict)
-        imageio.imwrite(rgb_path, rgb)
-        np.save(masks_path, masks)
+        self.scene_loader.save_cam(self.timestep, cam_dict)
+        self.scene_loader.save_rgb(self.timestep, rgb)
+        self.scene_loader.save_masks(self.timestep, masks)
 
     def cleanup(self):
         pass

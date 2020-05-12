@@ -142,7 +142,7 @@ async def send_to_client(websocket, path):
                     # Render unity and step.
                     if env.timestep % render_frequency == 0:
                         is_render_step = True
-                        state_id = f"{scene_id:06}_{env.timestep:06}"
+                        state_id = f"{scene_id}_{env.timestep:06}"
                         u_opt = get_unity_options(args.mode, opt, env)
                         for (rend_obs, rend_place, send_image, should_step) in u_opt:
                             render_state = compute_render_state(
