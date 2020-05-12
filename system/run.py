@@ -15,7 +15,6 @@ import scene.util
 import system.base_scenes
 import bullet2unity.states
 from states_env import StatesEnv
-import scene.loader as scene_loader
 from system.env import DemoEnvironment
 import my_pybullet_envs.utils as utils
 import ns_vqa_dart.bullet.util as util
@@ -54,73 +53,96 @@ async def send_to_client(websocket, path):
 
     # Run all sets in experiment.
     opt = SYSTEM_OPTIONS[args.mode]
-    sets = list(EXPERIMENT_OPTIONS[args.exp].keys())
-    for set_name in sets:
-        set_opt = EXPERIMENT_OPTIONS[args.exp][set_name]
-        set_states_dir = os.path.join(
-            exp.loader.get_exp_set_dir(exp=args.exp, set_name=set_name), "states"
-        )
-        scenes = scene_loader.load_scenes(exp=args.exp, set_name=set_name)
+    set_name2opt = exp.loader.ExpLoader(exp_name=args.exp).set_name2opt
+    for set_name, set_opt in set_name2opt.items():
+        # set_states_dir = os.path.join(
+        #     exp.loader.get_exp_set_dir(exp=args.exp, set_name=set_name), "states"
+        # )
+        set_loader = exp.loader.SetLoader(exp_name=args.exp, set_name=set_name)
+        id2scene = set_loader.load_id2scene()
         task = set_opt["task"]
-        n_set_scenes = len(scenes)
+        # n_set_scenes = len(id2scene)
 
-        for scene_idx in range(n_set_scenes):
+        for scene_id, scene in id2scene.items():
             avg_time = 0 if n_trials == 0 else (time.time() - start_time) / n_trials
             print(
                 f"Exp: {args.exp}\t"
                 f"Set: {set_name}\t"
                 f"Task: {task}\t"
-                f"Scene ID: {scene_idx}\t"
+                f"Scene ID: {scene_id}\t"
                 f"Trial: {n_trials}\t"
                 f"Avg Time: {avg_time:.2f}"
             )
 
-            scene = scenes[scene_idx]
-            states_path = os.path.join(set_states_dir, f"{scene_idx:04}.p")
-            place_dst_xy, place_dest_object = None, None
+            # states_path = os.path.join(set_states_dir, f"{scene_idx:04}.p")
             bullet_cam_targets = {}
+
+            # Modify the scene for placing, and determine placing destination.
+            place_dst_xy, place_dest_object = None, None
+            if task == "place":
+                (
+                    scene,
+                    place_dst_xy,
+                    place_dest_object,
+                ) = scene.util.convert_scene_for_placing(opt, scene)
 
             if args.mode == "unity_dataset":
                 env = StatesEnv(
-                    opt=opt, experiment=args.exp, set_name=set_name, scene_id=scene_idx
+                    opt=opt,
+                    experiment=args.exp,
+                    set_name=set_name,
+                    scene_id=scene_id,
+                    scene=scene,
+                    task=task,
+                    place_dst_xy=place_dst_xy,
                 )
             else:
-                # Modify the scene for placing, and determine placing destination.
-                if task == "place":
-                    (
-                        scene,
-                        place_dst_xy,
-                        place_dest_object,
-                    ) = scene.util.convert_scene_for_placing(opt, scene)
-
-                # Initialize the environment.
                 env = DemoEnvironment(
                     opt=opt,
                     bullet_opt=BULLET_OPTIONS,
                     policy_opt=POLICY_OPTIONS,
                     name2policy_models=NAME2POLICY_MODELS,
                     vision_opt=VISION_OPTIONS,
-                    trial=scene_idx,
+                    trial=scene_id,
                     scene=scene,
                     task=task,
                     place_dst_xy=place_dst_xy,
-                    states_path=states_path,
                 )
+
+            # Initalize the directory if we are saving states.
+            if opt.save_states:
+                set_loader.create_states_dir_for_scene(scene_id=scene_id)
+
             n_frames = 0
             frames_start = time.time()
             while 1:
+                # Get the current stage of execution.
+                stage, _ = env.get_current_stage()
+
+                # Save the current state, if the current stage is a stage that should
+                # be saved for the current set. The state is the state of the world
+                # BEFORE apply the action at the current timestep.
+                if opt.save_states and stage == set_opt["stage"]:
+                    set_loader.save_state(
+                        scene_id=scene_id, timestep=env.timestep, state=env.get_state()
+                    )
+
                 is_render_step = False
                 if opt.render_unity:
+                    # Modify the rendering frequency if we are using vision + policy,
+                    # and it's during the planning or placing stage.
                     render_frequency = opt.render_frequency
                     if args.mode != "unity_dataset":
-                        stage, _ = env.get_current_stage()
-                        if opt.obs_mode == "vision" and stage in ["plan", "place"]:
-                            render_frequency = POLICY_OPTIONS.vision_delay
+                        if opt.obs_mode == "vision":
+                            if stage in "plan":
+                                render_frequency = 1
+                            elif stage == "place":
+                                render_frequency = POLICY_OPTIONS.vision_delay
 
                     # Render unity and step.
                     if env.timestep % render_frequency == 0:
                         is_render_step = True
-                        state_id = f"{scene_idx:06}_{env.timestep:06}"
+                        state_id = f"{scene_id:06}_{env.timestep:06}"
                         u_opt = get_unity_options(args.mode, opt, env)
                         for (rend_obs, rend_place, send_image, should_step) in u_opt:
                             render_state = compute_render_state(
@@ -163,7 +185,9 @@ async def send_to_client(websocket, path):
                     break
 
                 n_frames += 1
-                print(f"Frame rate: {n_frames / (time.time() - frames_start):.2f}")
+                print(
+                    f"Stage: {stage}\tTimestep: {env.timestep}\tFrame rate: {n_frames / (time.time() - frames_start):.2f}"
+                )
     sys.exit(0)
 
 

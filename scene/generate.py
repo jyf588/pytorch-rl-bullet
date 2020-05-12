@@ -12,8 +12,8 @@ from scene.generator import SceneGenerator
 
 def main(args: argparse.Namespace):
     print(f"Generating scenes for experiment: {args.exp}...")
-    exp_opt = exp.loader.ExpLoader(exp_name=args.exp).opt
-    for set_name, set_opt in exp_opt.items():
+    set_name2opt = exp.loader.ExpLoader(exp_name=args.exp).set_name2opt
+    for set_name, set_opt in set_name2opt.items():
         # Generate scenes.
         generators = create_generators(
             seed=set_opt["seed"],

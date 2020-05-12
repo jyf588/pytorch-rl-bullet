@@ -13,23 +13,32 @@ import ns_vqa_dart.bullet.util as util
 
 
 class StatesEnv:
-    def __init__(self, opt, experiment: str, set_name: str, scene_id: int):
+    def __init__(
+        self,
+        opt,
+        experiment: str,
+        set_name: str,
+        scene_id: int,
+        scene: List,
+        task: str,
+        place_dst_xy: Tuple,
+    ):
         self.exp = experiment
         self.set_name = set_name
         self.scene_id = scene_id
 
         exp_options = EXPERIMENT_OPTIONS[self.exp][set_name]
-        self.task = exp_options["task"]
+        self.task = task
         self.stage = exp_options["stage"]
 
         # Get the relevant paths for the experiment / set.
         self.set_dir = exp.loader.get_exp_set_dir(exp=self.exp, set_name=set_name)
-        scenes_path = exp.loader.get_scenes_path(exp=self.exp, set_name=set_name)
+        # scenes_path = exp.loader.get_scenes_path(exp=self.exp, set_name=set_name)
         states_path = exp.loader.get_states_path(
             exp=self.exp, set_name=set_name, scene_id=scene_id
         )
 
-        scene = util.load_pickle(path=scenes_path)[scene_id]
+        # scene = util.load_pickle(path=scenes_path)[scene_id]
         self.states = util.load_pickle(path=states_path)
 
         # Initialize the index and timestep.
@@ -38,11 +47,11 @@ class StatesEnv:
         self.timestep = self.idx2timestep[self.idx]
 
         # Convert the scene for placing, and determine the placing destination.
-        self.place_dst_xy = None
-        if self.task == "place":
-            scene, self.place_dst_xy, _ = scene.util.convert_scene_for_placing(
-                opt=opt, scene=scene
-            )
+        # self.place_dst_xy = None
+        # if self.task == "place":
+        #     scene, self.place_dst_xy, _ = scene.util.convert_scene_for_placing(
+        #         opt=opt, scene=scene
+        #     )
 
         # Get the initial observation.
         self.initial_obs = scene

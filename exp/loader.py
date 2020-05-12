@@ -11,7 +11,7 @@ KEY2EXT = {"cam": "json", "img": "png", "masks": "npy"}
 class ExpLoader:
     def __init__(self, exp_name: str):
         self.set_names = list(EXPERIMENT_OPTIONS[exp_name].keys())
-        self.opt = EXPERIMENT_OPTIONS[exp_name]
+        self.set_name2opt = EXPERIMENT_OPTIONS[exp_name]
 
 
 class SetLoader:
@@ -24,12 +24,15 @@ class SetLoader:
 
         self.set_dir = self.construct_set_dir()
         self.scenes_dir = os.path.join(self.set_dir, "scenes")
+        self.states_root_dir = os.path.join(self.set_dir, "states")
 
     def construct_set_dir(self):
         set_dir = os.path.join(
             util.get_user_homedir(), self.root_dir, self.exp_name, self.set_name
         )
         return set_dir
+
+    """Scene-related functions"""
 
     def get_scene_path(self, scene_id: str):
         path = os.path.join(self.scenes_dir, f"{scene_id}.p")
@@ -44,14 +47,46 @@ class SetLoader:
             path = self.get_scene_path(scene_id=f"{idx:04}")
             util.save_pickle(path=path, data=scene)
 
+    def get_scene_ids(self) -> List:
+        scene_ids = sorted([name.split(".")[0] for name in os.listdir(self.scenes_dir)])
+        return scene_ids
+
+    def load_id2scene(self) -> Dict:
+        id2scene = {}
+        for scene_id in self.get_scene_ids():
+            scene = util.load_pickle(path=self.get_scene_path(scene_id=scene_id))
+            id2scene[scene_id] = scene
+        return id2scene
+
+    """State-related functions"""
+
+    def get_scene_states_dir(self, scene_id: str):
+        scene_states_dir = os.path.join(self.states_root_dir, scene_id)
+        return scene_states_dir
+
+    def create_states_dir_for_scene(self, scene_id: str):
+        scene_states_dir = self.get_scene_states_dir(scene_id=scene_id)
+        os.makedirs(scene_states_dir)
+
+    def get_state_path(self, scene_id: str, timestep: int):
+        path = os.path.join(
+            self.get_scene_states_dir(scene_id=scene_id), f"{timestep:06}.p"
+        )
+        return path
+
+    def save_state(self, scene_id: str, timestep: int, state: Dict):
+        path = self.get_state_path(scene_id=scene_id, timestep=timestep)
+        util.save_pickle(path=path, data=state)
+
+    """Frame-level functions"""
+
     def get_key_dir(self, key: str):
         key_dir = os.path.join(self.set_dir, key)
         return key_dir
 
     def get_scene2frames(self):
         scene2frames = {}
-        key_dir = self.get_key_dir(key="img")
-        for scene_id in sorted(os.listdir(key_dir)):
+        for scene_id in self.load_id2scene().keys():
             frames = []
             for fname in sorted(os.listdir(os.path.join(key_dir, scene_id))):
                 frame_id = int(fname.split(".")[0])
@@ -91,37 +126,3 @@ class SetLoader:
 
     def __len__(self):
         return len(self.get_key2paths()["img"])
-
-
-def get_frame_dir(
-    exp: str, set_name: str, key: str, scene_id: str, create_dir=False
-) -> str:
-    scene_dir = os.path.join(
-        util.get_user_homedir(), "data/dash", exp, set_name, key, f"{scene_id:04}"
-    )
-    if create_dir:
-        util.delete_and_create_dir(scene_dir)
-    return scene_dir
-
-
-def get_scenes_path(exp: str, set_name: str) -> str:
-    return os.path.join(get_exp_set_dir(exp=exp, set_name=set_name), "scenes.p")
-
-
-def get_states_path(exp: str, set_name: str, scene_id: int) -> str:
-    return os.path.join(
-        get_exp_set_dir(exp=exp, set_name=set_name), "states", f"{scene_id:04}.p"
-    )
-
-
-def get_frame_paths(
-    exp: str, set_name: str, scene_id: int, timestep: int, keys: List, create_dir: bool
-) -> str:
-    paths = []
-    for k in keys:
-        frame_dir = get_frame_dir(
-            exp=exp, set_name=set_name, key=k, scene_id=scene_id, create_dir=create_dir
-        )
-        path = os.path.join(frame_dir, f"{timestep:04}.{KEY2EXT[k]}")
-        paths.append(path)
-    return paths

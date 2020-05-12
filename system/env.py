@@ -38,7 +38,6 @@ class DemoEnvironment:
         task: str,
         command: Optional[str] = None,
         place_dst_xy: Optional[List[float]] = None,
-        states_path=None,
     ):
         """
         Args:
@@ -62,7 +61,6 @@ class DemoEnvironment:
         self.task = task
         self.command = command
         self.place_dst_xy = place_dst_xy
-        self.states_path = states_path
 
         np.random.seed(self.opt.seed)
 
@@ -140,18 +138,19 @@ class DemoEnvironment:
         transport_end = transport_start + self.policy_opt.n_plan_steps
         place_start = transport_end
         place_end = place_start + n_place
-        retract_start = place_end
-        retract_end = retract_start + self.policy_opt.n_plan_steps
 
         stage2ts_bounds = {
             "grasp": (grasp_start, grasp_end),
             "transport": (transport_start, transport_end),
             "place": (place_start, place_end),
-            "retract": (retract_start, retract_end),
         }
 
         if self.opt.enable_reaching:
             stage2ts_bounds["reach"] = (reach_start, reach_end)
+        if self.opt.enable_retract:
+            retract_start = place_end
+            retract_end = retract_start + self.policy_opt.n_plan_steps
+            stage2ts_bounds["retract"] = (retract_start, retract_end)
 
         n_total_steps = 0
         for start_ts, end_ts in stage2ts_bounds.values():
@@ -291,7 +290,6 @@ class DemoEnvironment:
             scene=self.scene,
             visualize=self.opt.render_bullet,
             use_control_skip=self.opt.use_control_skip,
-            states_path=self.states_path,
         )
 
         # If reaching is disabled, set the robot arm directly to the dstination
@@ -530,9 +528,6 @@ class DemoEnvironment:
             action=system.policy.unwrap_action(action=action, is_cuda=self.opt.is_cuda),
             timestep=self.timestep,
         )
-        # We only save in placing.
-        if self.opt.save_states:
-            self.w.save_current_state(timestep=self.timestep)
 
     def execute_plan(
         self, stage: str, stage_ts: int, restore_fingers: Optional[bool] = False,

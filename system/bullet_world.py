@@ -25,7 +25,6 @@ class BulletWorld:
         visualize: bool,
         p: Optional = None,
         use_control_skip: Optional[bool] = False,
-        states_path=None,
     ):
         """
         Args:
@@ -51,7 +50,6 @@ class BulletWorld:
         self.scene = scene
         self.visualize = visualize
         self.use_control_skip = use_control_skip
-        self.states_path = states_path
 
         if p is None:
             self.bc = self.create_bullet_client()
@@ -332,8 +330,3 @@ class BulletWorld:
                 self.robot_env.step_sim(action=action)
         else:
             self.robot_env.step_sim(action=action)
-
-    def save_current_state(self, timestep: int):
-        assert timestep not in self.states
-        self.states[timestep] = self.get_state()
-        util.save_pickle(path=self.states_path, data=self.states)
