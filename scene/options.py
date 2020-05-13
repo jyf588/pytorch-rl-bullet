@@ -3,12 +3,11 @@ import math
 import copy
 import argparse
 
-N_SCENES = 2000
-
 MAX_OPENRAVE_OBJECTS = 6
 MIN_TABLETOP_OBJECTS = 4
 N_STACK_OBJECTS = 2
 N_PLACE_OBJECTS = 1
+
 
 BASE_OBJECT = argparse.Namespace(
     seed=None,
@@ -30,43 +29,41 @@ BASE_OBJECT = argparse.Namespace(
 )
 
 # Options for manipulated objects.
-MANIPULATED_OBJECT = copy.deepcopy(BASE_OBJECT)
-MANIPULATED_OBJECT.n_objects = 1
-MANIPULATED_OBJECT.shapes = ["box", "cylinder"]
-MANIPULATED_OBJECT.x_pos = (-0.1, 0.25)
-MANIPULATED_OBJECT.y_pos = (-0.1, 0.5)
+MANIPULATED_OBJECTS = copy.deepcopy(BASE_OBJECT)
+MANIPULATED_OBJECTS.x_pos = (-0.1, 0.25)
+MANIPULATED_OBJECTS.y_pos = (-0.1, 0.5)
 
 # Options for surrounding objects.
-SURROUND_OBJECT = copy.deepcopy(BASE_OBJECT)
-SURROUND_OBJECT.shapes = ["box", "cylinder", "sphere"]
-SURROUND_OBJECT.x_pos = (-0.1, 0.3)
-SURROUND_OBJECT.y_pos = (-0.3, 0.7)
+SURROUND_OBJECTS = copy.deepcopy(BASE_OBJECT)
+SURROUND_OBJECTS.shapes = ["box", "cylinder", "sphere"]
+SURROUND_OBJECTS.x_pos = (-0.1, 0.3)
+SURROUND_OBJECTS.y_pos = (-0.3, 0.7)
 
 # Options for stacking.
-STACK_TOP, STACK_BTM = [copy.deepcopy(MANIPULATED_OBJECT) for _ in range(2)]
-STACK_SURROUND = copy.deepcopy(SURROUND_OBJECT)
+STACK_OBJECT = copy.deepcopy(MANIPULATED_OBJECTS)
+STACK_OBJECT.n_objects = 1
+STACK_OBJECT.shapes = ["box", "cylinder"]
+STACK_TOP, STACK_BTM = [copy.deepcopy(STACK_OBJECT) for _ in range(2)]
 STACK_BTM.radius = 0.045  # Slightly larger radius for the bottom.
+STACK_SURROUND = copy.deepcopy(SURROUND_OBJECTS)
 STACK_SURROUND.n_objects = (
     MIN_TABLETOP_OBJECTS - N_STACK_OBJECTS,
-    MAX_OPENRAVE_OBJECTS - 2,
+    MAX_OPENRAVE_OBJECTS - N_STACK_OBJECTS,
 )
 
 # Options for placing.
-PLACE_OBJECT = copy.deepcopy(MANIPULATED_OBJECT)
-PLACE_SURROUND = copy.deepcopy(SURROUND_OBJECT)
+PLACE_OBJECTS = copy.deepcopy(MANIPULATED_OBJECTS)
+PLACE_OBJECTS.n_objects = 2  # We include a second placing dst that will be deleted.
+PLACE_OBJECTS.shapes = ["box", "cylinder", "sphere"]
+PLACE_SURROUND = copy.deepcopy(SURROUND_OBJECTS)
 PLACE_SURROUND.n_objects = (
     MIN_TABLETOP_OBJECTS - N_PLACE_OBJECTS,
-    MAX_OPENRAVE_OBJECTS - 1,
+    MAX_OPENRAVE_OBJECTS - N_PLACE_OBJECTS,
 )
 
+# Map tasks to options.
 TASK_LIST = ["place", "stack"]
 TASK2OPTIONS = {
-    "place": [PLACE_OBJECT, PLACE_SURROUND],
+    "place": [PLACE_OBJECTS, PLACE_SURROUND],
     "stack": [STACK_TOP, STACK_BTM, STACK_SURROUND],
-}
-
-EXPERIMENT2SEED = {
-    "vision_planning": {"place": 1, "stack": 2,},
-    "vision_placing": {"place": 3, "stack": 4,},
-    "table1": {"place": 5, "stack": 6,},
 }

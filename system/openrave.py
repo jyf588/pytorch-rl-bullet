@@ -7,13 +7,14 @@ from typing import *
 import matplotlib.pyplot as plt
 
 
-homedir = os.path.expanduser("~")
-CONTAINER_DIR = os.path.join(homedir, "container_data")
+# homedir = os.path.expanduser("~")
+# CONTAINER_DIR = os.path.join(homedir, "container_data")
 STAGE2NAME = {"reach": "REACH", "transport": "MOVE", "retract": "RETRACT"}
 MAX_OBJECTS = 6
 
 
 def compute_trajectory(
+    container_dir: str,
     odicts: Dict,
     target_idx: int,
     q_start: np.ndarray,
@@ -87,8 +88,8 @@ def compute_trajectory(
         object_positions=object_positions,
         q_start=q_start,
         q_end=q_end,
-        save_path=os.path.join(CONTAINER_DIR, f"PB_{name}.npz"),
-        load_path=os.path.join(CONTAINER_DIR, f"OR_{name}.npz"),
+        save_path=os.path.join(container_dir, f"PB_{name}.npz"),
+        load_path=os.path.join(container_dir, f"OR_{name}.npz"),
     )
     return trajectory
 
@@ -117,19 +118,17 @@ def get_traj_from_openrave_container(
             If we found the file but no solution was found, we return an empty
                 array.
     """
-    print("Printing inputs to computing trajectory")
-    print(f"object_positions: {object_positions}")
-    print(f"q_start: {q_start}")
-    print(f"q_end: {q_end}")
+    # print("Printing inputs to computing trajectory")
+    # print(f"object_positions: {object_positions}")
+    # print(f"q_start: {q_start}")
+    # print(f"q_end: {q_end}")
 
     if q_start is not None and q_end is not None:
         np.savez(save_path, object_positions, q_start, q_end)  # move
     elif q_end is not None:
         np.savez(save_path, object_positions, q_end)  # reach has q_start 0
     elif q_start is not None:
-        np.savez(
-            save_path, object_positions, q_start
-        )  # retract always ends at zero
+        np.savez(save_path, object_positions, q_start)  # retract always ends at zero
     else:
         assert False
 
@@ -152,20 +151,18 @@ def get_traj_from_openrave_container(
         loaded_data = np.load(load_path)
         traj_i = loaded_data["arr_0"]
         traj_s = loaded_data["arr_1"]
-        print("loaded")
         # for k in range(7):
         #     plt.plot(range(300), traj_i[:,k])
         #     plt.plot(range(300), traj_s[:,k])
         #     plt.show()
         try:
             os.remove(load_path)
-            print("deleted")
             # input("press enter")
         except OSError as e:  # name the Exception `e`
             print("Failed with:", e.strerror)  # look what it says
             # input("press enter")
     else:
         raise ValueError("%s isn't a file!" % load_path)
-    print("Trajectory obtained from OpenRave!")
+    # print("Trajectory obtained from OpenRave!")
     # input("press enter")
     return traj_s

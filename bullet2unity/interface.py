@@ -28,6 +28,7 @@ def run_server(hostname: str, port: int, handler: Callable):
         handler: The handler coroutine to run for each websocket connection.
     """
     print(f"Running server on {hostname}:{port}")
+    print("Awaiting client connection...")
 
     start_server = websockets.serve(handler, hostname, port)
     asyncio.get_event_loop().run_until_complete(start_server)
@@ -38,7 +39,7 @@ def encode(
     state_id: str,
     bullet_state: List[Any],
     bullet_animation_target: List[float],
-    bullet_camera_targets: Dict,
+    bullet_cam_targets: Dict,
 ) -> str:
     """Converts the provided bullet state into a Unity state, and encodes the
     message for sending to Unity.
@@ -66,7 +67,7 @@ def encode(
             will be used.
         bullet_animation_target: The target position for the animation of the
             head/neck.
-        bullet_camera_targets: A dictionary of target positions that we want
+        bullet_cam_targets: A dictionary of target positions that we want
             Unity to point the camera at, in the format:
             {
                 <id>: {
@@ -82,7 +83,7 @@ def encode(
     unity_state = bullet2unity.states.bullet2unity_state(
         bullet_state=bullet_state,
         bullet_animation_target=bullet_animation_target,
-        bullet_camera_targets=bullet_camera_targets,
+        bullet_camera_targets=bullet_cam_targets,
     )
 
     # Combine the id and state, and stringify into a msg.
@@ -92,7 +93,7 @@ def encode(
     return message
 
 
-def decode(message_id: str, reply: str, bullet_camera_targets):
+def decode(message_id: str, reply: str, bullet_cam_targets):
     """Decodes messages received from Unity.
 
     Args:
@@ -107,7 +108,7 @@ def decode(message_id: str, reply: str, bullet_camera_targets):
                 <image>,
                 ...
             ]
-        bullet_camera_targets: A dictionary of target positions that we want
+        bullet_cam_targets: A dictionary of target positions that we want
             Unity to point the camera at, in the format:
             {
                 <id>: {
@@ -130,16 +131,10 @@ def decode(message_id: str, reply: str, bullet_camera_targets):
                 ...
             }
     """
-    print(
-        f"Received from client: {len(reply)} characters\tTime: {time.time()}"
-    )
+    print(f"Received from client: {len(reply)} characters\tTime: {time.time()}")
 
     # Split components by comma.
     reply = reply.split(",")
-    print(f"Number of reply components: {len(reply)}")
-    print(
-        f"Attempting to parse unity data for {len(bullet_camera_targets)} objects..."
-    )
 
     # Extract the state ID, and verify that the message IDs are equivalent,
     received_id = reply[0]
@@ -147,18 +142,14 @@ def decode(message_id: str, reply: str, bullet_camera_targets):
 
     idx = 1
     data = {}
-    for tid, info in bullet_camera_targets.items():
+    for tid, info in bullet_cam_targets.items():
         unity_target_id = int(reply[idx])
         assert unity_target_id == tid
         idx += 1
 
-        camera_position = [
-            float(x) for x in reply[idx : idx + N_CAM_POS_ELEMS]
-        ]
+        camera_position = [float(x) for x in reply[idx : idx + N_CAM_POS_ELEMS]]
         idx += N_CAM_POS_ELEMS
-        camera_orientation = [
-            float(x) for x in reply[idx : idx + N_CAM_ORN_ELEMS]
-        ]
+        camera_orientation = [float(x) for x in reply[idx : idx + N_CAM_ORN_ELEMS]]
         idx += N_CAM_ORN_ELEMS
 
         # Convert from base 64 to an image tensor.

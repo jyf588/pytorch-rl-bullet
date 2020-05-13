@@ -1,20 +1,29 @@
 """Generates pickle files of scenes. Used to generate scenes to run the full system on."""
+import os
 import argparse
 from typing import *
 from tqdm import tqdm
 
-import scenes.options as OPT
-from scenes.generator import SceneGenerator
+import exp.loader
+import scene.options
+import exp.options
+from scene.generator import SceneGenerator
 
 
 def main(args: argparse.Namespace):
-    for task in OPT.TASK_LIST:
-        print(f"Generating scenes for task: {task}...")
+    print(f"Generating scenes for experiment: {args.exp}...")
+    set_name2opt = exp.loader.ExpLoader(exp_name=args.exp).set_name2opt
+    for set_name, set_opt in set_name2opt.items():
+        # Generate scenes.
         generators = create_generators(
-            seed=OPT.EXPERIMENT2SEED[args.experiment][task],
-            generator_options=OPT.TASK2OPTIONS[task],
+            seed=set_opt["seed"],
+            generator_options=scene.options.TASK2OPTIONS[set_opt["task"]],
         )
-        _ = generate_scenes(n_scenes=OPT.N_SCENES, generators=generators)
+        scenes = generate_scenes(n_scenes=set_opt["n_scenes"], generators=generators)
+
+        # Save the scenes.
+        set_loader = exp.loader.SetLoader(exp_name=args.exp, set_name=set_name)
+        set_loader.save_scenes(scenes)
 
 
 def create_generators(seed: int, generator_options: List) -> List:
@@ -57,10 +66,7 @@ def generate_scenes(n_scenes: int, generators: List):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "experiment",
-        type=str,
-        choices=list(OPT.EXPERIMENT2SEED.keys()),
-        help="The name of the experiment to run.",
+        "exp", type=str, help="The name of the experiment to run.",
     )
     args = parser.parse_args()
     main(args)

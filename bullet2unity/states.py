@@ -13,12 +13,11 @@ from typing import *
 
 import bullet2unity.const as const
 import ns_vqa_dart.bullet.util as util
+from ns_vqa_dart.bullet.seg import UNITY_OIDS
 
 
 def create_bullet_camera_targets(
     camera_control: str,
-    bullet_odicts: Dict,
-    use_oids: bool,
     should_save: bool,
     should_send: bool,
     position: Optional[List[float]] = None,
@@ -165,9 +164,7 @@ def bullet2unity_state(
     unity_robot_state = bullet2unity_robot(bullet_state=bullet_robot_state)
 
     # Convert object state from bullet to unity.
-    unity_object_states = bullet2unity_objects(
-        bullet_state=bullet_state["objects"],
-    )
+    unity_object_states = bullet2unity_objects(bullet_state=bullet_state["objects"],)
 
     # Compute the target position in Unity coordinates.
     if bullet_animation_target:
@@ -186,12 +183,8 @@ def bullet2unity_state(
     unity_cam_targets = []
     for tid, target_info in bullet_camera_targets.items():
         bullet_pos = target_info["position"]
-        bullet_pos_shoulder = bullet_world2shoulder_position(
-            pos_world=bullet_pos
-        )
-        unity_rel_position = bullet2unity_position(
-            bullet_position=bullet_pos_shoulder
-        )
+        bullet_pos_shoulder = bullet_world2shoulder_position(pos_world=bullet_pos)
+        unity_rel_position = bullet2unity_position(bullet_position=bullet_pos_shoulder)
         unity_cam_targets += [
             tid,
             int(target_info["should_save"]),
@@ -363,7 +356,17 @@ def bullet2unity_objects(bullet_state: Dict[int, Dict]):
     """
     n_objects = len(bullet_state)
     unity_state = [n_objects]
-    for idx, odict in enumerate(bullet_state.values()):
+    for oid, odict in bullet_state.items():
+        # The object id must be defined in the Unity RGB mapping. Otherwise, Unity will
+        # not be able to encode the object segmentation in the segmentation image it
+        # produces.
+        if type(oid) == str and oid.startswith("h_"):
+            otag = oid
+        elif oid in UNITY_OIDS:
+            otag = f"{oid:02}"
+        elif oid not in UNITY_OIDS:
+            raise ValueError(f"Object ID not supported by Unity: {oid}")
+
         shape = odict["shape"]
         color = odict["color"]
         radius = odict["radius"]
@@ -389,8 +392,6 @@ def bullet2unity_objects(bullet_state: Dict[int, Dict]):
         # Convert the object orientation.
         unity_rotation = bullet2unity_euler(bullet_orn=bullet_orientation)
 
-        # Create the state for the current object.
-        otag = f"{idx:02}"
         # look_at_flag = int(idx in look_at_idxs)
         ostate = (
             [otag, shape, color]
