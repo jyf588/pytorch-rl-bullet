@@ -113,11 +113,12 @@ else:
         PLACE_PI = "0404_0_n_place_0404_0"
         PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
-        # GRASP_PI = "0510_0_n_25_45"
-        # GRASP_DIR = "./trained_models_%s/ppo/" % "0510_0_n"
-        #
-        # PLACE_PI = "0510_0_n_place_0510_0"
-        # PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
+        if ADD_PLACE_STACK_BIT:
+            GRASP_PI = "0510_0_n_25_45"
+            GRASP_DIR = "./trained_models_%s/ppo/" % "0510_0_n"
+
+            PLACE_PI = "0510_0_n_place_0510_0"
+            PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
     else:
         GRASP_PI = "0411_0_n_25_45"
         GRASP_DIR = "./trained_models_%s/ppo/" % "0411_0_n"
@@ -345,11 +346,12 @@ def get_stack_policy_obs_tensor(tx, ty, tz, t_half_height, is_box, t_pos, t_up, 
         obs = env_core.get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
             tx, ty, is_box, t_pos, t_up, b_pos, b_up
         )
-        if ADD_PLACE_STACK_BIT:
-            if TEST_PLACING:
-                obs.extend([1.0])
-            else:
-                obs.extend([-1.0])
+
+    if ADD_PLACE_STACK_BIT:
+        if TEST_PLACING:
+            obs.extend([1.0])
+        else:
+            obs.extend([-1.0])
     obs = policy.wrap_obs(obs, IS_CUDA)
     return obs
 
