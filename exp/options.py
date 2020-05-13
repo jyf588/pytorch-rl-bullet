@@ -30,10 +30,22 @@ EXPERIMENT_OPTIONS = {
             "save_states": True,
         },
     },
-    # "table1": {
-    #     "place": {"seed": 7, "task": "place", "n_scenes": N_TABLE1_SCENES},
-    #     "stack": {"seed": 8, "task": "stack", "n_scenes": N_TABLE1_SCENES},
-    # },
+    "table1": {
+        "stack": {
+            "seed": 5,
+            "task": "stack",
+            "stage": "place",
+            "n_scenes": N_TABLE1_SCENES,
+            "save_states": True,
+        },
+        "place": {
+            "seed": 4,
+            "task": "place",
+            "stage": "place",
+            "n_scenes": N_TABLE1_SCENES,
+            "save_states": True,
+        },
+    },
 }
 
 

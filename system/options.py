@@ -40,7 +40,7 @@ UNITY_DATASET_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 UNITY_DATASET_OPTIONS.render_frequency = 1  # Render and save every state.
 
 TEST_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
-TEST_OPTIONS.enable_reaching = False
+TEST_OPTIONS.enable_reaching = True
 TEST_OPTIONS.enable_retract = True
 TEST_OPTIONS.container_dir = "/home/mguo/container_data_v2"
 
@@ -54,8 +54,6 @@ TEST_GT_OPTIONS.obs_mode = "gt"
 TEST_GT_OPTIONS.obs_noise = False
 TEST_GT_OPTIONS.render_unity = False
 TEST_GT_OPTIONS.render_bullet = False
-TEST_GT_OPTIONS.enable_reaching = False
-TEST_GT_OPTIONS.enable_retract = False
 
 
 SYSTEM_OPTIONS = {

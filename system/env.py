@@ -138,11 +138,12 @@ class DemoEnvironment:
     def check_success(self) -> bool:
         """Checks whether the current state configuration is considered successful."""
         if self.task == "place":
-            idx = self.opt.scene_place_src_idx
+            src_idx = self.opt.scene_place_src_idx
+            dst_idx = self.opt.scene_place_dst_idx
         elif self.task == "stack":
-            idx = self.opt.scene_stack_src_idx
-        src_odict = list(self.get_state()["objects"].values())[idx]
-        # src_odict = self.get_observation()["objects"][idx]
+            src_idx = self.opt.scene_stack_src_idx
+            dst_idx = self.opt.scene_stack_dst_idx
+        src_odict = list(self.get_state()["objects"].values())[src_idx]
         x, y, z = src_odict["position"]
         dst_x, dst_y, dst_z = self.dst_xyz
         z_check = z - dst_z > 0.05
@@ -301,20 +302,26 @@ class DemoEnvironment:
 
         # Determine the source / target pbject(s) and destination position.
         task_params = self.compute_task_params(observation=self.initial_obs)
-        (self.src_idx, self.dst_idx, self.dst_xyz, self.is_sphere,) = task_params
+        (
+            self.src_idx,
+            self.dst_idx,
+            self.dst_xyz,
+            plan_xyz,
+            self.policy_dst_xyz,
+            self.is_sphere,
+        ) = task_params
         self.policy_models = self.name2policy_models[
             "sphere" if self.is_sphere else "universal"
         ]
 
         # obtained from initial_obs
-        # self.dst_xyz = dst_xyz[:2]  # used for policy as well
         self.src_xy = self.initial_obs[self.src_idx]["position"][
             :2
         ]  # used for policy as well
 
         # Compute the goal arm poses for reaching and transport.
         self.q_reach_dst, self.q_transport_dst = self.compute_qs(
-            src_xy=self.src_xy, dst_xyz=self.dst_xyz,
+            src_xy=self.src_xy, dst_xyz=plan_xyz,
         )
 
         # Create the bullet world now that we've finished our imaginary
@@ -411,14 +418,17 @@ class DemoEnvironment:
         # object that we are placing on top of (stacking).
         if dst_idx is None:
             z = 0.0
+            policy_z = z
         else:
-            if self.policy_opt.use_height:
-                z = observation[dst_idx]["height"]
-            else:
-                z = utils.H_MAX
+            z = observation[dst_idx]["height"]
+            policy_z = z
+            if not self.policy_opt.use_height:
+                policy_z = utils.H_MAX
 
-        dst_xyz = [dst_x, dst_y, z + utils.PLACE_START_CLEARANCE]
-        return src_idx, dst_idx, dst_xyz, is_sphere
+        dst_xyz = [dst_x, dst_y, z]
+        plan_xyz = [dst_x, dst_y, z + utils.PLACE_START_CLEARANCE]
+        policy_dst_xyz = [dst_x, dst_y, policy_z]
+        return src_idx, dst_idx, dst_xyz, plan_xyz, policy_dst_xyz, is_sphere
 
     def compute_qs(self, src_xy: List[float], dst_xyz: List[float]) -> Tuple:
         """Computes the arm joint angles that will be used to determine the
@@ -665,12 +675,7 @@ class DemoEnvironment:
             self.obs = self.get_observation()
 
         # Compute the observation vector from object poses and placing position.
-        tx, ty, _ = self.dst_xyz  # this should be dst xy rather than src xy
-        if self.task == "stack":
-            b_init_dict = self.initial_obs[self.dst_idx]
-            tz = b_init_dict["height"]
-        else:
-            tz = 0.0
+        tx, ty, tz = self.policy_dst_xyz  # this should be dst xy rather than src xy
 
         tdict = self.obs[self.src_idx]
         t_pos = tdict["position"]

@@ -50,21 +50,24 @@ async def send_to_client(websocket, path):
         path: The URI path.
     """
     start_time = time.time()
-    n_trials = 0
 
     # Run all sets in experiment.
     opt = SYSTEM_OPTIONS[args.mode]
     set_name2opt = exp.loader.ExpLoader(exp_name=args.exp).set_name2opt
+
+    if args.mode == "table1":
+        assert not os.path.exists(opt.table1_path)
 
     if opt.render_bullet:
         p.connect(p.GUI)
     else:
         p.connect(p.DIRECT)
 
-    n_successes = 0
-    n_or_success_trials = 0
+    set2success = {}
 
     for set_name, set_opt in set_name2opt.items():
+        set2success[set_name] = {"n_success": 0, "n_or_success": 0, "n_trials": 0}
+
         if opt.save_states and not set_opt["save_states"]:
             continue
         set_loader = exp.loader.SetLoader(exp_name=args.exp, set_name=set_name)
@@ -72,16 +75,8 @@ async def send_to_client(websocket, path):
         task = set_opt["task"]
 
         for scene_id, scene in id2scene.items():
-            avg_time = 0 if n_trials == 0 else (time.time() - start_time) / n_trials
-            print(
-                f"Exp: {args.exp}\t"
-                f"Set: {set_name}\t"
-                f"Task: {task}\t"
-                f"Scene ID: {scene_id}\t"
-                f"Trial: {n_trials}\t"
-                f"Avg Time: {avg_time:.2f}"
-            )
-
+            if int(scene_id) != 99:
+                continue
             # states_path = os.path.join(set_states_dir, f"{scene_idx:04}.p")
             bullet_cam_targets = {}
 
@@ -191,25 +186,32 @@ async def send_to_client(websocket, path):
 
                 # Break out if we're done with the sequence, or it failed.
                 if is_done or not openrave_success:
-                    n_trials += 1
+                    set2success[set_name]["n_trials"] += 1
                     if env.check_success():
-                        n_successes += 1
+                        set2success[set_name]["n_success"] += 1
                     if openrave_success:
-                        n_or_success_trials += 1
+                        set2success[set_name]["n_or_success"] += 1
                     env.cleanup()
+                    n_trials = set2success[set_name]["n_trials"]
+                    n_success = set2success[set_name]["n_success"]
+                    n_or_success = set2success[set_name]["n_or_success"]
+                    success_rate = 0.0 if n_trials == 0 else n_success / n_trials
+                    success_rate_wo_or = (
+                        0.0 if n_or_success == 0 else n_success / n_or_success
+                    )
+                    avg_time = (
+                        0 if n_trials == 0 else (time.time() - start_time) / n_trials
+                    )
+                    print(
+                        f"Exp: {args.exp}\tSet: {set_name}\tTask: {task}\tScene ID: {scene_id}\tStage: {stage}\tTimestep: {env.timestep}\n"
+                        f"Frame rate: {n_frames / (time.time() - frames_start):.2f}\tAvg trial time: {avg_time:.2f}\n"
+                        f"Success rate: {success_rate:.2f} ({n_trials})\tSuccess w/o OR failures: {success_rate_wo_or:.2f} ({n_or_success})\t# Successes: {n_success}"
+                    )
+                    if args.mode == "table1":
+                        util.save_json(path=opt.table1_path, data=set2success)
                     break
-                success_rate = 0.0 if n_trials == 0 else n_successes / n_trials
-                success_rate_wo_or = (
-                    0.0
-                    if n_or_success_trials == 0
-                    else n_successes / n_or_success_trials
-                )
-                print(
-                    f"Exp: {args.exp}\tSet: {set_name}\tTask: {task}Scene ID: {scene_id}\tStage: {stage}\tTimestep: {env.timestep}\n"
-                    f"Frame rate: {n_frames / (time.time() - frames_start):.2f}\tAvg trial time: {avg_time:.2f}\n"
-                    f"Success rate: {success_rate:.2f} ({n_trials})\tSuccess w/o OR failures: {success_rate_wo_or} ({n_or_success_trials})\t# Successes: {n_successes}"
-                )
                 n_frames += 1
+
     sys.exit(0)
 
 
