@@ -185,7 +185,7 @@ def planning(trajectory, restore_fingers=False):
         else:
             # try to keep fin q close to init_fin_q (keep finger pose)
             # add at most offset 0.05 in init_tar_fin_q direction so that grasp is tight
-            tar_fin_q = np.clip(init_tar_fin_q, init_fin_q - 0.05, init_fin_q + 0.05)
+            tar_fin_q = np.clip(init_tar_fin_q, init_fin_q - 0.1, init_fin_q + 0.1)
 
         # clip to joint limit
         tar_fin_q = np.clip(
