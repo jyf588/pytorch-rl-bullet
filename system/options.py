@@ -38,7 +38,7 @@ VISION_STATES_OPTIONS.container_dir = "/home/mguo/container_data_v1"
 
 UNITY_DATASET_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 UNITY_DATASET_OPTIONS.render_frequency = 1  # Render and save every state.
-TEST_VISION_OPTIONS.render_unity = True
+UNITY_DATASET_OPTIONS.render_unity = True
 
 TEST_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 TEST_OPTIONS.enable_reaching = True
