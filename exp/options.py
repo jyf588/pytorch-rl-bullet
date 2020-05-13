@@ -30,15 +30,13 @@ EXPERIMENT_OPTIONS = {
             "save_states": True,
         },
     },
-    "table1": {
+    "t1": {
         "stack": {
             "seed": 5,
             "task": "stack",
             "stage": "place",
             "n_scenes": N_TABLE1_SCENES,
             "save_states": False,
-            "z_rot": True,
-            "larger_table_range": True
         },
         "place": {
             "seed": 4,
@@ -46,19 +44,15 @@ EXPERIMENT_OPTIONS = {
             "stage": "place",
             "n_scenes": N_TABLE1_SCENES,
             "save_states": False,
-            "z_rot": True,
-            "larger_table_range": True
         },
     },
-    "table1_smaller_range_no_z_rot": {
+    "t1_smaller_range_no_z_rot": {
         "stack": {
             "seed": 5,
             "task": "stack",
             "stage": "place",
             "n_scenes": N_TABLE1_SCENES,
             "save_states": False,
-            "z_rot": False,
-            "larger_table_range": False
         },
         "place": {
             "seed": 4,
@@ -66,8 +60,38 @@ EXPERIMENT_OPTIONS = {
             "stage": "place",
             "n_scenes": N_TABLE1_SCENES,
             "save_states": False,
-            "z_rot": False,
-            "larger_table_range": False
+        },
+    },
+    "t1_small_range_no_zrot_no_sphere": {
+        "stack": {
+            "seed": 5,
+            "task": "stack",
+            "stage": "place",
+            "n_scenes": N_TABLE1_SCENES,
+            "save_states": False,
+        },
+        "place": {
+            "seed": 4,
+            "task": "place",
+            "stage": "place",
+            "n_scenes": N_TABLE1_SCENES,
+            "save_states": False,
+        },
+    },
+    "t1_no_sphere": {
+        "stack": {
+            "seed": 5,
+            "task": "stack",
+            "stage": "place",
+            "n_scenes": N_TABLE1_SCENES,
+            "save_states": False,
+        },
+        "place": {
+            "seed": 4,
+            "task": "place",
+            "stage": "place",
+            "n_scenes": N_TABLE1_SCENES,
+            "save_states": False,
         },
     },
 }

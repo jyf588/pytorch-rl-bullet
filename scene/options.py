@@ -21,8 +21,8 @@ BASE_OBJECT = argparse.Namespace(
     x_pos=None,
     y_pos=None,
     z_pos=0.0,
-    # z_rot=(0.0, 2 * math.pi),
-    z_rot=None,
+    z_rot=(0.0, 2 * math.pi),
+    # z_rot=None,
     mass=(1.0, 5.0),
     mu=(0.8, 1.2),
     position_mode="com",
@@ -37,10 +37,10 @@ MANIPULATED_OBJECTS.y_pos = (-0.1, 0.5)
 # Options for surrounding objects.
 SURROUND_OBJECTS = copy.deepcopy(BASE_OBJECT)
 SURROUND_OBJECTS.shapes = ["box", "cylinder", "sphere"]
-# SURROUND_OBJECTS.x_pos = (-0.1, 0.3)
-# SURROUND_OBJECTS.y_pos = (-0.3, 0.7)
-SURROUND_OBJECTS.x_pos = (-0.1, 0.25)
-SURROUND_OBJECTS.y_pos = (-0.1, 0.5)
+SURROUND_OBJECTS.x_pos = (-0.1, 0.3)
+SURROUND_OBJECTS.y_pos = (-0.3, 0.7)
+# SURROUND_OBJECTS.x_pos = (-0.1, 0.25)
+# SURROUND_OBJECTS.y_pos = (-0.1, 0.5)
 
 # Options for stacking.
 STACK_OBJECT = copy.deepcopy(MANIPULATED_OBJECTS)
@@ -57,7 +57,7 @@ STACK_SURROUND.n_objects = (
 # Options for placing.
 PLACE_OBJECTS = copy.deepcopy(MANIPULATED_OBJECTS)
 PLACE_OBJECTS.n_objects = 2  # We include a second placing dst that will be deleted.
-PLACE_OBJECTS.shapes = ["box", "cylinder", "sphere"]
+PLACE_OBJECTS.shapes = ["box", "cylinder"]
 PLACE_SURROUND = copy.deepcopy(SURROUND_OBJECTS)
 PLACE_SURROUND.n_objects = (
     MIN_TABLETOP_OBJECTS - N_PLACE_OBJECTS,

@@ -1,7 +1,12 @@
 {
+  "place": {
+    "n_or_success": 13,
+    "n_success": 5,
+    "n_trials": 16
+  },
   "stack": {
-    "n_or_success": 69,
-    "n_success": 55,
-    "n_trials": 97
+    "n_or_success": 72,
+    "n_success": 56,
+    "n_trials": 100
   }
 }

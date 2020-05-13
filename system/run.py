@@ -58,8 +58,11 @@ async def send_to_client(websocket, path):
     opt = SYSTEM_OPTIONS[args.mode]
     set_name2opt = exp.loader.ExpLoader(exp_name=args.exp).set_name2opt
 
-    if args.exp.startswith("table1"):
-        assert not os.path.exists(opt.table1_path)
+    save_t1 = args.exp.startswith("t1")
+    if save_t1:
+        t1_fname = f"{opt.obs_mode}_{args.exp}_{util.get_time_dirname()}"
+        t1_path = os.path.join(opt.table1_dir, t1_fname)
+        assert not os.path.exists(t1_path)
 
     system.openrave.check_clean_container(container_dir=opt.container_dir)
     shape2policy_dict = system.policy.get_shape2policy_dict(opt=opt)
@@ -216,8 +219,8 @@ async def send_to_client(websocket, path):
                         f"Frame rate: {n_frames / (time.time() - frames_start):.2f}\tAvg trial time: {avg_time:.2f}\n"
                         f"Success rate: {success_rate:.2f} ({n_trials})\tSuccess w/o OR failures: {success_rate_wo_or:.2f} ({n_or_success})\t# Successes: {n_success}"
                     )
-                    if args.exp.startswith("table1"):
-                        util.save_json(path=opt.table1_path, data=set2success)
+                    if save_t1:
+                        util.save_json(path=t1_path, data=set2success)
                     break
                 n_frames += 1
 

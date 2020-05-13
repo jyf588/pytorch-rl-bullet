@@ -25,7 +25,7 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     animate_head=False,
     save_states=False,
     container_dir=None,
-    table1_path="figures/table1.json",
+    table1_dir="figures/table1",
 )
 
 VISION_STATES_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
