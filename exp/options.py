@@ -46,7 +46,7 @@ EXPERIMENT_OPTIONS = {
             "save_states": False,
         },
     },
-    "t1_smaller_range_no_z_rot": {
+    "t1_zrot_lrange": {
         "stack": {
             "seed": 5,
             "task": "stack",
@@ -62,7 +62,7 @@ EXPERIMENT_OPTIONS = {
             "save_states": False,
         },
     },
-    "t1_small_range_no_zrot_no_sphere": {
+    "t1_zrot_lrange_sphere": {
         "stack": {
             "seed": 5,
             "task": "stack",
@@ -78,7 +78,7 @@ EXPERIMENT_OPTIONS = {
             "save_states": False,
         },
     },
-    "t1_no_sphere": {
+    "t1_sphere": {
         "stack": {
             "seed": 5,
             "task": "stack",
