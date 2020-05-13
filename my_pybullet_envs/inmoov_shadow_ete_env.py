@@ -118,6 +118,7 @@ class InmoovShadowHandEteEnv(gym.Env):
         assert self.grasp_floor
 
         self.grasp_stage = True
+        self.can_start_place = False
 
         mu_f = self.np_random.uniform(utils.MU_MIN, utils.MU_MAX)
         self.table_id = utils.create_table(mu_f)
@@ -217,6 +218,10 @@ class InmoovShadowHandEteEnv(gym.Env):
 
         # make this always negative so always beneficial to enter stage 2
         reward += (np.sum(dist_diffs[:-1]) + dist_diffs[-1] * 5.0) * 10.0
+        #
+        # # small wrist in stage 1 and 2
+        # arm_q = self.robot.get_q_dq(self.robot.arm_dofs)[0]
+        # reward += (1.5 - np.abs(arm_q[-1])) * 5.0
 
         if dist > 0.3:
             # only this for phase one
@@ -293,10 +298,14 @@ class InmoovShadowHandEteEnv(gym.Env):
             )
             / 1.0
         )
-        reward += xyz_metric * 30.0      # when dist < 0.15, will be almost equivalent as term in placing
+        reward += xyz_metric * 30.0
+        arm_q = self.robot.get_q_dq(self.robot.arm_dofs)[0]
+        reward += (1.5 - np.abs(arm_q[-1])) * 5.0
 
         if dist < 0.15:
             # good enough, phase place, focus on other things
+
+            self.can_start_place = True
 
             # we only care about the upright(z) direction
             z_axis, _ = p.multiplyTransforms(
@@ -333,7 +342,7 @@ class InmoovShadowHandEteEnv(gym.Env):
                 if con_this_link:
                     any_hand_contact = True
                 else:
-                    hand_r += 0.5
+                    hand_r += 1.5       # TODO: make this 3x larger
             reward += hand_r
 
             # reward -= self.robot.get_4_finger_deviation() * 0.3   # TODO: make sure all terms positive
@@ -346,12 +355,11 @@ class InmoovShadowHandEteEnv(gym.Env):
                 rot_metric > 0.9
                 and xyz_metric > 0.6
                 and vel_metric > 0.6
-                # and meaningful_c
             ):  # close to placing
                 reward += 5.0
                 # print("upright")
                 if not any_hand_contact:
-                    reward += 20.0
+                    reward += 40.0          # TODO: make this 2x larger
                     # print("no hand con")
         # print("p", reward)
         return reward, False
@@ -452,6 +460,11 @@ class InmoovShadowHandEteEnv(gym.Env):
         self.observation.extend([stage + self.np_random.uniform(low=-0.01, high=0.01),
                                  stage + self.np_random.uniform(low=-0.01, high=0.01),
                                  stage])
+
+        start_place = 1. if self.can_start_place else -1.
+        self.observation.extend([start_place + self.np_random.uniform(low=-0.01, high=0.01),
+                                 start_place + self.np_random.uniform(low=-0.01, high=0.01),
+                                 start_place ])
 
         return self.observation
 
