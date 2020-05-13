@@ -55,7 +55,7 @@ parser.add_argument("--long_move", type=int, default=0)
 parser.add_argument("--non-det", type=int, default=0)
 parser.add_argument("--render", type=int, default=0)
 parser.add_argument("--sleep", type=int, default=0)
-parser.add_argument("--flag_0426", type=int, default=0)
+parser.add_argument("--add_place_stack_bit", type=int, default=0)
 args = parser.parse_args()
 np.random.seed(args.seed)
 args.det = not args.non_det
@@ -67,7 +67,7 @@ DUMMY_SLEEP = bool(args.sleep)
 WITH_REACHING = True
 WITH_RETRACT = True
 USE_HEIGHT_INFO = bool(args.use_height)
-FLAG_0426 = bool(args.flag_0426)
+ADD_PLACE_STACK_BIT = bool(args.add_place_stack_bit)
 TEST_PLACING = bool(args.test_placing)    # if false, test stacking
 ADD_SURROUNDING_OBJS = True
 LONG_MOVE = bool(args.long_move)
@@ -125,7 +125,7 @@ else:
         PLACE_PI = "0411_0_n_place_0411_0"
         PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
-        if FLAG_0426:
+        if ADD_PLACE_STACK_BIT:
             GRASP_PI = "0426_0_n_25_45"
             GRASP_DIR = "./trained_models_%s/ppo/" % "0426_0_n"
 
@@ -345,7 +345,7 @@ def get_stack_policy_obs_tensor(tx, ty, tz, t_half_height, is_box, t_pos, t_up, 
         obs = env_core.get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
             tx, ty, is_box, t_pos, t_up, b_pos, b_up
         )
-        if FLAG_0426:
+        if ADD_PLACE_STACK_BIT:
             if TEST_PLACING:
                 obs.extend([1.0])
             else:
