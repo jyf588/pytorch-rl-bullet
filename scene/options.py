@@ -21,7 +21,8 @@ BASE_OBJECT = argparse.Namespace(
     x_pos=None,
     y_pos=None,
     z_pos=0.0,
-    z_rot=(0.0, 2 * math.pi),
+    # z_rot=(0.0, 2 * math.pi),
+    z_rot=None,
     mass=(1.0, 5.0),
     mu=(0.8, 1.2),
     position_mode="com",
@@ -36,8 +37,10 @@ MANIPULATED_OBJECTS.y_pos = (-0.1, 0.5)
 # Options for surrounding objects.
 SURROUND_OBJECTS = copy.deepcopy(BASE_OBJECT)
 SURROUND_OBJECTS.shapes = ["box", "cylinder", "sphere"]
-SURROUND_OBJECTS.x_pos = (-0.1, 0.3)
-SURROUND_OBJECTS.y_pos = (-0.3, 0.7)
+# SURROUND_OBJECTS.x_pos = (-0.1, 0.3)
+# SURROUND_OBJECTS.y_pos = (-0.3, 0.7)
+SURROUND_OBJECTS.x_pos = (-0.1, 0.25)
+SURROUND_OBJECTS.y_pos = (-0.1, 0.5)
 
 # Options for stacking.
 STACK_OBJECT = copy.deepcopy(MANIPULATED_OBJECTS)

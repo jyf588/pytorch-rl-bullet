@@ -32,7 +32,7 @@ class DemoEnvironment:
         opt: argparse.Namespace,
         bullet_opt: argparse.Namespace,
         policy_opt: argparse.Namespace,
-        name2policy_models: Dict,
+        shape2policy_dict: Dict,
         vision_opt: argparse.Namespace,
         exp_name: str,
         set_name: str,
@@ -41,6 +41,7 @@ class DemoEnvironment:
         task: str,
         command: Optional[str] = None,
         place_dst_xy: Optional[List[float]] = None,
+        vision_models_dict: Dict = None,
     ):
         """
         Args:
@@ -57,7 +58,7 @@ class DemoEnvironment:
         self.opt = opt
         self.bullet_opt = bullet_opt
         self.policy_opt = policy_opt
-        self.name2policy_models = name2policy_models
+        self.shape2policy_dict = shape2policy_dict
         self.vision_opt = vision_opt
         self.exp_name = exp_name
         self.set_name = set_name
@@ -66,6 +67,7 @@ class DemoEnvironment:
         self.task = task
         self.command = command
         self.place_dst_xy = place_dst_xy
+        self.vision_models_dict = vision_models_dict
 
         np.random.seed(self.opt.seed)
 
@@ -82,36 +84,6 @@ class DemoEnvironment:
         # Initialize the vision module if we are using vision for our
         # observations.
         if self.opt.obs_mode == "vision":
-            if self.vision_opt.separate_vision_modules:
-                if task == "stack":
-                    place_checkpoint_path = self.vision_opt.stacking_checkpoint_path
-                elif task == "place":
-                    place_checkpoint_path = self.vision_opt.placing_checkpoint_path
-                else:
-                    raise ValueError(f"Invalid task: {task}")
-                self.planning_vision_module = VisionModule(
-                    load_checkpoint_path=self.vision_opt.planning_checkpoint_path,
-                    debug_dir=self.vision_opt.debug_dir,
-                )
-                self.placing_vision_module = VisionModule(
-                    load_checkpoint_path=place_checkpoint_path,
-                    debug_dir=self.vision_opt.debug_dir,
-                )
-            else:
-                self.vision_module = VisionModule(
-                    load_checkpoint_path=self.vision_opt.attr_checkpoint_path,
-                    debug_dir=self.vision_opt.debug_dir,
-                )
-
-            # Initialize the segmentation module if requested.
-            if self.vision_opt.use_segmentation_module:
-                self.segmentation_module = DASHSegModule(
-                    mode="eval_single",
-                    checkpoint_path=self.vision_opt.seg_checkpoint_path,
-                    vis_dir=None
-                    if self.vision_opt.debug_dir is None
-                    else os.path.join(self.vision_opt.debug_dir, f"{trial:04}"),
-                )
             self.scene_loader = exp.loader.SceneLoader(
                 exp_name=f"system_{self.exp_name}",
                 set_name=self.set_name,
@@ -139,10 +111,8 @@ class DemoEnvironment:
         """Checks whether the current state configuration is considered successful."""
         if self.task == "place":
             src_idx = self.opt.scene_place_src_idx
-            dst_idx = self.opt.scene_place_dst_idx
         elif self.task == "stack":
             src_idx = self.opt.scene_stack_src_idx
-            dst_idx = self.opt.scene_stack_dst_idx
         src_odict = list(self.get_state()["objects"].values())[src_idx]
         x, y, z = src_odict["position"]
         dst_x, dst_y, dst_z = self.dst_xyz
@@ -310,14 +280,21 @@ class DemoEnvironment:
             self.policy_dst_xyz,
             self.is_sphere,
         ) = task_params
-        self.policy_models = self.name2policy_models[
+
+        # Extract policy-related variables according to the shape.
+        policy_dict = self.shape2policy_dict[
             "sphere" if self.is_sphere else "universal"
         ]
+        self.grasp_policy = policy_dict["grasp_policy"]
+        self.place_policy = policy_dict["place_policy"]
+        self.hidden_states = copy.deepcopy(policy_dict["hidden_states"])
+        self.masks = copy.deepcopy(policy_dict["masks"])
+        self.o_quat_pf_ave = policy_dict["o_quat_pf_ave"]
+        self.p_pos_of_ave = policy_dict["p_pos_of_ave"]
+        self.p_quat_of_ave = policy_dict["p_quat_of_ave"]
 
         # obtained from initial_obs
-        self.src_xy = self.initial_obs[self.src_idx]["position"][
-            :2
-        ]  # used for policy as well
+        self.src_xy = self.initial_obs[self.src_idx]["position"][:2]
 
         # Compute the goal arm poses for reaching and transport.
         self.q_reach_dst, self.q_transport_dst = self.compute_qs(
@@ -463,10 +440,6 @@ class DemoEnvironment:
 
         # Compute the destination arm pose for transport.
         table_id = utils.create_table(self.bullet_opt.floor_mu)
-        (o_pos_pf_ave, o_quat_pf_ave, _,) = utils.read_grasp_final_states_from_pickle(
-            self.policy_models.grasp_pi
-        )
-        p_pos_of_ave, p_quat_of_ave = p.invertTransform(o_pos_pf_ave, o_quat_pf_ave)
         robot = InmoovShadowNew(
             init_noise=False, timestep=utils.TS, np_random=np.random,
         )
@@ -475,14 +448,14 @@ class DemoEnvironment:
                 [0, 0, 0],
                 p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
                 [0, 0, 0],
-                o_quat_pf_ave,
+                self.o_quat_pf_ave,
             )
         else:
             desired_oquat = [0.0, 0.0, 0.0, 1.0]
         q_transport_dst = utils.get_n_optimal_init_arm_qs(
             robot,
-            p_pos_of_ave,
-            p_quat_of_ave,
+            self.p_pos_of_ave,
+            self.p_quat_of_ave,
             dst_xyz,
             table_id,
             desired_obj_quat=desired_oquat,
@@ -531,18 +504,11 @@ class DemoEnvironment:
         return trajectory
 
     def grasp(self, stage_ts: int):
-        # Load the grasping actor critic model.
-        if stage_ts == 0:
-            (self.policy, _, self.hidden_states, self.masks,) = system.policy.load(
-                policy_dir=self.policy_models.grasp_dir,
-                env_name=self.policy_opt.grasp_env_name,
-                is_cuda=self.opt.is_cuda,
-            )
         obs = system.policy.wrap_obs(
             self.get_grasp_observation(), is_cuda=self.opt.is_cuda
         )
         with torch.no_grad():
-            _, action, _, self.hidden_states = self.policy.act(
+            _, action, _, self.hidden_states = self.grasp_policy.act(
                 obs, self.hidden_states, self.masks, deterministic=self.bullet_opt.det
             )
         self.w.step_robot(
@@ -556,18 +522,13 @@ class DemoEnvironment:
             self.w.robot_env.change_control_skip_scaling(
                 c_skip=self.policy_opt.control_skip
             )
-            (self.policy, _, self.hidden_states, self.masks,) = system.policy.load(
-                policy_dir=self.policy_models.place_dir,
-                env_name=self.policy_opt.place_env_name,
-                is_cuda=self.opt.is_cuda,
-            )
 
         # Get the current observation.
         obs = system.policy.wrap_obs(
             self.get_place_observation(), is_cuda=self.opt.is_cuda
         )
         with torch.no_grad():
-            _, action, _, self.hidden_states = self.policy.act(
+            _, action, _, self.hidden_states = self.place_policy.act(
                 obs, self.hidden_states, self.masks, deterministic=self.bullet_opt.det
             )
 
@@ -752,20 +713,20 @@ class DemoEnvironment:
         # Select the vision module based on the current stage.
         if self.vision_opt.separate_vision_modules:
             if self.stage == "plan":
-                vision_module = self.planning_vision_module
+                vision_module = self.vision_models_dict["plan"]
             elif self.stage == "place":
-                vision_module = self.placing_vision_module
+                vision_module = self.vision_models_dict[self.task]
             else:
                 raise ValueError(f"No vision module for stage: {self.stage}.")
         else:
-            vision_module = self.vision_module
+            vision_module = self.vision_models_dict["combined"]
 
         # Retrieves the image, camera pose, and object segmentation masks.
         rgb, oid2mask, cam_position, cam_orientation = self.get_images()
 
         # Either predict segmentations or use ground truth.
         if self.vision_opt.use_segmentation_module:
-            masks = self.segmentation_module.eval_example(bgr=rgb[:, :, ::-1])
+            masks = self.vision_models_dict["seg"].eval_example(bgr=rgb[:, :, ::-1])
         else:
             masks = oid2mask.values()
 

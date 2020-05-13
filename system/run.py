@@ -12,20 +12,23 @@ import warnings
 warnings.filterwarnings("ignore")
 
 import exp.loader
-import scene.util as scene_util
+import system.policy
+import system.openrave
 import system.base_scenes
 import bullet2unity.states
+import scene.util as scene_util
 from states_env import StatesEnv
 from system.env import DemoEnvironment
 import my_pybullet_envs.utils as utils
 import ns_vqa_dart.bullet.util as util
 import bullet2unity.interface as interface
 from exp.options import EXPERIMENT_OPTIONS
+from system.vision_module import VisionModule
+from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
 from system.options import (
     SYSTEM_OPTIONS,
     BULLET_OPTIONS,
     POLICY_OPTIONS,
-    NAME2POLICY_MODELS,
     VISION_OPTIONS,
 )
 
@@ -55,8 +58,12 @@ async def send_to_client(websocket, path):
     opt = SYSTEM_OPTIONS[args.mode]
     set_name2opt = exp.loader.ExpLoader(exp_name=args.exp).set_name2opt
 
-    if args.mode == "table1":
+    if args.exp.startswith("table1"):
         assert not os.path.exists(opt.table1_path)
+
+    system.openrave.check_clean_container(container_dir=opt.container_dir)
+    shape2policy_dict = system.policy.get_shape2policy_dict(opt=opt)
+    vision_models_dict = load_vision_models() if opt.obs_mode == "vision" else {}
 
     if opt.render_bullet:
         p.connect(p.GUI)
@@ -64,7 +71,6 @@ async def send_to_client(websocket, path):
         p.connect(p.DIRECT)
 
     set2success = {}
-
     for set_name, set_opt in set_name2opt.items():
         set2success[set_name] = {"n_success": 0, "n_or_success": 0, "n_trials": 0}
 
@@ -75,9 +81,6 @@ async def send_to_client(websocket, path):
         task = set_opt["task"]
 
         for scene_id, scene in id2scene.items():
-            if int(scene_id) != 99:
-                continue
-            # states_path = os.path.join(set_states_dir, f"{scene_idx:04}.p")
             bullet_cam_targets = {}
 
             # Modify the scene for placing, and determine placing destination.
@@ -104,7 +107,7 @@ async def send_to_client(websocket, path):
                     opt=opt,
                     bullet_opt=BULLET_OPTIONS,
                     policy_opt=POLICY_OPTIONS,
-                    name2policy_models=NAME2POLICY_MODELS,
+                    shape2policy_dict=shape2policy_dict,
                     vision_opt=VISION_OPTIONS,
                     exp_name=args.exp,
                     set_name=set_name,
@@ -112,6 +115,7 @@ async def send_to_client(websocket, path):
                     scene=scene,
                     task=task,
                     place_dst_xy=place_dst_xy,
+                    vision_models_dict=vision_models_dict,
                 )
 
             # Initalize the directory if we are saving states.
@@ -184,13 +188,18 @@ async def send_to_client(websocket, path):
                 if not is_render_step:
                     is_done, openrave_success = env.step()
 
+                # Skip retract if placing failed.
+                if stage == "retract" and not env.check_success():
+                    is_done = True
+
                 # Break out if we're done with the sequence, or it failed.
                 if is_done or not openrave_success:
                     set2success[set_name]["n_trials"] += 1
-                    if env.check_success():
-                        set2success[set_name]["n_success"] += 1
                     if openrave_success:
                         set2success[set_name]["n_or_success"] += 1
+                        # Only check for task success if OR didn't fail.
+                        if env.check_success():
+                            set2success[set_name]["n_success"] += 1
                     env.cleanup()
                     n_trials = set2success[set_name]["n_trials"]
                     n_success = set2success[set_name]["n_success"]
@@ -207,12 +216,41 @@ async def send_to_client(websocket, path):
                         f"Frame rate: {n_frames / (time.time() - frames_start):.2f}\tAvg trial time: {avg_time:.2f}\n"
                         f"Success rate: {success_rate:.2f} ({n_trials})\tSuccess w/o OR failures: {success_rate_wo_or:.2f} ({n_or_success})\t# Successes: {n_success}"
                     )
-                    if args.mode == "table1":
+                    if args.exp.startswith("table1"):
                         util.save_json(path=opt.table1_path, data=set2success)
                     break
                 n_frames += 1
 
     sys.exit(0)
+
+
+def load_vision_models():
+    vision_models_dict = {}
+    if VISION_OPTIONS.use_segmentation_module:
+        vision_models_dict["seg"] = DASHSegModule(
+            mode="eval_single",
+            checkpoint_path=VISION_OPTIONS.seg_checkpoint_path,
+            vis_dir=None,
+        )
+    if VISION_OPTIONS.separate_vision_modules:
+        vision_models_dict["plan"] = VisionModule(
+            load_checkpoint_path=VISION_OPTIONS.planning_checkpoint_path,
+            debug_dir=VISION_OPTIONS.debug_dir,
+        )
+        vision_models_dict["place"] = VisionModule(
+            load_checkpoint_path=VISION_OPTIONS.placing_checkpoint_path,
+            debug_dir=VISION_OPTIONS.debug_dir,
+        )
+        vision_models_dict["stack"] = VisionModule(
+            load_checkpoint_path=VISION_OPTIONS.stacking_checkpoint_path,
+            debug_dir=VISION_OPTIONS.debug_dir,
+        )
+    else:
+        vision_models_dict["combined"] = VisionModule(
+            load_checkpoint_path=VISION_OPTIONS.attr_checkpoint_path,
+            debug_dir=VISION_OPTIONS.debug_dir,
+        )
+    return vision_models_dict
 
 
 def get_unity_options(mode, opt, env):
@@ -236,13 +274,17 @@ def get_unity_options(mode, opt, env):
 
 
 def compute_bullet_camera_targets(env, send_image):
+    print(f"send_image: {send_image}")
+    print(f"env.task: {env.task}")
+    print(f"env.stage: {env.stage}")
+    print(f"env.stage_ts: {env.stage_ts}")
     if not send_image:
         return None
 
     task = env.task
     if env.stage == "plan":
         cam_target = PLAN_TARGET_POSITION
-    elif env.stage == "place" and env.stage_ts == 0:
+    elif env.stage == "place":
         if task == "place":
             cam_target = env.place_dst_xy + [env.initial_obs[env.src_idx]["height"]]
         elif task == "stack":

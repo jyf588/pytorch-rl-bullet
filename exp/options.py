@@ -36,14 +36,38 @@ EXPERIMENT_OPTIONS = {
             "task": "stack",
             "stage": "place",
             "n_scenes": N_TABLE1_SCENES,
-            "save_states": True,
+            "save_states": False,
+            "z_rot": True,
+            "larger_table_range": True
         },
         "place": {
             "seed": 4,
             "task": "place",
             "stage": "place",
             "n_scenes": N_TABLE1_SCENES,
-            "save_states": True,
+            "save_states": False,
+            "z_rot": True,
+            "larger_table_range": True
+        },
+    },
+    "table1_smaller_range_no_z_rot": {
+        "stack": {
+            "seed": 5,
+            "task": "stack",
+            "stage": "place",
+            "n_scenes": N_TABLE1_SCENES,
+            "save_states": False,
+            "z_rot": False,
+            "larger_table_range": False
+        },
+        "place": {
+            "seed": 4,
+            "task": "place",
+            "stage": "place",
+            "n_scenes": N_TABLE1_SCENES,
+            "save_states": False,
+            "z_rot": False,
+            "larger_table_range": False
         },
     },
 }

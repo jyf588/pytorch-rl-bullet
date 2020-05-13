@@ -20,11 +20,12 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     render_bullet=False,
     visualize_unity=False,
     use_control_skip=True,
-    render_frequency=20,
+    render_frequency=100,
     render_obs=False,
     animate_head=False,
     save_states=False,
     container_dir=None,
+    table1_path="figures/table1.json",
 )
 
 VISION_STATES_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
@@ -46,14 +47,11 @@ TEST_OPTIONS.container_dir = "/home/mguo/container_data_v2"
 
 TEST_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_VISION_OPTIONS.obs_mode = "vision"
-TEST_VISION_OPTIONS.obs_noise = False
-TEST_VISION_OPTIONS.render_obs = True
+TEST_VISION_OPTIONS.render_obs = False
 
 TEST_GT_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_GT_OPTIONS.obs_mode = "gt"
-TEST_GT_OPTIONS.obs_noise = False
 TEST_GT_OPTIONS.render_unity = False
-TEST_GT_OPTIONS.render_bullet = False
 
 
 SYSTEM_OPTIONS = {
@@ -88,36 +86,36 @@ POLICY_OPTIONS = argparse.Namespace(
     vision_delay=2,
 )
 
-UNIVERSAL_POLICY_MODELS = argparse.Namespace(
+UNIVERSAL_POLICY_NAMES = argparse.Namespace(
     grasp_pi="0411_0_n_25_45",
     grasp_dir="./trained_models_0411_0_n/ppo/",
     place_dir="./trained_models_0411_0_n_place_0411_0/ppo/",
 )
 
-SPHERE_POLICY_MODELS = argparse.Namespace(
+SPHERE_POLICY_NAMES = argparse.Namespace(
     grasp_pi="0422_sph_n_25_45",
     grasp_dir="./trained_models_0422_sph_n/ppo/",
     place_dir="./trained_models_0422_sph_n_place_0422_sph/ppo/",
 )
 
-NAME2POLICY_MODELS = {
-    "universal": UNIVERSAL_POLICY_MODELS,
-    "sphere": SPHERE_POLICY_MODELS,
+SHAPE2POLICY_NAMES = {
+    "universal": UNIVERSAL_POLICY_NAMES,
+    "sphere": SPHERE_POLICY_NAMES,
 }
 
 
 VISION_OPTIONS = argparse.Namespace(
     renderer="unity",
-    use_segmentation_module=False,
-    separate_vision_modules=False,
-    use_gt_obs=True,
-    # seg_checkpoint_path="/home/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
-    # planning_checkpoint_path="/home/mguo/outputs/planning_v003_20K/checkpoint_best.pt",
-    # placing_checkpoint_path="/home/mguo/outputs/placing_v003_2K_20K/checkpoint_best.pt",
-    # stacking_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/checkpoint_best.pt",
-    seg_checkpoint_path="/home/mguo/outputs/detectron/seg_tiny/2020_05_11_20_52_07/model_final.pth",
+    use_segmentation_module=True,
+    separate_vision_modules=True,
+    use_gt_obs=False,
+    seg_checkpoint_path="/home/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
+    planning_checkpoint_path="/home/mguo/outputs/planning_v003_20K/checkpoint_best.pt",
+    placing_checkpoint_path="/home/mguo/outputs/placing_v003_2K_20K/checkpoint_best.pt",
+    stacking_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/checkpoint_best.pt",
+    # seg_checkpoint_path="/home/mguo/outputs/detectron/seg_tiny/2020_05_11_20_52_07/model_final.pth",
     # attr_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/checkpoint_best.pt",
-    attr_checkpoint_path="/home/mguo/outputs/attr_net/seg_tiny/checkpoint_best.pt",
+    # attr_checkpoint_path="/home/mguo/outputs/attr_net/seg_tiny/checkpoint_best.pt",
     coordinate_frame="unity_camera",
     save_predictions=True,
     debug_dir=None,

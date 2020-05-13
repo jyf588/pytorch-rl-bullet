@@ -13,6 +13,20 @@ STAGE2NAME = {"reach": "REACH", "transport": "MOVE", "retract": "RETRACT"}
 MAX_OBJECTS = 6
 
 
+def check_clean_container(container_dir: str):
+    """Checks whether the openrave container is clean (e.g., no existing filepaths.)"""
+    for stage, name in STAGE2NAME.items():
+        sp, lp = construct_filepaths(container_dir=container_dir, name=name)
+        assert not os.path.exists(sp)
+        assert not os.path.exists(lp)
+
+
+def construct_filepaths(container_dir: str, name: str):
+    save_path = os.path.join(container_dir, f"PB_{name}.npz")
+    load_path = os.path.join(container_dir, f"OR_{name}.npz")
+    return save_path, load_path
+
+
 def compute_trajectory(
     container_dir: str,
     odicts: Dict,
