@@ -5,6 +5,7 @@ import time
 import copy
 import pprint
 import argparse
+import pybullet as p
 from typing import *
 import warnings
 
@@ -54,6 +55,15 @@ async def send_to_client(websocket, path):
     # Run all sets in experiment.
     opt = SYSTEM_OPTIONS[args.mode]
     set_name2opt = exp.loader.ExpLoader(exp_name=args.exp).set_name2opt
+
+    if opt.render_bullet:
+        p.connect(p.GUI)
+    else:
+        p.connect(p.DIRECT)
+
+    n_successes = 0
+    n_or_success_trials = 0
+
     for set_name, set_opt in set_name2opt.items():
         if opt.save_states and not set_opt["save_states"]:
             continue
@@ -175,20 +185,31 @@ async def send_to_client(websocket, path):
                             if send_image:
                                 env.set_unity_data(data)
                             if should_step:
-                                is_done, success = env.step()
+                                is_done, openrave_success = env.step()
                 if not is_render_step:
-                    is_done, success = env.step()
+                    is_done, openrave_success = env.step()
 
                 # Break out if we're done with the sequence, or it failed.
-                if is_done or not success:
-                    env.cleanup()
+                if is_done or not openrave_success:
                     n_trials += 1
+                    if env.check_success():
+                        n_successes += 1
+                    if openrave_success:
+                        n_or_success_trials += 1
+                    env.cleanup()
                     break
-
-                n_frames += 1
-                print(
-                    f"Exp: {args.exp}\tSet: {set_name}\tScene ID: {scene_id}\tStage: {stage}\tTimestep: {env.timestep}\tFrame rate: {n_frames / (time.time() - frames_start):.2f}"
+                success_rate = 0.0 if n_trials == 0 else n_successes / n_trials
+                success_rate_wo_or = (
+                    0.0
+                    if n_or_success_trials == 0
+                    else n_successes / n_or_success_trials
                 )
+                print(
+                    f"Exp: {args.exp}\tSet: {set_name}\tTask: {task}Scene ID: {scene_id}\tStage: {stage}\tTimestep: {env.timestep}\n"
+                    f"Frame rate: {n_frames / (time.time() - frames_start):.2f}\tAvg trial time: {avg_time:.2f}\n"
+                    f"Success rate: {success_rate:.2f} ({n_trials})\tSuccess w/o OR failures: {success_rate_wo_or} ({n_or_success_trials})\t# Successes: {n_successes}"
+                )
+                n_frames += 1
     sys.exit(0)
 
 

@@ -121,14 +121,10 @@ class DemoEnvironment:
                 os.makedirs(self.scene_loader.rgb_dir)
             self.exp_time_dirname = util.get_time_dirname()
 
-        if self.opt.render_bullet:
-            p.connect(p.GUI)
-        else:
-            p.connect(p.DIRECT)
-
     def cleanup(self):
-        p.disconnect()
-        del self
+        # p.disconnect()
+        # del self
+        p.resetSimulation()
 
     def is_done(self) -> bool:
         """Determines whether we have finished the sequence.
@@ -138,6 +134,21 @@ class DemoEnvironment:
         """
         # If we executed all steps, we are done.
         return self.timestep == self.n_total_steps
+
+    def check_success(self) -> bool:
+        """Checks whether the current state configuration is considered successful."""
+        if self.task == "place":
+            idx = self.opt.scene_place_src_idx
+        elif self.task == "stack":
+            idx = self.opt.scene_stack_src_idx
+        src_odict = list(self.get_state()["objects"].values())[idx]
+        # src_odict = self.get_observation()["objects"][idx]
+        x, y, z = src_odict["position"]
+        dst_x, dst_y, dst_z = self.dst_xyz
+        z_check = z - dst_z > 0.05
+        xy_check = (x - dst_x) ** 2 + (y - dst_y) ** 2 < 0.1 ** 2
+        is_success = z_check and xy_check
+        return is_success
 
     def compute_stages(self):
         if self.opt.enable_reaching:
@@ -290,20 +301,20 @@ class DemoEnvironment:
 
         # Determine the source / target pbject(s) and destination position.
         task_params = self.compute_task_params(observation=self.initial_obs)
-        (self.src_idx, self.dst_idx, dst_xyz, self.is_sphere,) = task_params
+        (self.src_idx, self.dst_idx, self.dst_xyz, self.is_sphere,) = task_params
         self.policy_models = self.name2policy_models[
             "sphere" if self.is_sphere else "universal"
         ]
 
         # obtained from initial_obs
-        self.dst_xy = dst_xyz[:2]  # used for policy as well
+        # self.dst_xyz = dst_xyz[:2]  # used for policy as well
         self.src_xy = self.initial_obs[self.src_idx]["position"][
             :2
         ]  # used for policy as well
 
         # Compute the goal arm poses for reaching and transport.
         self.q_reach_dst, self.q_transport_dst = self.compute_qs(
-            src_xy=self.src_xy, dst_xyz=dst_xyz,
+            src_xy=self.src_xy, dst_xyz=self.dst_xyz,
         )
 
         # Create the bullet world now that we've finished our imaginary
@@ -505,7 +516,7 @@ class DemoEnvironment:
             q_end=q_end,
             stage=stage,
             src_base_z_post_placing=expected_src_base_z_post_placing,
-            container_dir=self.container_dir,
+            container_dir=self.opt.container_dir,
         )
         return trajectory
 
@@ -654,7 +665,7 @@ class DemoEnvironment:
             self.obs = self.get_observation()
 
         # Compute the observation vector from object poses and placing position.
-        tx, ty = self.dst_xy  # this should be dst xy rather than src xy
+        tx, ty, _ = self.dst_xyz  # this should be dst xy rather than src xy
         if self.task == "stack":
             b_init_dict = self.initial_obs[self.dst_idx]
             tz = b_init_dict["height"]

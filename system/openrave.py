@@ -14,6 +14,7 @@ MAX_OBJECTS = 6
 
 
 def compute_trajectory(
+    container_dir: str,
     odicts: Dict,
     target_idx: int,
     q_start: np.ndarray,
@@ -21,7 +22,6 @@ def compute_trajectory(
     stage: str,
     src_base_z_post_placing: Optional[float] = None,
     default_base_z: Optional[float] = 0.0,
-    container_dir: str,
 ) -> np.ndarray:
     """Computes a trajectory using OpenRAVE.
     Args:

@@ -1,13 +1,13 @@
 import copy
 import argparse
 
-N_VISION_SCENES = 2500
+N_VISION_SCENES = 5000
 N_TINY_VISION_SCENES = 1
 N_TABLE1_SCENES = 100
 
 
 EXPERIMENT_OPTIONS = {
-    "seg": {  # Training data for the segmentation module.
+    "vision": {  # Training data for the vision module.
         "plan": {
             "seed": 1,
             "task": "stack",
@@ -24,29 +24,6 @@ EXPERIMENT_OPTIONS = {
         },
         "stack": {
             "seed": 3,
-            "task": "stack",
-            "stage": "place",
-            "n_scenes": N_VISION_SCENES,
-            "save_states": True,
-        },
-    },
-    "vision": {  # Training data for the vision module.
-        "plan": {
-            "seed": 4,
-            "task": "stack",
-            "stage": "plan",
-            "n_scenes": N_VISION_SCENES,
-            "save_states": False,
-        },
-        "place": {
-            "seed": 5,
-            "task": "place",
-            "stage": "place",
-            "n_scenes": N_VISION_SCENES,
-            "save_states": True,
-        },
-        "stack": {
-            "seed": 6,
             "task": "stack",
             "stage": "place",
             "n_scenes": N_VISION_SCENES,
