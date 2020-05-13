@@ -55,7 +55,6 @@ parser.add_argument("--long_move", type=int, default=0)
 parser.add_argument("--non-det", type=int, default=0)
 parser.add_argument("--render", type=int, default=0)
 parser.add_argument("--sleep", type=int, default=0)
-parser.add_argument("--flag_0428", type=int, default=0)
 parser.add_argument("--flag_0426", type=int, default=0)
 args = parser.parse_args()
 np.random.seed(args.seed)
@@ -68,7 +67,6 @@ DUMMY_SLEEP = bool(args.sleep)
 WITH_REACHING = True
 WITH_RETRACT = True
 USE_HEIGHT_INFO = bool(args.use_height)
-FLAG_0428 = bool(args.flag_0428)
 FLAG_0426 = bool(args.flag_0426)
 TEST_PLACING = bool(args.test_placing)    # if false, test stacking
 ADD_SURROUNDING_OBJS = True
@@ -115,12 +113,11 @@ else:
         PLACE_PI = "0404_0_n_place_0404_0"
         PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
-        if FLAG_0428:
-            GRASP_PI = "0428_0_n_25_45"
-            GRASP_DIR = "./trained_models_%s/ppo/" % "0428_0_n"
-
-            PLACE_PI = "0428_0_n_place_0428_0"
-            PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
+        # GRASP_PI = "0510_0_n_25_45"
+        # GRASP_DIR = "./trained_models_%s/ppo/" % "0510_0_n"
+        #
+        # PLACE_PI = "0510_0_n_place_0510_0"
+        # PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
     else:
         GRASP_PI = "0411_0_n_25_45"
         GRASP_DIR = "./trained_models_%s/ppo/" % "0411_0_n"
@@ -129,21 +126,11 @@ else:
         PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
         if FLAG_0426:
-            # GRASP_PI = "0502_1_n_25_45"
-            # GRASP_DIR = "./trained_models_%s/ppo/" % "0502_1_n"
-            #
-            # PLACE_PI = "0502_1_n_place_0502_1"
-            # PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
             GRASP_PI = "0426_0_n_25_45"
             GRASP_DIR = "./trained_models_%s/ppo/" % "0426_0_n"
 
             PLACE_PI = "0426_0_n_place_0426_0"
             PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
-            # GRASP_PI = "0502_1_n_25_45"
-            # GRASP_DIR = "./trained_models_%s/ppo/" % "0502_1_n"
-            #
-            # PLACE_PI = "0502_1_n_place_0502_5"
-            # PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
     GRASP_PI_ENV_NAME = "InmoovHandGraspBulletEnv-v6"
     PLACE_PI_ENV_NAME = "InmoovHandPlaceBulletEnv-v9"
@@ -408,10 +395,10 @@ def get_stacking_obs(
     top_half_height = obj_state[top_oid]["height"] / 2
 
     if ADD_WHITE_NOISE:
-        top_pos = utils.perturb(np.random, top_pos, r=0.03)
-        btm_pos = utils.perturb(np.random, btm_pos, r=0.03)
-        top_up = utils.perturb(np.random, top_up, r=0.04)
-        btm_up = utils.perturb(np.random, btm_up, r=0.04)
+        top_pos = utils.perturb(np.random, top_pos, r=0.02)
+        btm_pos = utils.perturb(np.random, btm_pos, r=0.02)
+        top_up = utils.perturb(np.random, top_up, r=0.03)
+        btm_up = utils.perturb(np.random, btm_up, r=0.03)
         top_half_height = utils.perturb_scalar(np.random, top_half_height, r=0.01)
 
     return top_pos, top_up, btm_pos, btm_up, top_half_height
@@ -469,8 +456,8 @@ for trial in range(NUM_TRIALS):
         t_half_height = top_dict["height"]/2
 
         if ADD_WHITE_NOISE:
-            g_tx += np.random.uniform(low=-0.02, high=0.02)
-            g_ty += np.random.uniform(low=-0.02, high=0.02)
+            g_tx += np.random.uniform(low=-0.015, high=0.015)
+            g_ty += np.random.uniform(low=-0.015, high=0.015)
             t_half_height += np.random.uniform(low=-0.01, high=0.01)
             p_tx += np.random.uniform(low=-0.015, high=0.015)
             p_ty += np.random.uniform(low=-0.015, high=0.015)
@@ -514,7 +501,7 @@ for trial in range(NUM_TRIALS):
 
         p.resetSimulation()
 
-    if USE_HEIGHT_INFO and not FLAG_0428:       # 0428 only uses height info for obs space, not planning
+    if USE_HEIGHT_INFO:
         desired_obj_pos = [p_tx, p_ty, utils.PLACE_START_CLEARANCE + p_tz]
     else:
         if TEST_PLACING:
