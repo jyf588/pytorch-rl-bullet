@@ -60,7 +60,7 @@ async def send_to_client(websocket, path):
 
     save_t1 = args.exp.startswith("t1")
     if save_t1:
-        t1_fname = f"{opt.obs_mode}_{args.exp}_{util.get_time_dirname()}"
+        t1_fname = f"{opt.obs_mode}_{args.exp}_{util.get_time_dirname()}.json"
         t1_path = os.path.join(opt.table1_dir, t1_fname)
         assert not os.path.exists(t1_path)
 
@@ -76,6 +76,9 @@ async def send_to_client(websocket, path):
     set2success = {}
     for set_name, set_opt in set_name2opt.items():
         set2success[set_name] = {"n_success": 0, "n_or_success": 0, "n_trials": 0}
+
+        if set_name != "place":
+            continue
 
         if opt.save_states and not set_opt["save_states"]:
             continue
@@ -277,10 +280,6 @@ def get_unity_options(mode, opt, env):
 
 
 def compute_bullet_camera_targets(env, send_image):
-    print(f"send_image: {send_image}")
-    print(f"env.task: {env.task}")
-    print(f"env.stage: {env.stage}")
-    print(f"env.stage_ts: {env.stage_ts}")
     if not send_image:
         return None
 

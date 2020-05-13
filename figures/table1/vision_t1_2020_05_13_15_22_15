@@ -1,0 +1,12 @@
+{
+  "place": {
+    "n_or_success": 1,
+    "n_success": 0,
+    "n_trials": 1
+  },
+  "stack": {
+    "n_or_success": 0,
+    "n_success": 0,
+    "n_trials": 0
+  }
+}
