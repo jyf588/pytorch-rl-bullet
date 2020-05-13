@@ -13,18 +13,21 @@ EXPERIMENT_OPTIONS = {
             "task": "stack",
             "stage": "plan",
             "n_scenes": N_VISION_SCENES,
+            "save_states": False,
         },
         "place": {
             "seed": 2,
             "task": "place",
             "stage": "place",
             "n_scenes": N_VISION_SCENES,
+            "save_states": True,
         },
         "stack": {
             "seed": 3,
             "task": "stack",
             "stage": "place",
             "n_scenes": N_VISION_SCENES,
+            "save_states": True,
         },
     },
     "vision": {  # Training data for the vision module.
@@ -33,18 +36,21 @@ EXPERIMENT_OPTIONS = {
             "task": "stack",
             "stage": "plan",
             "n_scenes": N_VISION_SCENES,
+            "save_states": False,
         },
         "place": {
             "seed": 5,
             "task": "place",
             "stage": "place",
             "n_scenes": N_VISION_SCENES,
+            "save_states": True,
         },
         "stack": {
             "seed": 6,
             "task": "stack",
             "stage": "place",
             "n_scenes": N_VISION_SCENES,
+            "save_states": True,
         },
     },
     # "table1": {

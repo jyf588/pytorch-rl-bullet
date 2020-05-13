@@ -11,7 +11,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 import exp.loader
-import scene.util
+import scene.util as scene_util
 import system.base_scenes
 import bullet2unity.states
 from states_env import StatesEnv
@@ -55,13 +55,11 @@ async def send_to_client(websocket, path):
     opt = SYSTEM_OPTIONS[args.mode]
     set_name2opt = exp.loader.ExpLoader(exp_name=args.exp).set_name2opt
     for set_name, set_opt in set_name2opt.items():
-        # set_states_dir = os.path.join(
-        #     exp.loader.get_exp_set_dir(exp=args.exp, set_name=set_name), "states"
-        # )
+        if opt.save_states and not set_opt["save_states"]:
+            continue
         set_loader = exp.loader.SetLoader(exp_name=args.exp, set_name=set_name)
         id2scene = set_loader.load_id2scene()
         task = set_opt["task"]
-        # n_set_scenes = len(id2scene)
 
         for scene_id, scene in id2scene.items():
             avg_time = 0 if n_trials == 0 else (time.time() - start_time) / n_trials
@@ -84,7 +82,7 @@ async def send_to_client(websocket, path):
                     scene,
                     place_dst_xy,
                     place_dest_object,
-                ) = scene.util.convert_scene_for_placing(opt, scene)
+                ) = scene_util.convert_scene_for_placing(opt, scene)
 
             if args.mode == "unity_dataset":
                 env = StatesEnv(
@@ -189,7 +187,7 @@ async def send_to_client(websocket, path):
 
                 n_frames += 1
                 print(
-                    f"Stage: {stage}\tTimestep: {env.timestep}\tFrame rate: {n_frames / (time.time() - frames_start):.2f}"
+                    f"Exp: {args.exp}\tSet: {set_name}\tScene ID: {scene_id}\tStage: {stage}\tTimestep: {env.timestep}\tFrame rate: {n_frames / (time.time() - frames_start):.2f}"
                 )
     sys.exit(0)
 

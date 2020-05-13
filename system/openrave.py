@@ -7,8 +7,8 @@ from typing import *
 import matplotlib.pyplot as plt
 
 
-homedir = os.path.expanduser("~")
-CONTAINER_DIR = os.path.join(homedir, "container_data")
+# homedir = os.path.expanduser("~")
+# CONTAINER_DIR = os.path.join(homedir, "container_data")
 STAGE2NAME = {"reach": "REACH", "transport": "MOVE", "retract": "RETRACT"}
 MAX_OBJECTS = 6
 
@@ -21,6 +21,7 @@ def compute_trajectory(
     stage: str,
     src_base_z_post_placing: Optional[float] = None,
     default_base_z: Optional[float] = 0.0,
+    container_dir: str,
 ) -> np.ndarray:
     """Computes a trajectory using OpenRAVE.
     Args:
@@ -87,8 +88,8 @@ def compute_trajectory(
         object_positions=object_positions,
         q_start=q_start,
         q_end=q_end,
-        save_path=os.path.join(CONTAINER_DIR, f"PB_{name}.npz"),
-        load_path=os.path.join(CONTAINER_DIR, f"OR_{name}.npz"),
+        save_path=os.path.join(container_dir, f"PB_{name}.npz"),
+        load_path=os.path.join(container_dir, f"OR_{name}.npz"),
     )
     return trajectory
 

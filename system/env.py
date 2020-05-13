@@ -505,6 +505,7 @@ class DemoEnvironment:
             q_end=q_end,
             stage=stage,
             src_base_z_post_placing=expected_src_base_z_post_placing,
+            container_dir=self.container_dir,
         )
         return trajectory
 
@@ -717,18 +718,12 @@ class DemoEnvironment:
             obs = self.get_vision_observation()
             self.obs_to_render = obs
 
-            print(f"vision obs:")
-            pprint.pprint(obs)
             if self.vision_opt.use_gt_obs:
                 obs = list(self.get_state()["objects"].values())
         else:
             raise ValueError("Unsupported observation mode: {self.opt.obs_mode}")
-        print(f"obs:")
-        pprint.pprint(obs)
         if self.opt.obs_noise:
             obs = apply_obs_noise(opt=self.opt, obs=obs)
-            print(f"obs with noise:")
-            pprint.pprint(obs)
         return copy.deepcopy(obs)
 
     def get_vision_observation(self):
@@ -751,9 +746,6 @@ class DemoEnvironment:
 
         # Retrieves the image, camera pose, and object segmentation masks.
         rgb, oid2mask, cam_position, cam_orientation = self.get_images()
-        print(f"Camera info:")
-        print(f"cam_position: {cam_position}")
-        print(f"cam_orientation: {cam_orientation}")
 
         # Either predict segmentations or use ground truth.
         if self.vision_opt.use_segmentation_module:

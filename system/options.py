@@ -24,6 +24,7 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     render_obs=False,
     animate_head=False,
     save_states=False,
+    container_dir=None,
 )
 
 VISION_STATES_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
@@ -33,6 +34,7 @@ VISION_STATES_OPTIONS.render_unity = False
 VISION_STATES_OPTIONS.obs_mode = "gt"
 VISION_STATES_OPTIONS.obs_noise = False
 VISION_STATES_OPTIONS.save_states = True
+VISION_STATES_OPTIONS.container_dir = "/home/mguo/container_data_v1"
 
 UNITY_DATASET_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 UNITY_DATASET_OPTIONS.render_frequency = 1  # Render and save every state.
@@ -40,6 +42,7 @@ UNITY_DATASET_OPTIONS.render_frequency = 1  # Render and save every state.
 TEST_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 TEST_OPTIONS.enable_reaching = False
 TEST_OPTIONS.enable_retract = True
+VISION_STATES_OPTIONS.container_dir = "/home/mguo/container_data_v2"
 
 TEST_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_VISION_OPTIONS.obs_mode = "vision"
