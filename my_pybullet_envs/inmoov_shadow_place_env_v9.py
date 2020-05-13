@@ -445,7 +445,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         reward += hand_r - 7
         # print("no contact", hand_r - 7.0)
 
-        reward -= self.robot.get_4_finger_deviation() * 0.4
+        reward -= self.robot.get_4_finger_deviation() * 0.3
 
         #
         # if self.timer == 99 * self.control_skip:
