@@ -20,7 +20,7 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     render_bullet=False,
     visualize_unity=False,
     use_control_skip=True,
-    render_frequency=70,
+    render_frequency=20,
     render_obs=False,
     animate_head=False,
     save_states=False,
@@ -31,7 +31,7 @@ VISION_STATES_OPTIONS.enable_reaching = False
 VISION_STATES_OPTIONS.enable_retract = False
 VISION_STATES_OPTIONS.render_unity = False
 VISION_STATES_OPTIONS.obs_mode = "gt"
-VISION_STATES_OPTIONS.obs_noise = True
+VISION_STATES_OPTIONS.obs_noise = False
 VISION_STATES_OPTIONS.save_states = True
 
 UNITY_DATASET_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
@@ -39,16 +39,16 @@ UNITY_DATASET_OPTIONS.render_frequency = 1  # Render and save every state.
 
 TEST_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 TEST_OPTIONS.enable_reaching = False
-TEST_OPTIONS.enable_retract = False
+TEST_OPTIONS.enable_retract = True
 
 TEST_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_VISION_OPTIONS.obs_mode = "vision"
+TEST_VISION_OPTIONS.obs_noise = False
 TEST_VISION_OPTIONS.render_obs = True
-TEST_VISION_OPTIONS.visualize_unity = True
 
 TEST_GT_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_GT_OPTIONS.obs_mode = "gt"
-TEST_GT_OPTIONS.obs_noise = True
+TEST_GT_OPTIONS.obs_noise = False
 
 
 SYSTEM_OPTIONS = {
@@ -105,14 +105,14 @@ VISION_OPTIONS = argparse.Namespace(
     renderer="unity",
     use_segmentation_module=False,
     separate_vision_modules=False,
-    disable_planning=True,
+    use_gt_obs=True,
     # seg_checkpoint_path="/home/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
     # planning_checkpoint_path="/home/mguo/outputs/planning_v003_20K/checkpoint_best.pt",
     # placing_checkpoint_path="/home/mguo/outputs/placing_v003_2K_20K/checkpoint_best.pt",
     # stacking_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/checkpoint_best.pt",
     seg_checkpoint_path="/home/mguo/outputs/detectron/seg_tiny/2020_05_11_20_52_07/model_final.pth",
     # attr_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/checkpoint_best.pt",
-    attr_checkpoint_path="/home/mguo/outputs/attr_net/seg_tiny/checkpoint.pt",
+    attr_checkpoint_path="/home/mguo/outputs/attr_net/seg_tiny/checkpoint_best.pt",
     coordinate_frame="unity_camera",
     save_predictions=True,
     debug_dir=None,

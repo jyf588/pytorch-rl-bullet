@@ -712,13 +712,23 @@ class DemoEnvironment:
             # The ground truth observation is simply the same as the true
             # state of the world.
             obs = list(self.get_state()["objects"].values())
+            self.obs_to_render = obs
         elif self.opt.obs_mode == "vision":
             obs = self.get_vision_observation()
+            self.obs_to_render = obs
+
+            print(f"vision obs:")
+            pprint.pprint(obs)
+            if self.vision_opt.use_gt_obs:
+                obs = list(self.get_state()["objects"].values())
         else:
             raise ValueError("Unsupported observation mode: {self.opt.obs_mode}")
-
+        print(f"obs:")
+        pprint.pprint(obs)
         if self.opt.obs_noise:
             obs = apply_obs_noise(opt=self.opt, obs=obs)
+            print(f"obs with noise:")
+            pprint.pprint(obs)
         return copy.deepcopy(obs)
 
     def get_vision_observation(self):
@@ -728,11 +738,6 @@ class DemoEnvironment:
         Returns:
             obs: The vision observation.
         """
-        if self.stage == "plan" and self.vision_opt.disable_planning:
-            obs = list(self.get_state()["objects"].values())
-            self.last_pred_obs = copy.deepcopy(obs)
-            return obs
-
         # Select the vision module based on the current stage.
         if self.vision_opt.separate_vision_modules:
             if self.stage == "plan":
@@ -746,6 +751,10 @@ class DemoEnvironment:
 
         # Retrieves the image, camera pose, and object segmentation masks.
         rgb, oid2mask, cam_position, cam_orientation = self.get_images()
+        print(f"Camera info:")
+        print(f"cam_position: {cam_position}")
+        print(f"cam_orientation: {cam_orientation}")
+
         # Either predict segmentations or use ground truth.
         if self.vision_opt.use_segmentation_module:
             masks = self.segmentation_module.eval_example(bgr=rgb[:, :, ::-1])

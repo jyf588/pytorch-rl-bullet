@@ -8,8 +8,18 @@ N_TABLE1_SCENES = 100
 
 EXPERIMENT_OPTIONS = {
     "seg": {  # Training data for the segmentation module.
-        # "seg_plan": {"seed": 1, "task": "place", "n_scenes": N_VISION_SCENES},
-        # "seg_place": {"seed": 2, "task": "place", "n_scenes": N_VISION_SCENES},
+        "plan": {
+            "seed": 1,
+            "task": "stack",
+            "stage": "plan",
+            "n_scenes": N_VISION_SCENES,
+        },
+        "place": {
+            "seed": 2,
+            "task": "place",
+            "stage": "place",
+            "n_scenes": N_VISION_SCENES,
+        },
         "stack": {
             "seed": 3,
             "task": "stack",
@@ -18,10 +28,20 @@ EXPERIMENT_OPTIONS = {
         },
     },
     "vision": {  # Training data for the vision module.
-        # "seg_plan": {"seed": 1, "task": "place", "n_scenes": N_VISION_SCENES},
-        # "seg_place": {"seed": 2, "task": "place", "n_scenes": N_VISION_SCENES},
+        "plan": {
+            "seed": 4,
+            "task": "stack",
+            "stage": "plan",
+            "n_scenes": N_VISION_SCENES,
+        },
+        "place": {
+            "seed": 5,
+            "task": "place",
+            "stage": "place",
+            "n_scenes": N_VISION_SCENES,
+        },
         "stack": {
-            "seed": 3,
+            "seed": 6,
             "task": "stack",
             "stage": "place",
             "n_scenes": N_VISION_SCENES,

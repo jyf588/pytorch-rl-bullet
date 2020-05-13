@@ -39,6 +39,7 @@ class StatesEnv:
         # Initialize the index and timestep.
         self.idx = 0
         self.timestep = self.ts_state_list[self.idx][0]
+        self.stage_ts = self.idx
 
         # Get the initial observation.
         self.initial_obs = copy.deepcopy(scene)
@@ -91,7 +92,7 @@ class StatesEnv:
         self.scene_loader.save_rgb(self.timestep, rgb)
 
         self.scene_loader.create_masks_dir(timestep=self.timestep)
-        for mask, oidx in zip(masks, oids):
+        for mask, oid in zip(masks, oids):
             self.scene_loader.save_mask(self.timestep, mask, oid)
 
     def cleanup(self):

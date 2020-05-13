@@ -15,7 +15,7 @@ def main(args: argparse.Namespace):
     attr_metrics = Metrics()
     system_exp_name = f"system_{args.exp_name}"
     output_exp_dir = os.path.join(
-        "/home/mguo/outputs/system", args.exp_name, "2020_05_12_15_46_28"
+        "/home/mguo/outputs/system", args.exp_name, "2020_05_12_18_41_54"
     )
 
     # Loop over the predictions...

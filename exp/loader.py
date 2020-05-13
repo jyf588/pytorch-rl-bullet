@@ -18,7 +18,7 @@ class ExpLoader:
         self.set_names = list(EXPERIMENT_OPTIONS[exp_name].keys())
         self.set_name2opt = EXPERIMENT_OPTIONS[exp_name]
 
-    def get_idx2info(self):
+    def get_idx2info(self, filter_stage_oids=False):
         idx2info = {}
         idx = 0
         for set_name in self.set_names:
@@ -28,7 +28,25 @@ class ExpLoader:
                     exp_name=self.exp_name, set_name=set_name, scene_id=scene_id
                 )
                 for ts in scene_loader.get_timesteps():
-                    for oid in scene_loader.get_oids(timestep=ts):
+                    oids = scene_loader.get_oids(timestep=ts)
+                    if filter_stage_oids:
+                        stage = self.set_name2opt[set_name]["stage"]
+                        task = self.set_name2opt[set_name]["task"]
+                        if stage == "plan":
+                            filtered_oids = oids
+                        elif stage == "place":
+                            if task == "place":
+                                filtered_oids = [0]
+                            elif task == "stack":
+                                filtered_oids = [0, 1]
+                            else:
+                                raise ValueError(f"Invalid task: {task}")
+                        else:
+                            raise ValueError(f"Invalid stage: {stage}")
+                        for filtered_oid in filtered_oids:
+                            assert filtered_oid in oids
+                        oids = filtered_oids
+                    for oid in oids:
                         idx2info[idx] = (set_name, scene_id, ts, oid)
                         idx += 1
         return idx2info
@@ -143,7 +161,10 @@ class SceneLoader:
 
     def get_timesteps(self):
         timesteps = []
-        for fname in sorted(os.listdir(self.rgb_dir)):
+        timesteps_dir = self.states_dir
+        if not os.path.exists(self.states_dir):
+            timesteps_dir = self.rgb_dir
+        for fname in sorted(os.listdir(timesteps_dir)):
             ts = int(fname.split(".")[0])
             timesteps.append(ts)
         return timesteps

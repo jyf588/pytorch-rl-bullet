@@ -276,7 +276,7 @@ def compute_render_state(env, place_dest_object, render_obs, render_place):
     render_state = copy.deepcopy(state)
     if render_obs:
         render_state = add_hallucinations_to_state(
-            state=render_state, h_odicts=env.obs, color=None,
+            state=render_state, h_odicts=env.obs_to_render, color=None,
         )
     if render_place:
         render_state = add_hallucinations_to_state(
