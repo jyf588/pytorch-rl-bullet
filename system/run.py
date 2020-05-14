@@ -81,10 +81,15 @@ async def send_to_client(websocket, path):
     else:
         p.connect(p.DIRECT)
 
-    set2success = {}
+    success_metrics = {"overall": {}, "scenes": {}}
     for set_name, set_opt in set_name2opt.items():
 
-        set2success[set_name] = {"n_success": 0, "n_or_success": 0, "n_trials": 0}
+        success_metrics["overall"][set_name] = {
+            "n_success": 0,
+            "n_or_success": 0,
+            "n_trials": 0,
+        }
+        success_metrics["scenes"][set_name] = {}
 
         if opt.save_states and not set_opt["save_states"]:
             continue
@@ -207,16 +212,22 @@ async def send_to_client(websocket, path):
 
                 # Break out if we're done with the sequence, or it failed.
                 if is_done or not openrave_success:
-                    set2success[set_name]["n_trials"] += 1
+                    success_metrics["overall"][set_name]["n_trials"] += 1
+                    trial_succeeded = False
                     if openrave_success:
-                        set2success[set_name]["n_or_success"] += 1
+                        success_metrics["overall"][set_name]["n_or_success"] += 1
                         # Only check for task success if OR didn't fail.
                         if env.check_success():
-                            set2success[set_name]["n_success"] += 1
+                            trial_succeeded = True
+                            success_metrics["overall"][set_name]["n_success"] += 1
+                    success_metrics["scenes"][set_name][scene_id] = {
+                        "success": trial_succeeded,
+                        "or_success": openrave_success,
+                    }
                     env.cleanup()
-                    n_trials = set2success[set_name]["n_trials"]
-                    n_success = set2success[set_name]["n_success"]
-                    n_or_success = set2success[set_name]["n_or_success"]
+                    n_trials = success_metrics["overall"][set_name]["n_trials"]
+                    n_success = success_metrics["overall"][set_name]["n_success"]
+                    n_or_success = success_metrics["overall"][set_name]["n_or_success"]
                     success_rate = 0.0 if n_trials == 0 else n_success / n_trials
                     success_rate_wo_or = (
                         0.0 if n_or_success == 0 else n_success / n_or_success
@@ -224,13 +235,14 @@ async def send_to_client(websocket, path):
                     avg_time = (
                         0 if n_trials == 0 else (time.time() - start_time) / n_trials
                     )
+                    util.save_json(
+                        path=successes_path, data=success_metrics, check_override=False
+                    )
                     print(
                         f"Exp: {args.exp}\tSet: {set_name}\tTask: {task}\tScene ID: {scene_id}\tStage: {stage}\tTimestep: {env.timestep}\n"
                         f"Frame rate: {n_frames / (time.time() - frames_start):.2f}\tAvg trial time: {avg_time:.2f}\n"
-                        f"Success rate: {success_rate:.2f} ({n_trials})\tSuccess w/o OR failures: {success_rate_wo_or:.2f} ({n_or_success})\t# Successes: {n_success}"
-                    )
-                    util.save_json(
-                        path=successes_path, data=set2success, check_override=False
+                        f"Success rate: {success_rate:.2f} ({n_trials})\tSuccess w/o OR failures: {success_rate_wo_or:.2f} ({n_or_success})\t# Successes: {n_success}\n"
+                        f"Saved stats to: {successes_path}"
                     )
                     break
                 n_frames += 1

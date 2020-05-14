@@ -4,10 +4,9 @@ import pprint
 import shutil
 import argparse
 import collections
+import matplotlib.pyplot as plt
 
-import exp.loader
 import system.env
-from system.options import VISION_OPTIONS
 from ns_vqa_dart.bullet import util
 from ns_vqa_dart.bullet.metrics import Metrics
 from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule, register_dataset
@@ -17,7 +16,8 @@ def main():
     plan_metrics = Metrics()
     place_metrics = Metrics()
     stack_metrics = Metrics()
-    run_dir = "/home/mguo/outputs/system/t1/0404/2020_05_13_22_05_00"
+    # run_dir = "/home/mguo/outputs/system/t1/0404/2020_05_13_22_05_00"
+    run_dir = "/home/mguo/outputs/system/t1/0404/2020_05_14_10_28_54"
     pickle_dir = os.path.join(run_dir, "pickle")
 
     stage2count = collections.defaultdict(int)
@@ -55,13 +55,15 @@ def main():
     }
 
     for name, metrics in name2metrics.items():
-        metrics.print()
+        if metrics.n_total > 0:
+            metrics.print()
 
     for name, metrics in name2metrics.items():
-        metrics_path = os.path.join(run_dir, f"{name}_metrics.txt")
-        assert not os.path.exists(metrics_path)
-        sys.stdout = open(metrics_path, "wt")
-        metrics.print()
+        if metrics.n_total > 0:
+            metrics_path = os.path.join(run_dir, f"{name}_metrics.txt")
+            assert not os.path.exists(metrics_path)
+            sys.stdout = open(metrics_path, "wt")
+            metrics.print()
 
     # print(metrics_path)
     # attr_metrics.print()
