@@ -59,17 +59,13 @@ async def send_to_client(websocket, path):
     set_name2opt = exp.loader.ExpLoader(exp_name=args.exp).set_name2opt
 
     system.openrave.check_clean_container(container_dir=opt.container_dir)
+
+    # Define paths.
     run_time_str = util.get_time_dirname()
-
-    save_t1 = args.exp.startswith("t1")
-    if save_t1:
-        t1_fname = f"{opt.obs_mode}_{args.exp}_{run_time_str}.json"
-        t1_path = os.path.join(opt.table1_dir, t1_fname)
-        assert not os.path.exists(t1_path)
-
-    outputs_dir = os.path.join(
-        opt.root_outputs_dir, args.exp, opt.policy_id, run_time_str, "pickle",
-    )
+    run_dir = os.path.join(opt.root_outputs_dir, args.exp, opt.policy_id, run_time_str)
+    outputs_dir = os.path.join(run_dir, "pickle")
+    successes_path = os.path.join(run_dir, "successes.json")
+    os.makedirs(outputs_dir)
 
     # Preparing models.
     policy_opt, shape2policy_paths = system.options.get_policy_options_and_paths(
@@ -233,10 +229,9 @@ async def send_to_client(websocket, path):
                         f"Frame rate: {n_frames / (time.time() - frames_start):.2f}\tAvg trial time: {avg_time:.2f}\n"
                         f"Success rate: {success_rate:.2f} ({n_trials})\tSuccess w/o OR failures: {success_rate_wo_or:.2f} ({n_or_success})\t# Successes: {n_success}"
                     )
-                    if save_t1:
-                        util.save_json(
-                            path=t1_path, data=set2success, check_override=False
-                        )
+                    util.save_json(
+                        path=successes_path, data=set2success, check_override=False
+                    )
                     break
                 n_frames += 1
 

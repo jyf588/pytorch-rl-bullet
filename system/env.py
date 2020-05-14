@@ -83,11 +83,6 @@ class DemoEnvironment:
         self.stage2ts_bounds, self.n_total_steps = self.compute_stages()
         self.stage, self.stage_ts = self.get_current_stage()
 
-        # Initialize the vision module if we are using vision for our
-        # observations.
-        if self.opt.obs_mode == "vision" and vision_opt.save_predictions:
-            os.makedirs(outputs_dir, exist_ok=True)
-
     def cleanup(self):
         # p.disconnect()
         # del self

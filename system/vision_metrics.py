@@ -17,7 +17,8 @@ def main():
     plan_metrics = Metrics()
     place_metrics = Metrics()
     stack_metrics = Metrics()
-    pickle_dir = "/home/mguo/outputs/system/t1/0404/2020_05_13_22_05_00/pickle"
+    run_dir = "/home/mguo/outputs/system/t1/0404/2020_05_13_22_05_00"
+    pickle_dir = os.path.join(run_dir, "pickle")
 
     stage2count = collections.defaultdict(int)
     for fname in os.listdir(pickle_dir):
@@ -46,15 +47,23 @@ def main():
                     place_metrics.add_example(gt_dict=gt_odict, pred_dict=pred_odict)
                 elif task == "stack" and pred_idx in [src_idx, dst_idx]:
                     stack_metrics.add_example(gt_dict=gt_odict, pred_dict=pred_odict)
-    plan_metrics.print()
-    place_metrics.print()
-    # stack_metqrics.print()
-    print(stage2count)
 
-    # metrics_path = os.path.join(output_exp_dir, "metrics.txt")
-    # assert not os.path.exists(metrics_path)
+    name2metrics = {
+        "plan": plan_metrics,
+        "place": place_metrics,
+        "stack": stack_metrics,
+    }
+
+    for name, metrics in name2metrics.items():
+        metrics.print()
+
+    for name, metrics in name2metrics.items():
+        metrics_path = os.path.join(run_dir, f"{name}_metrics.txt")
+        assert not os.path.exists(metrics_path)
+        sys.stdout = open(metrics_path, "wt")
+        metrics.print()
+
     # print(metrics_path)
-    # sys.stdout = open(metrics_path, "wt")
     # attr_metrics.print()
 
     # register_dataset(exp_name=system_exp_name)

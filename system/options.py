@@ -28,7 +28,6 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     save_states=False,
     container_dir=None,
     policy_id="0404",  # [0404, 0411, 0510]
-    table1_dir="figures/table1",
     root_outputs_dir=os.path.join(util.get_user_homedir(), "outputs/system"),
 )
 
@@ -55,6 +54,7 @@ TEST_VISION_OPTIONS.render_unity = True
 
 TEST_GT_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_GT_OPTIONS.obs_mode = "gt"
+TEST_GT_OPTIONS.container_dir = "/home/mguo/container_data_v1"
 
 DEBUG_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 DEBUG_VISION_OPTIONS.obs_mode = "vision"
