@@ -13,6 +13,7 @@ warnings.filterwarnings("ignore")
 
 import exp.loader
 import system.policy
+import system.options
 import system.openrave
 import system.base_scenes
 import bullet2unity.states
@@ -28,7 +29,6 @@ from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
 from system.options import (
     SYSTEM_OPTIONS,
     BULLET_OPTIONS,
-    POLICY_OPTIONS,
     VISION_OPTIONS,
 )
 
@@ -58,14 +58,26 @@ async def send_to_client(websocket, path):
     opt = SYSTEM_OPTIONS[args.mode]
     set_name2opt = exp.loader.ExpLoader(exp_name=args.exp).set_name2opt
 
+    system.openrave.check_clean_container(container_dir=opt.container_dir)
+    run_time_str = util.get_time_dirname()
+
     save_t1 = args.exp.startswith("t1")
     if save_t1:
-        t1_fname = f"{opt.obs_mode}_{args.exp}_{util.get_time_dirname()}.json"
+        t1_fname = f"{opt.obs_mode}_{args.exp}_{run_time_str}.json"
         t1_path = os.path.join(opt.table1_dir, t1_fname)
         assert not os.path.exists(t1_path)
 
-    system.openrave.check_clean_container(container_dir=opt.container_dir)
-    shape2policy_dict = system.policy.get_shape2policy_dict(opt=opt)
+    outputs_dir = os.path.join(
+        opt.root_outputs_dir, args.exp, opt.policy_id, run_time_str, "pickle",
+    )
+
+    # Preparing models.
+    policy_opt, shape2policy_paths = system.options.get_policy_options_and_paths(
+        policy_id=opt.policy_id
+    )
+    shape2policy_dict = system.policy.get_shape2policy_dict(
+        opt=opt, policy_opt=policy_opt, shape2policy_paths=shape2policy_paths
+    )
     vision_models_dict = load_vision_models() if opt.obs_mode == "vision" else {}
 
     if opt.render_bullet:
@@ -75,10 +87,8 @@ async def send_to_client(websocket, path):
 
     set2success = {}
     for set_name, set_opt in set_name2opt.items():
-        set2success[set_name] = {"n_success": 0, "n_or_success": 0, "n_trials": 0}
 
-        # if set_name != "place":
-        #     continue
+        set2success[set_name] = {"n_success": 0, "n_or_success": 0, "n_trials": 0}
 
         if opt.save_states and not set_opt["save_states"]:
             continue
@@ -87,8 +97,6 @@ async def send_to_client(websocket, path):
         task = set_opt["task"]
 
         for scene_id, scene in id2scene.items():
-            # if int(scene_id) < 92:
-            #     continue
             bullet_cam_targets = {}
 
             # Modify the scene for placing, and determine placing destination.
@@ -114,7 +122,7 @@ async def send_to_client(websocket, path):
                 env = DemoEnvironment(
                     opt=opt,
                     bullet_opt=BULLET_OPTIONS,
-                    policy_opt=POLICY_OPTIONS,
+                    policy_opt=policy_opt,
                     shape2policy_dict=shape2policy_dict,
                     vision_opt=VISION_OPTIONS,
                     exp_name=args.exp,
@@ -122,6 +130,7 @@ async def send_to_client(websocket, path):
                     scene_id=scene_id,
                     scene=scene,
                     task=task,
+                    outputs_dir=outputs_dir,
                     place_dst_xy=place_dst_xy,
                     vision_models_dict=vision_models_dict,
                 )
@@ -155,7 +164,7 @@ async def send_to_client(websocket, path):
                             if env.stage in "plan":
                                 render_frequency = 1
                             elif env.stage == "place":
-                                render_frequency = POLICY_OPTIONS.vision_delay
+                                render_frequency = policy_opt.vision_delay
 
                     # Render unity and step.
                     if env.timestep % render_frequency == 0:
@@ -225,7 +234,9 @@ async def send_to_client(websocket, path):
                         f"Success rate: {success_rate:.2f} ({n_trials})\tSuccess w/o OR failures: {success_rate_wo_or:.2f} ({n_or_success})\t# Successes: {n_success}"
                     )
                     if save_t1:
-                        util.save_json(path=t1_path, data=set2success)
+                        util.save_json(
+                            path=t1_path, data=set2success, check_override=False
+                        )
                     break
                 n_frames += 1
 

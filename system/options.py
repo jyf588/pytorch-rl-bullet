@@ -1,5 +1,7 @@
+import os
 import copy
 import argparse
+import ns_vqa_dart.bullet.util as util
 
 
 BASE_SYSTEM_OPTIONS = argparse.Namespace(
@@ -25,7 +27,9 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     animate_head=False,
     save_states=False,
     container_dir=None,
+    policy_id="0404",  # [0404, 0411, 0510]
     table1_dir="figures/table1",
+    root_outputs_dir=os.path.join(util.get_user_homedir(), "outputs/system"),
 )
 
 VISION_STATES_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
@@ -72,6 +76,7 @@ BULLET_OPTIONS = argparse.Namespace(
     floor_mu=1.0,
 )
 
+
 POLICY_OPTIONS = argparse.Namespace(
     seed=101,
     init_noise=True,
@@ -86,22 +91,33 @@ POLICY_OPTIONS = argparse.Namespace(
     vision_delay=2,
 )
 
-UNIVERSAL_POLICY_NAMES = argparse.Namespace(
-    grasp_pi="0411_0_n_25_45",
-    grasp_dir="./trained_models_0411_0_n/ppo/",
-    place_dir="./trained_models_0411_0_n_place_0411_0/ppo/",
-)
 
-SPHERE_POLICY_NAMES = argparse.Namespace(
-    grasp_pi="0422_sph_n_25_45",
-    grasp_dir="./trained_models_0422_sph_n/ppo/",
-    place_dir="./trained_models_0422_sph_n_place_0422_sph/ppo/",
-)
+def get_policy_options_and_paths(policy_id: str):
+    policy_options = copy.deepcopy(POLICY_OPTIONS)
+    if policy_id == "0411":
+        grasp_pi = f"0411_0_n_25_45"
+        grasp_dir = f"./trained_models_0411_0_n/ppo/"
+        place_dir = f"./trained_models_0411_0_n_place_0411_0/ppo/"
+    elif policy_id == "0404":
+        policy_options.use_height = True
+        grasp_pi = f"0404_0_n_20_40"
+        grasp_dir = f"./trained_models_%s/ppo/" % "0404_0_n"
+        place_pi = f"0404_0_n_place_0404_0"
+        place_dir = f"./trained_models_%s/ppo/" % place_pi
 
-SHAPE2POLICY_NAMES = {
-    "universal": UNIVERSAL_POLICY_NAMES,
-    "sphere": SPHERE_POLICY_NAMES,
-}
+    shape2policy_paths = {
+        "universal": {
+            "grasp_pi": grasp_pi,
+            "grasp_dir": grasp_dir,
+            "place_dir": place_dir,
+        },
+        "sphere": {
+            "grasp_pi": "0422_sph_n_25_45",
+            "grasp_dir": "./trained_models_0422_sph_n/ppo/",
+            "place_dir": "./trained_models_0422_sph_n_place_0422_sph/ppo/",
+        },
+    }
+    return policy_options, shape2policy_paths
 
 
 VISION_OPTIONS = argparse.Namespace(

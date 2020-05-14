@@ -39,6 +39,7 @@ class DemoEnvironment:
         scene_id: int,
         scene: List[Dict],
         task: str,
+        outputs_dir: str,
         command: Optional[str] = None,
         place_dst_xy: Optional[List[float]] = None,
         vision_models_dict: Dict = None,
@@ -65,6 +66,7 @@ class DemoEnvironment:
         self.scene_id = scene_id
         self.scene = scene
         self.task = task
+        self.outputs_dir = outputs_dir
         self.command = command
         self.place_dst_xy = place_dst_xy
         self.vision_models_dict = vision_models_dict
@@ -83,15 +85,8 @@ class DemoEnvironment:
 
         # Initialize the vision module if we are using vision for our
         # observations.
-        if self.opt.obs_mode == "vision":
-            self.scene_loader = exp.loader.SceneLoader(
-                exp_name=f"system_{self.exp_name}",
-                set_name=self.set_name,
-                scene_id=self.scene_id,
-            )
-            if vision_opt.save_predictions:
-                os.makedirs(self.scene_loader.rgb_dir)
-            self.exp_time_dirname = util.get_time_dirname()
+        if self.opt.obs_mode == "vision" and vision_opt.save_predictions:
+            os.makedirs(outputs_dir, exist_ok=True)
 
     def cleanup(self):
         # p.disconnect()
@@ -722,13 +717,11 @@ class DemoEnvironment:
             vision_module = self.vision_models_dict["combined"]
 
         # Retrieves the image, camera pose, and object segmentation masks.
-        rgb, oid2mask, cam_position, cam_orientation = self.get_images()
+        rgb, oid2mask, masks, cam_position, cam_orientation = self.get_images()
 
         # Either predict segmentations or use ground truth.
         if self.vision_opt.use_segmentation_module:
             masks = self.vision_models_dict["seg"].eval_example(bgr=rgb[:, :, ::-1])
-        else:
-            masks = oid2mask.values()
 
         # Predict attributes for all the segmentations.
         pred = vision_module.predict(rgb=rgb, masks=masks, debug_id=self.timestep)
@@ -762,29 +755,25 @@ class DemoEnvironment:
         # Save the predicted and ground truth object dictionaries.
         if self.vision_opt.save_predictions:
             path = os.path.join(
-                "/home/mguo/outputs/system",
-                self.exp_name,
-                self.exp_time_dirname,
-                self.set_name,
-                self.scene_id,
-                f"{self.timestep:06}.p",
+                self.outputs_dir, f"{self.task}_{self.scene_id}_{self.timestep:06}.p",
             )
-            os.makedirs(os.path.dirname(path), exist_ok=True)
             util.save_pickle(
                 path=path,
                 data={
+                    "task": self.task,
+                    "scene_id": self.scene_id,
+                    "timestep": self.timestep,
+                    "stage": self.stage,
+                    "stage_ts": self.stage_ts,
                     "gt": {"oid2odict": self.get_state()["objects"],},
                     "pred": {"odicts": pred_obs},
                     "s2d_idxs": s2d_idxs,
                     "src_idx": self.src_idx,
                     "dst_idx": self.dst_idx,
+                    "rgb": rgb,
+                    "masks": masks,
                 },
             )
-            # Save ground truth masks for evaluation later on.
-            self.scene_loader.save_rgb(timestep=self.timestep, rgb=rgb)
-            self.scene_loader.create_masks_dir(timestep=self.timestep)
-            for oid, mask in oid2mask.items():
-                self.scene_loader.save_mask(timestep=self.timestep, mask=mask, oid=oid)
         return pred_obs
 
     def match_predictions_with_initial_obs(self, pred_odicts: List[Dict]) -> List:
@@ -864,7 +853,7 @@ class DemoEnvironment:
 
         masks, oids = ns_vqa_dart.bullet.seg.seg_img_to_map(seg_img)
         oid2mask = {oid: mask for mask, oid in zip(masks, oids)}
-        return rgb, oid2mask, camera_position, camera_orientation
+        return rgb, oid2mask, masks, camera_position, camera_orientation
 
     def set_unity_data(self, data: Dict):
         """Sets the data received from Unity.

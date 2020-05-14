@@ -1,7 +1,9 @@
 import os
 import sys
 import pprint
+import shutil
 import argparse
+import collections
 
 import exp.loader
 import system.env
@@ -11,64 +13,59 @@ from ns_vqa_dart.bullet.metrics import Metrics
 from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule, register_dataset
 
 
-def main(args: argparse.Namespace):
-    attr_metrics = Metrics()
-    system_exp_name = f"system_{args.exp_name}"
-    output_exp_dir = os.path.join(
-        "/home/mguo/outputs/system", args.exp_name, "2020_05_12_18_41_54"
-    )
+def main():
+    plan_metrics = Metrics()
+    place_metrics = Metrics()
+    pickle_dir = "/home/mguo/outputs/system/t1/0404/2020_05_13_22_05_00/pickle"
 
-    # Loop over the predictions...
-    for set_name in exp.loader.ExpLoader(exp_name=args.exp_name).set_names:
-        system_set_loader = exp.loader.SetLoader(
-            exp_name=system_exp_name, set_name=set_name
+    stage2count = collections.defaultdict(int)
+    for fname in os.listdir(pickle_dir):
+        path = os.path.join(pickle_dir, fname)
+        data = util.load_pickle(path=path)
+
+        scene_id = data["scene_id"]
+        stage = data["stage"]
+        print(f"scene_id: {scene_id}")
+        print(f"stage: {stage}")
+
+        # Compute attribute metrics.
+        gt_odicts = list(data["gt"]["oid2odict"].values())
+        pred_odicts = data["pred"]["odicts"]
+        src_idx = data["src_idx"]
+        dst_idx = data["dst_idx"]
+        gt2pred_map = system.env.match_objects(
+            src_odicts=gt_odicts, dst_odicts=pred_odicts
         )
-        system_set_loader.scenes_dir
-        scene_ids = exp.loader.SetLoader(
-            exp_name=args.exp_name, set_name=set_name
-        ).get_scene_ids()
-        if not os.path.exists(system_set_loader.scenes_dir):
-            system_set_loader.save_scenes(scenes=[[] * len(scene_ids)])
-        for scene_id in scene_ids:
-            output_scene_dir = os.path.join(output_exp_dir, set_name, scene_id)
-            for fname in sorted(os.listdir(output_scene_dir)):
-                path = os.path.join(output_scene_dir, fname)
-                data = util.load_pickle(path=path)
+        for gt_idx, gt_odict in enumerate(gt_odicts):
+            pred_idx = gt2pred_map[gt_idx]
+            pred_odict = pred_odicts[pred_idx]
+            if data["stage"] == "plan":
+                plan_metrics.add_example(gt_dict=gt_odict, pred_dict=pred_odict)
+            elif data["stage"] == "place" and pred_idx in [src_idx, dst_idx]:
+                place_metrics.add_example(gt_dict=gt_odict, pred_dict=pred_odict)
+    plan_metrics.print()
+    place_metrics.print()
+    print(stage2count)
 
-                # Compute attribute metrics.
-                gt_odicts = list(data["gt"]["oid2odict"].values())
-                pred_odicts = data["pred"]["odicts"]
-                src_idx = data["src_idx"]
-                dst_idx = data["dst_idx"]
-                gt2pred_map = system.env.match_objects(
-                    src_odicts=gt_odicts, dst_odicts=pred_odicts
-                )
-                for gt_idx, gt_odict in enumerate(gt_odicts):
-                    pred_idx = gt2pred_map[gt_idx]
-                    if pred_idx in [src_idx, dst_idx]:
-                        pred_odict = pred_odicts[pred_idx]
-                        attr_metrics.add_example(gt_dict=gt_odict, pred_dict=pred_odict)
+    # metrics_path = os.path.join(output_exp_dir, "metrics.txt")
+    # assert not os.path.exists(metrics_path)
+    # print(metrics_path)
+    # sys.stdout = open(metrics_path, "wt")
+    # attr_metrics.print()
 
-    metrics_path = os.path.join(output_exp_dir, "metrics.txt")
-    assert not os.path.exists(metrics_path)
-    print(metrics_path)
-    sys.stdout = open(metrics_path, "wt")
-    attr_metrics.print()
-
-    register_dataset(exp_name=system_exp_name)
-    seg_module = DASHSegModule(
-        mode="eval",
-        exp_name=system_exp_name,
-        checkpoint_path=VISION_OPTIONS.seg_checkpoint_path,
-    )
-    res = seg_module.eval(compute_metrics=True)
-    print(f"Segmentation Performance:")
-    pprint.pprint(res)
-    # util.save_json(path=os.path.join(output_exp_dir, "seg_metrics.json"), data=res)
+    # register_dataset(exp_name=system_exp_name)
+    # seg_module = DASHSegModule(
+    #     mode="eval",
+    #     exp_name=system_exp_name,
+    #     checkpoint_path=VISION_OPTIONS.seg_checkpoint_path,
+    # )
+    # res = seg_module.eval(compute_metrics=True)
+    # print(f"Segmentation Performance:")
+    # pprint.pprint(res)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("exp_name", type=str, help="The name of the experiment to run.")
-    args = parser.parse_args()
-    main(args)
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("exp_name", type=str, help="The name of the experiment to run.")
+    # args = parser.parse_args()
+    main()
