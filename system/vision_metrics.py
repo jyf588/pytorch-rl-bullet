@@ -16,6 +16,7 @@ from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule, register_data
 def main():
     plan_metrics = Metrics()
     place_metrics = Metrics()
+    stack_metrics = Metrics()
     pickle_dir = "/home/mguo/outputs/system/t1/0404/2020_05_13_22_05_00/pickle"
 
     stage2count = collections.defaultdict(int)
@@ -25,8 +26,7 @@ def main():
 
         scene_id = data["scene_id"]
         stage = data["stage"]
-        print(f"scene_id: {scene_id}")
-        print(f"stage: {stage}")
+        task = data["task"]
 
         # Compute attribute metrics.
         gt_odicts = list(data["gt"]["oid2odict"].values())
@@ -39,12 +39,16 @@ def main():
         for gt_idx, gt_odict in enumerate(gt_odicts):
             pred_idx = gt2pred_map[gt_idx]
             pred_odict = pred_odicts[pred_idx]
-            if data["stage"] == "plan":
+            if stage == "plan":
                 plan_metrics.add_example(gt_dict=gt_odict, pred_dict=pred_odict)
-            elif data["stage"] == "place" and pred_idx in [src_idx, dst_idx]:
-                place_metrics.add_example(gt_dict=gt_odict, pred_dict=pred_odict)
+            elif stage == "place":
+                if task == "place" and pred_idx == src_idx:
+                    place_metrics.add_example(gt_dict=gt_odict, pred_dict=pred_odict)
+                elif task == "stack" and pred_idx in [src_idx, dst_idx]:
+                    stack_metrics.add_example(gt_dict=gt_odict, pred_dict=pred_odict)
     plan_metrics.print()
     place_metrics.print()
+    # stack_metqrics.print()
     print(stage2count)
 
     # metrics_path = os.path.join(output_exp_dir, "metrics.txt")

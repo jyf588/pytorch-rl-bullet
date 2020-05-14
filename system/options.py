@@ -51,11 +51,16 @@ TEST_OPTIONS.container_dir = "/home/mguo/container_data_v2"
 
 TEST_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_VISION_OPTIONS.obs_mode = "vision"
-TEST_VISION_OPTIONS.render_obs = False
 TEST_VISION_OPTIONS.render_unity = True
 
 TEST_GT_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_GT_OPTIONS.obs_mode = "gt"
+
+DEBUG_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
+DEBUG_VISION_OPTIONS.obs_mode = "vision"
+DEBUG_VISION_OPTIONS.render_obs = True
+DEBUG_VISION_OPTIONS.render_unity = True
+DEBUG_VISION_OPTIONS.container_dir = "/home/mguo/container_data_v1"
 
 
 SYSTEM_OPTIONS = {
@@ -63,7 +68,7 @@ SYSTEM_OPTIONS = {
     "unity_dataset": UNITY_DATASET_OPTIONS,
     "test_vision": TEST_VISION_OPTIONS,
     "test_gt": TEST_GT_OPTIONS,
-    "demo": None,
+    "debug_vision": DEBUG_VISION_OPTIONS,
 }
 
 
