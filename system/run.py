@@ -77,8 +77,8 @@ async def send_to_client(websocket, path):
     for set_name, set_opt in set_name2opt.items():
         set2success[set_name] = {"n_success": 0, "n_or_success": 0, "n_trials": 0}
 
-        if set_name != "place":
-            continue
+        # if set_name != "place":
+        #     continue
 
         if opt.save_states and not set_opt["save_states"]:
             continue
@@ -87,6 +87,8 @@ async def send_to_client(websocket, path):
         task = set_opt["task"]
 
         for scene_id, scene in id2scene.items():
+            # if int(scene_id) < 92:
+            #     continue
             bullet_cam_targets = {}
 
             # Modify the scene for placing, and determine placing destination.

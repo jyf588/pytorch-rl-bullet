@@ -1,8 +1,8 @@
 {
   "place": {
-    "n_or_success": 68,
-    "n_success": 47,
-    "n_trials": 92
+    "n_or_success": 6,
+    "n_success": 3,
+    "n_trials": 8
   },
   "stack": {
     "n_or_success": 0,
