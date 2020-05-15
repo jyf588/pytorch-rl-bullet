@@ -4,10 +4,11 @@ import sys
 import time
 import copy
 import pprint
+import imageio
 import argparse
+import warnings
 import pybullet as p
 from typing import *
-import warnings
 
 warnings.filterwarnings("ignore")
 
@@ -61,6 +62,7 @@ async def send_to_client(websocket, path):
     system.openrave.check_clean_container(container_dir=opt.container_dir)
 
     # Define paths.
+    assert not os.path.exists(opt.unity_captures_dir)
     run_time_str = util.get_time_dirname()
     run_dir = os.path.join(opt.root_outputs_dir, args.exp, opt.policy_id, run_time_str)
     outputs_dir = os.path.join(run_dir, "pickle")
@@ -75,6 +77,15 @@ async def send_to_client(websocket, path):
         opt=opt, policy_opt=policy_opt, shape2policy_paths=shape2policy_paths
     )
     vision_models_dict = load_vision_models() if opt.obs_mode == "vision" else {}
+
+    # Manage experiment options.
+    system.options.print_and_save_options(
+        run_dir=run_dir,
+        system_opt=opt,
+        bullet_opt=BULLET_OPTIONS,
+        policy_opt=policy_opt,
+        vision_opt=VISION_OPTIONS,
+    )
 
     if opt.render_bullet:
         p.connect(p.GUI)
@@ -99,7 +110,6 @@ async def send_to_client(websocket, path):
 
         for scene_id, scene in id2scene.items():
             bullet_cam_targets = {}
-
             # Modify the scene for placing, and determine placing destination.
             place_dst_xy, place_dest_object = None, None
             if task == "place":
@@ -145,6 +155,7 @@ async def send_to_client(websocket, path):
 
             n_frames = 0
             frames_start = time.time()
+            update_camera_target = False
             while 1:
                 stage = env.stage
                 # Save the current state, if the current stage is a stage that should
@@ -154,6 +165,10 @@ async def send_to_client(websocket, path):
                     scene_loader.save_state(
                         scene_id=scene_id, timestep=env.timestep, state=env.get_state()
                     )
+
+                if stage in ["plan", "place", "stack"] and env.stage_ts == 0:
+                    # if stage in ["plan", "place", "stack"]:
+                    update_camera_target = True
 
                 is_render_step = False
                 if opt.render_unity:
@@ -170,24 +185,33 @@ async def send_to_client(websocket, path):
                     # Render unity and step.
                     if env.timestep % render_frequency == 0:
                         is_render_step = True
-                        state_id = f"{scene_id}_{env.timestep:06}"
+                        frame_id = f"{task}_{scene_id}_{env.timestep:06}"
                         u_opt = get_unity_options(args.mode, opt, env)
                         for (rend_obs, rend_place, send_image, should_step) in u_opt:
-                            render_state = compute_render_state(
-                                env, place_dest_object, rend_obs, rend_place
-                            )
-
                             # Compute camera targets.
-                            new_targets = compute_bullet_camera_targets(env, send_image)
-                            if new_targets is not None:
-                                bullet_cam_targets = copy.deepcopy(new_targets)
+                            if update_camera_target:
+                                bullet_cam_targets = compute_bullet_camera_targets(
+                                    opt,
+                                    env,
+                                    send_image,
+                                    save_image=opt.save_first_pov_image,
+                                )
+                                update_camera_target = False
+
+                            render_state = compute_render_state(
+                                env,
+                                place_dest_object,
+                                bullet_cam_targets,
+                                rend_obs,
+                                rend_place,
+                            )
 
                             # Compute the animation target.
                             b_ani_tar = compute_b_ani_tar(opt, env)
 
                             # Encode, send, receive, and decode.
                             message = interface.encode(
-                                state_id=state_id,
+                                state_id=frame_id,
                                 bullet_state=render_state,
                                 bullet_animation_target=b_ani_tar,
                                 bullet_cam_targets=bullet_cam_targets,
@@ -195,7 +219,7 @@ async def send_to_client(websocket, path):
                             await websocket.send(message)
                             reply = await websocket.recv()
                             data = interface.decode(
-                                state_id, reply, bullet_cam_targets=bullet_cam_targets,
+                                frame_id, reply, bullet_cam_targets=bullet_cam_targets,
                             )
 
                             # Hand the data to the env for processing.
@@ -246,7 +270,9 @@ async def send_to_client(websocket, path):
                     )
                     break
                 n_frames += 1
-
+    total_duration = time.time() - start_time
+    print(f"Finished experiment.")
+    print(f"Duration: {total_duration}")
     sys.exit(0)
 
 
@@ -285,10 +311,15 @@ def get_unity_options(mode, opt, env):
     else:
         render_place = env.task == "place"
         if opt.obs_mode == "vision":
-            # render_place = opt.render_obs and env.task == "place"
             if env.stage in ["plan", "place"]:
+                render_cur_step = False
+                if env.stage == "plan":
+                    render_cur_step = True
+                elif env.stage == "place" and env.stage_progress() < 0.4:
+                    render_cur_step = True
+
                 unity_options = [(False, False, True, True)]
-                if opt.render_obs:
+                if render_cur_step:
                     unity_options += [(True, render_place, False, False)]
             else:
                 unity_options = [(opt.render_obs, render_place, False, True)]
@@ -299,30 +330,35 @@ def get_unity_options(mode, opt, env):
     return unity_options
 
 
-def compute_bullet_camera_targets(env, send_image):
-    if not send_image:
-        return None
-
+def compute_bullet_camera_targets(opt, env, send_image, save_image):
     task = env.task
     if env.stage == "plan":
         cam_target = PLAN_TARGET_POSITION
     elif env.stage == "place":
         if task == "place":
-            cam_target = env.place_dst_xy + [env.initial_obs[env.src_idx]["height"]]
+            # TODO: This is using ground truth.
+            cam_target = bullet2unity.states.get_object_camera_target(
+                bullet_odicts=list(env.get_state()["objects"].values()),
+                oidx=opt.scene_place_src_idx,
+            )
+
+            # TODO: predicted version.
+            # cam_target = env.place_dst_xy + [env.initial_obs[env.src_idx]["height"]]
         elif task == "stack":
             cam_target = bullet2unity.states.get_object_camera_target(
                 bullet_odicts=env.initial_obs, oidx=env.dst_idx
             )
     else:
-        return None
+        raise ValueError(f"Invalid task: {task}")
 
     # Set the camera target.
     bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
         camera_control="position",
-        should_save=False,
+        should_save=save_image,
         should_send=send_image,
         position=cam_target,
     )
+    print(f"bullet_camera_targets: {bullet_camera_targets}")
     return bullet_camera_targets
 
 
@@ -353,8 +389,19 @@ def compute_b_ani_tar(opt, env):
     return b_ani_tar
 
 
-def compute_render_state(env, place_dest_object, render_obs, render_place):
+def compute_render_state(
+    env, place_dest_object, bullet_cam_targets, render_obs, render_place
+):
     state = env.get_state()
+
+    camera_target_odict = {
+        "shape": "sphere",
+        "color": "red",
+        "position": bullet_cam_targets[0]["position"],
+        "radius": 0.02,
+        "height": 0.02,
+        "orientation": [0, 0, 0, 1],
+    }
 
     # If we are rendering observations, add them to the
     # render state.
@@ -362,6 +409,9 @@ def compute_render_state(env, place_dest_object, render_obs, render_place):
     if render_obs:
         render_state = add_hallucinations_to_state(
             state=render_state, h_odicts=env.obs_to_render, color=None,
+        )
+        render_state = add_hallucinations_to_state(
+            state=render_state, h_odicts=[camera_target_odict], color=None,
         )
     if render_place:
         render_state = add_hallucinations_to_state(
