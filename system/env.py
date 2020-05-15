@@ -80,7 +80,11 @@ class DemoEnvironment:
         self.w = None
         self.src_idx, self.dst_idx = None, None
 
-        self.stage2ts_bounds, self.n_total_steps = self.compute_stages()
+        (
+            self.stage2ts_bounds,
+            self.stage2steps,
+            self.n_total_steps,
+        ) = self.compute_stages()
         self.stage, self.stage_ts = self.get_current_stage()
 
     def cleanup(self):
@@ -145,10 +149,13 @@ class DemoEnvironment:
             retract_end = retract_start + self.policy_opt.n_plan_steps
             stage2ts_bounds["retract"] = (retract_start, retract_end)
 
+        stage2steps = {}
         n_total_steps = 0
-        for start_ts, end_ts in stage2ts_bounds.values():
-            n_total_steps += end_ts - start_ts
-        return stage2ts_bounds, n_total_steps
+        for stage, (start_ts, end_ts) in stage2ts_bounds.items():
+            n_stage_steps = end_ts - start_ts
+            n_total_steps += n_stage_steps
+            stage2steps[stage] = n_stage_steps
+        return stage2ts_bounds, stage2steps, n_total_steps
 
     def get_current_stage(self) -> Tuple[str, int]:
         """Retrieves the current stage of the demo.
@@ -171,6 +178,10 @@ class DemoEnvironment:
         if current_stage is None:
             raise ValueError(f"No stage found for current timestep: {self.timestep}")
         return current_stage, stage_ts
+
+    def stage_progress(self):
+        completion_frac = self.stage_ts / self.stage2steps[self.stage]
+        return completion_frac
 
     def step(self):
         """Policy performs a single action based on the current state.
