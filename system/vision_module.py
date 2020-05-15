@@ -4,6 +4,7 @@ import imageio
 import numpy as np
 from typing import *
 from argparse import Namespace
+import matplotlib.pyplot as plt
 
 import torch
 import torchvision.transforms as transforms
@@ -15,7 +16,7 @@ from ns_vqa_dart.scene_parse.attr_net.options import BaseOptions
 
 
 class VisionModule:
-    def __init__(self, load_checkpoint_path: str, debug_dir: str):
+    def __init__(self, load_checkpoint_path: str, debug_dir=None):
         self.debug_dir = debug_dir
         options = self.get_options(load_checkpoint_path=load_checkpoint_path)
         self.model = get_model(options)
@@ -41,7 +42,9 @@ class VisionModule:
         options = BaseOptions().parse(opt=options, save_options=False)
         return options
 
-    def predict(self, rgb: np.ndarray, masks: np.ndarray, debug_id: int) -> np.ndarray:
+    def predict(
+        self, rgb: np.ndarray, masks: np.ndarray, inputs_path=None
+    ) -> np.ndarray:
         """Runs inference on an image to get vision predictions.
 
         Args:
@@ -63,18 +66,15 @@ class VisionModule:
             data.append(X)
 
         # Writing images for debugging.
-        self.gen_debug_images(
-            data=data,
-            show_window=False,
-            save_image=self.debug_dir is not None,
-            debug_id=debug_id,
+        inputs_img = self.gen_debug_images(
+            data=data, show_window=False, save_path=inputs_path,
         )
 
         # Predict.
         data = np.array(data)
         assert data.shape == (len(masks), W, W, 6)  # (N, W, W, 6)
         pred = self.predict_from_data(data=data)
-        return pred
+        return pred, inputs_img
 
     def predict_from_data(self, data: np.ndarray):
         """
@@ -89,6 +89,18 @@ class VisionModule:
         for i in range(N):
             X[i] = self.data_transforms(data[i])
 
+            # data_rgb = np.hstack([data[i][:, :, :3], data[i][:, :, 3:6]])
+            # imageio.imwrite("/home/mguo/before_normalize.png", data_rgb)
+
+            # normalized_rgb = X[i].numpy()
+            # normalized_rgb = np.moveaxis(normalized_rgb, 0, -1)
+            # normalized_rgb = np.hstack(
+            #     [normalized_rgb[:, :, :3], normalized_rgb[:, :, 3:6]]
+            # )
+            # bgr_normalized_img = normalized_rgb[:, :, ::-1]
+            # cv2.imshow("normalized", bgr_normalized_img)
+            # cv2.waitKey(0)
+
         # Run the model.
         self.model.set_input(X)
         self.model.forward()
@@ -96,7 +108,7 @@ class VisionModule:
         return pred
 
     def gen_debug_images(
-        self, data: List[np.ndarray], show_window=False, save_image=False, debug_id=None
+        self, data: List[np.ndarray], show_window=False, save_path=None
     ):
         """
         Args:
@@ -112,8 +124,8 @@ class VisionModule:
             cv2.imshow("data", image[:, :, ::-1])
             cv2.waitKey(0)
 
-        if save_image:
-            path = os.path.join(self.debug_dir, f"{debug_id:04}", "vision_input.png")
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            imageio.imwrite(path, image)
-            print(f"Wrote debug image to: {path}")
+        if save_path is not None:
+            os.makedirs()
+            imageio.imwrite(save_path, image)
+            print(f"Wrote image of vision module inputs to: {save_path}")
+        return image
