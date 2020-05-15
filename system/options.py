@@ -28,6 +28,7 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     save_states=False,
     container_dir=None,
     policy_id="0404",  # [0404, 0411, 0510]
+    save_first_pov_image=False,
     root_outputs_dir=os.path.join(util.get_user_homedir(), "outputs/system"),
 )
 
@@ -60,8 +61,10 @@ DEBUG_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 DEBUG_VISION_OPTIONS.obs_mode = "vision"
 DEBUG_VISION_OPTIONS.render_obs = True
 DEBUG_VISION_OPTIONS.render_unity = True
+DEBUG_VISION_OPTIONS.save_first_pov_image = True
 DEBUG_VISION_OPTIONS.container_dir = "/home/mguo/container_data_v1"
-
+DEBUG_VISION_OPTIONS.enable_reaching = False
+DEBUG_VISION_OPTIONS.enable_retract = False
 
 SYSTEM_OPTIONS = {
     "vision_states": VISION_STATES_OPTIONS,
@@ -132,7 +135,8 @@ VISION_OPTIONS = argparse.Namespace(
     use_gt_obs=False,
     seg_checkpoint_path="/home/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
     planning_checkpoint_path="/home/mguo/outputs/planning_v003_20K/checkpoint_best.pt",
-    placing_checkpoint_path="/home/mguo/outputs/placing_v003_2K_20K/2020_04_22_04_35/checkpoint_best.pt",
+    # placing_checkpoint_path="/home/mguo/outputs/placing_v003_2K_20K/2020_04_22_04_35/checkpoint_best.pt",
+    placing_checkpoint_path="/home/mguo/outputs/placing_v003_2K_20K/2020_05_15_02_18_08/checkpoint_best.pt",
     stacking_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/checkpoint_best.pt",
     # seg_checkpoint_path="/home/mguo/outputs/detectron/seg_tiny/2020_05_11_20_52_07/model_final.pth",
     # attr_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/checkpoint_best.pt",
