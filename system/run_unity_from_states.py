@@ -18,9 +18,7 @@ global args
 
 def main():
     # Start the python server.
-    interface.run_server(
-        hostname=args.hostname, port=args.port, handler=send_to_client
-    )
+    interface.run_server(hostname=args.hostname, port=args.port, handler=send_to_client)
 
 
 async def send_to_client(websocket, path):
@@ -30,8 +28,7 @@ async def send_to_client(websocket, path):
         states_dir=args.states_dir, start_id=args.start_id, end_id=args.end_id
     )
     saver = UnitySaver(
-        out_dir=args.out_dir,
-        save_keys=["camera_position", "camera_orientation"],
+        out_dir=args.out_dir, save_keys=["camera_position", "camera_orientation"],
     )
     # cam_target_position = [0.075, 0.2, 0.155]
     # cam_target_position = [-0.06, 0.3, 0.0]
@@ -83,8 +80,8 @@ async def send_to_client(websocket, path):
 
         bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
             camera_control=args.camera_control,
-            bullet_odicts=None,
-            use_oids=False,
+            # bullet_odicts=None,
+            # use_oids=False,
             should_save=True,
             should_send=False,
             position=first_object_cam_target,
@@ -98,14 +95,13 @@ async def send_to_client(websocket, path):
         message = interface.encode(
             state_id=msg_id,
             bullet_state=bullet_state,
-            bullet_camera_targets=bullet_camera_targets,
+            bullet_animation_target=None,
+            bullet_cam_targets=bullet_camera_targets,
         )
         await websocket.send(message)
         reply = await websocket.recv()
         # input("enter")
-        data = interface.decode(
-            msg_id, reply, bullet_camera_targets=bullet_camera_targets
-        )
+        data = interface.decode(msg_id, reply, bullet_cam_targets=bullet_camera_targets)
         saver.save(msg_id, data)
 
         n_iter += 1
@@ -121,13 +117,10 @@ if __name__ == "__main__":
     global args
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--hostname",
-        type=str,
-        default="127.0.0.1",
-        help="The hostname of the server.",
+        "--hostname", type=str, default="127.0.0.1", help="The hostname of the server.",
     )
     parser.add_argument(
-        "--port", type=int, default=9000, help="The port of the server."
+        "--port", type=int, default=8000, help="The port of the server."
     )
     parser.add_argument(
         "--states_dir",
@@ -142,10 +135,7 @@ if __name__ == "__main__":
         help="The state ID to start generation at.",
     )
     parser.add_argument(
-        "--end_id",
-        required=True,
-        type=int,
-        help="The state ID to end generation at.",
+        "--end_id", required=True, type=int, help="The state ID to end generation at.",
     )
     parser.add_argument(
         "--camera_control",
