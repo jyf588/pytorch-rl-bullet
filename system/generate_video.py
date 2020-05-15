@@ -3,68 +3,77 @@ import os
 import shutil
 import argparse
 
+from ns_vqa_dart.bullet import util
 
-POV = "first"
-TRIM = False
+render_frequency = 5
+speed_up_factor = 27 / render_frequency
 
 
 def main(args: argparse.Namespace):
-    fps = 30
-    render_frequency = 5
-    speed_up_factor = 27 / render_frequency
+    src_dir = os.path.join(args.run_dir, "Captures/temp", args.pov, "rgb")
 
     # First pov images are not ordered, so we need to re-order them.
-    src_dir = args.src_dir
-    reorder = False
-    if POV == "first":
-        reorder = True
+    reorder = args.pov == "first"
 
+    # Create a reordered directory of images that ffmpeg can run on.
     if reorder:
-        tmp_dir = "/home/mguo/tmp_ffmpeg"
-        os.makedirs(tmp_dir)
-        for idx, fname in enumerate(sorted(os.listdir(args.src_dir))):
-            src_path = os.path.join(args.src_dir, fname)
-            dst_path = os.path.join(tmp_dir, f"{idx:06}.png")
-            shutil.copyfile(src_path, dst_path)
-        src_dir = tmp_dir
+        create_orderered_dir(src_dir, args.reordered_src_dir)
+        src_dir = args.reordered_src_dir
 
-    # Demo command
-    # demo_command = f'ffmpeg -i {src_dir}/%06d.png -filter:v "setpts=PTS/{speed_up_factor},fps={fps}" -vb 20M -vcodec mpeg4 -y {args.dst_path}.mp4'
-    debug_command = f'ffmpeg -i {src_dir}/%06d.png -filter:v "fps={fps}" -vb 20M -vcodec mpeg4 -y {args.dst_path}.mp4'
+    dst_path = os.path.join(args.run_dir, f"{args.pov}.mp4")
+    generate_video(src_dir=src_dir, dst_path=dst_path, fps=args.fps)
 
-    os.system(debug_command)
+    # Delete the temporary reordered directory.
     if reorder:
-        shutil.rmtree(tmp_dir)
+        shutil.rmtree(args.reordered_src_dir)
 
-    if TRIM:
-        trim_command = f"ffmpeg -ss 00:00:00 -t 00:01:44 -i {args.dst_path}.mp4 -vcodec copy -acodec copy {args.dst_path}_trimmed.mp4"
-        os.system(trim_command)
+    # if TRIM:
+    #     trim_command = f"ffmpeg -ss 00:00:00 -t 00:01:44 -i {args.dst_path}.mp4 -vcodec copy -acodec copy {args.dst_path}_trimmed.mp4"
+    #     os.system(trim_command)
+
+
+def generate_video(src_dir: str, dst_path: str, fps: int, speed_up_factor: int = None):
+    assert not os.path.exists(dst_path)
+
+    if speed_up_factor is not None:
+        arg = f"setpts=PTS/{speed_up_factor},fps={fps}"
+    else:
+        arg = f"fps={fps}"
+
+    command = f'ffmpeg -i {src_dir}/%06d.png -filter:v "{arg}" -vb 20M -vcodec mpeg4 -y {dst_path}'
+    os.system(command)
+
+
+def create_orderered_dir(orig_dir, reordered_dir):
+    util.delete_and_create_dir(reordered_dir)
+    for idx, fname in enumerate(sorted(os.listdir(orig_dir))):
+        src_path = os.path.join(orig_dir, fname)
+        dst_path = os.path.join(reordered_dir, f"{idx:06}.png")
+        shutil.copyfile(src_path, dst_path)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--src_dir",
+        "--run_dir",
         type=str,
-        # default="/Users/michelleguo/workspace/lucas/unity/Captures/temp/third/rgb",
-        # default="/Users/michelleguo/Desktop/dash/demo_video/vision/0507",
-        # default="/home/mguo/unity/Builds/LinuxBuildLocalhost0512/0514_Captures/temp/third/rgb",
-        default="/home/mguo/outputs/system/t1/0404/2020_05_14_14_21_40/Captures/temp/first/rgb",
-        # default="/home/mguo/outputs/system/t1/0404/2020_05_14_14_21_40/Captures/temp/third/rgb",
+        default="/home/mguo/outputs/system/t1/0404/2020_05_15_12_51_33",
         help="The directory containing the png images to convert into video format.",
     )
-    # parser.add_argument(
-    #     "--temp_path",
-    #     type=str,
-    #     default="/Users/michelleguo/Desktop/tmp.mp4",
-    #     help="The destination path to write the mp4 video to.",
-    # )
     parser.add_argument(
-        "--dst_path",
+        "--pov",
         type=str,
-        # default="/Users/michelleguo/Desktop/test.mp4",
-        default="/home/mguo/test",
-        help="The destination path to write the mp4 video to.",
+        default="first",
+        help="The point of view to generate video for.",
+    )
+    parser.add_argument(
+        "--reordered_src_dir",
+        type=str,
+        default="/home/mguo/tmp_ffmpeg",
+        help="The directory containing the png images to convert into video format.",
+    )
+    parser.add_argument(
+        "--fps", type=int, default=30, help="The frames per second.",
     )
     args = parser.parse_args()
     main(args=args)
