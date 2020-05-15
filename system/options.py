@@ -30,6 +30,9 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     policy_id="0404",  # [0404, 0411, 0510]
     save_first_pov_image=False,
     root_outputs_dir=os.path.join(util.get_user_homedir(), "outputs/system"),
+    unity_captures_dir=os.path.join(
+        util.get_user_homedir(), "unity/Builds/LinuxBuildLocalhost0512/Captures"
+    ),
 )
 
 VISION_STATES_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
@@ -52,6 +55,9 @@ TEST_OPTIONS.container_dir = None
 TEST_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_VISION_OPTIONS.obs_mode = "vision"
 TEST_VISION_OPTIONS.render_unity = True
+TEST_VISION_OPTIONS.render_obs = True
+TEST_VISION_OPTIONS.save_first_pov_image = True
+TEST_VISION_OPTIONS.container_dir = "/home/mguo/container_data_v1"
 
 TEST_GT_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_GT_OPTIONS.obs_mode = "gt"
@@ -59,12 +65,13 @@ TEST_GT_OPTIONS.container_dir = None
 
 DEBUG_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 DEBUG_VISION_OPTIONS.obs_mode = "vision"
-DEBUG_VISION_OPTIONS.render_obs = True
 DEBUG_VISION_OPTIONS.render_unity = True
+DEBUG_VISION_OPTIONS.render_obs = True
 DEBUG_VISION_OPTIONS.save_first_pov_image = True
 DEBUG_VISION_OPTIONS.container_dir = "/home/mguo/container_data_v1"
 DEBUG_VISION_OPTIONS.enable_reaching = False
 DEBUG_VISION_OPTIONS.enable_retract = False
+
 
 SYSTEM_OPTIONS = {
     "vision_states": VISION_STATES_OPTIONS,
@@ -145,3 +152,26 @@ VISION_OPTIONS = argparse.Namespace(
     save_predictions=True,
     debug_dir=None,
 )
+
+
+def print_and_save_options(
+    run_dir: str, system_opt, bullet_opt, policy_opt, vision_opt
+):
+    name2opt = {
+        "system": system_opt,
+        "bullet": bullet_opt,
+        "policy": policy_opt,
+        "vision": vision_opt,
+    }
+    for name, opt in name2opt.items():
+        args = vars(opt)
+        print("| options")
+        for k, v in args.items():
+            print("%s: %s" % (str(k), str(v)))
+
+        filename = os.path.join(run_dir, f"{name}_options.txt")
+        file_path = os.path.join(run_dir, filename)
+        with open(file_path, "wt") as fout:
+            fout.write("| options\n")
+            for k, v in sorted(args.items()):
+                fout.write("%s: %s\n" % (str(k), str(v)))
