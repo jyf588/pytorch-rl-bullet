@@ -719,7 +719,18 @@ class DemoEnvironment:
             masks = self.vision_models_dict["seg"].eval_example(bgr=rgb[:, :, ::-1])
 
         # Predict attributes for all the segmentations.
-        pred = vision_module.predict(rgb=rgb, masks=masks, debug_id=self.timestep)
+        pred, inputs_img = vision_module.predict(rgb=rgb, masks=masks)
+
+        # pred_obs = copy.deepcopy(self.scene)
+        # Convert vectorized predictions to dictionary form. The
+        # predicted pose is also transformed using camera information.
+        # odict = dash_object.y_vec_to_dict(
+        #     y=list(pred[0]),
+        #     coordinate_frame=self.vision_opt.coordinate_frame,
+        #     cam_position=cam_position,
+        #     cam_orientation=cam_orientation,
+        # )
+        # pred_obs[0] = odict
 
         pred_odicts = []
         for y in pred:
@@ -749,9 +760,8 @@ class DemoEnvironment:
 
         # Save the predicted and ground truth object dictionaries.
         if self.vision_opt.save_predictions:
-            path = os.path.join(
-                self.outputs_dir, f"{self.task}_{self.scene_id}_{self.timestep:06}.p",
-            )
+            frame_fname = f"{self.task}_{self.scene_id}_{self.timestep:06}"
+            path = os.path.join(self.outputs_dir, f"{frame_fname}.p",)
             util.save_pickle(
                 path=path,
                 data={
@@ -767,6 +777,7 @@ class DemoEnvironment:
                     "dst_idx": self.dst_idx,
                     "rgb": rgb,
                     "masks": masks,
+                    "vision_inputs": inputs_img,
                 },
             )
         return pred_obs
