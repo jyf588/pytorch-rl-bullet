@@ -721,17 +721,6 @@ class DemoEnvironment:
         # Predict attributes for all the segmentations.
         pred, inputs_img = vision_module.predict(rgb=rgb, masks=masks)
 
-        # pred_obs = copy.deepcopy(self.scene)
-        # Convert vectorized predictions to dictionary form. The
-        # predicted pose is also transformed using camera information.
-        # odict = dash_object.y_vec_to_dict(
-        #     y=list(pred[0]),
-        #     coordinate_frame=self.vision_opt.coordinate_frame,
-        #     cam_position=cam_position,
-        #     cam_orientation=cam_orientation,
-        # )
-        # pred_obs[0] = odict
-
         pred_odicts = []
         for y in pred:
             # Convert vectorized predictions to dictionary form. The
