@@ -149,7 +149,7 @@ VISION_V2_MODELS = {
 
 plan_model = VISION_V1_MODELS["plan"]
 place_model = VISION_V2_MODELS["place"]
-stack_model = VISION_V1_MODELS["stack"]
+stack_model = VISION_V2_MODELS["stack"]
 
 VISION_OPTIONS = argparse.Namespace(
     seed=None,
