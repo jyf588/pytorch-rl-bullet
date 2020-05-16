@@ -4,6 +4,9 @@ import argparse
 import ns_vqa_dart.bullet.util as util
 
 
+# UNITY_NAME = "Linux8000_0512"
+UNITY_NAME = "Linux8001_0515"
+
 BASE_SYSTEM_OPTIONS = argparse.Namespace(
     seed=101,
     is_cuda=True,
@@ -34,7 +37,7 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     save_first_pov_image=False,
     root_outputs_dir=os.path.join(util.get_user_homedir(), "outputs/system"),
     unity_captures_dir=os.path.join(
-        util.get_user_homedir(), "unity/builds/Linux8000_0512/Captures"
+        util.get_user_homedir(), f"unity/builds/{UNITY_NAME}/Captures"
     ),
 )
 
@@ -52,7 +55,7 @@ UNITY_DATASET_OPTIONS.render_unity = True
 TEST_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 TEST_OPTIONS.enable_reaching = True
 TEST_OPTIONS.enable_retract = False  # Retract is excluded from Table 1 evaluation.
-TEST_OPTIONS.container_dir = "/home/mguo/container_data_v1"
+TEST_OPTIONS.container_dir = "/home/mguo/container_data_v2"
 
 TEST_GT_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_GT_OPTIONS.obs_mode = "gt"
@@ -147,7 +150,7 @@ VISION_V2_MODELS = {
     "stack": "2020_05_16_02_36_30",
 }
 
-plan_model = VISION_V1_MODELS["plan"]
+plan_model = VISION_V2_MODELS["plan"]
 place_model = VISION_V2_MODELS["place"]
 stack_model = VISION_V2_MODELS["stack"]
 
