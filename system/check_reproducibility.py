@@ -4,7 +4,7 @@ from ns_vqa_dart.bullet import util
 
 GT_RUN_NAMES = ["2020_05_15_22_47_48", "2020_05_15_22_50_35", "2020_05_15_23_06_50"]
 GT_UNITY_RUN_NAMES = ["2020_05_15_23_31_33"]
-VISION_SEG_RUN_NAMES = ["2020_05_16_01_41_05", "2020_05_16_01_41_33"]
+VISION_SEG_RUN_NAMES = ["2020_05_16_02_05_16", "2020_05_16_02_11_06"]
 
 
 def main():
@@ -26,13 +26,13 @@ def main():
             ts = int(ts_str)
             path = os.path.join(states_dir, fname)
             state = util.load_pickle(path=path)
-            if task == "stack" and int(scene_id) == 0 and ts < 300:
-                run2task2id2ts[run_name][task][scene_id][ts] = state
-                e = (task, scene_id, ts)
-                if e not in examples:
-                    examples.append((task, scene_id, ts))
+            run2task2id2ts[run_name][task][scene_id][ts] = state
+            e = (task, scene_id, ts)
+            if e not in examples:
+                examples.append((task, scene_id, ts))
 
     # Now, loop over the timesteps and compare across runs.
+    num_diff = 0
     for task, sid, ts in examples:
         states = []
         for run in run_names:
@@ -43,11 +43,14 @@ def main():
         for idx, state in enumerate(states):
             if src_state != state:
                 x1, x2 = extract_robot_states(src_state, state)
-                if not np.allclose(x1, x2, 1e-07, 1e-07):
+                if not np.allclose(x1, x2, 1e-03, 1e-03):
+                    num_diff += 1
                     print(
                         f"Run {run_names[src_idx]} and {run_names[idx]} do not match for task {task}, sid {sid}, ts {ts}."
                     )
                     print(f"Diff: {(x1-x2)/x2}")
+    print(f"Num diff: {num_diff}")
+    print(f"Total: {len(examples)}")
 
 
 def extract_robot_states(s1, s2):
