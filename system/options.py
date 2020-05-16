@@ -31,7 +31,7 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     save_first_pov_image=False,
     root_outputs_dir=os.path.join(util.get_user_homedir(), "outputs/system"),
     unity_captures_dir=os.path.join(
-        util.get_user_homedir(), "unity/Builds/LinuxBuildLocalhost0512/Captures"
+        util.get_user_homedir(), "unity/builds/Linux8000_0512/Captures"
     ),
 )
 
