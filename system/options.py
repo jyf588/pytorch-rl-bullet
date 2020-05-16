@@ -137,7 +137,7 @@ def get_policy_options_and_paths(policy_id: str):
 
 VISION_OPTIONS = argparse.Namespace(
     renderer="unity",
-    use_segmentation_module=False,
+    use_segmentation_module=True,
     separate_vision_modules=True,
     use_gt_obs=False,
     seg_checkpoint_path="/home/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
@@ -150,13 +150,14 @@ VISION_OPTIONS = argparse.Namespace(
     # attr_checkpoint_path="/home/mguo/outputs/attr_net/seg_tiny/checkpoint_best.pt",
     coordinate_frame="unity_camera",
     save_predictions=True,
-    debug_dir=None,
 )
 
 
 def print_and_save_options(
     run_dir: str, system_opt, bullet_opt, policy_opt, vision_opt
 ):
+    options_dir = os.path.join(run_dir, "options")
+    os.makedirs(options_dir)
     name2opt = {
         "system": system_opt,
         "bullet": bullet_opt,
@@ -169,8 +170,8 @@ def print_and_save_options(
         for k, v in args.items():
             print("%s: %s" % (str(k), str(v)))
 
-        filename = os.path.join(run_dir, f"{name}_options.txt")
-        file_path = os.path.join(run_dir, filename)
+        filename = f"{name}.txt"
+        file_path = os.path.join(options_dir, filename)
         with open(file_path, "wt") as fout:
             fout.write("| options\n")
             for k, v in sorted(args.items()):
