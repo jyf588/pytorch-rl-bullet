@@ -49,7 +49,7 @@ async def send_to_client(websocket, path):
             break
 
         # We update every frame if trial info is not provided.
-        if args.update_cam_target_every_frame:
+        if args.missing_trial_info:
             update_cam_target = True
         else:
             # This is the first frame of the trial if the trial of the current
@@ -58,44 +58,19 @@ async def send_to_client(websocket, path):
             update_cam_target = trial != last_trial
 
         if update_cam_target:
-            first_object_cam_target = bullet2unity.states.get_object_camera_target(
-                bullet_odicts=list(bullet_state["objects"].values()), oidx=0
+            # GT index of target object is always 0.
+            target_oidx = 0
+            odicts = list(bullet_state["objects"].values())
+
+            # We don't need the image sent but we need unity save the first person
+            # images it generates.
+            bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
+                stage=args.stage,
+                send_image=False,
+                save_image=True,
+                odicts=odicts,
+                oidx=target_oidx,
             )
-
-        # Create a state with extreme object locations and sides.
-        # extreme_xy = [
-        #     (utils.TX_MIN, utils.TY_MIN),
-        #     (utils.TX_MIN + 0.15, utils.TY_MAX - 0.15),
-        #     (utils.TX_MAX, utils.TY_MIN),
-        #     (utils.TX_MAX, utils.TY_MAX),
-        # ]
-        # base_odict = {
-        #     "radius": utils.HALF_W_MAX,
-        #     "height": utils.H_MAX,
-        #     "orientation": [0.0, 0.0, 0.0, 1.0],
-        # }
-        # colors = ["red", "green", "blue", "yellow"]
-        # shapes = ["cylinder", "box", "cylinder", "box"]
-        # bullet_state = {"objects": {}}
-        # for odict_idx, (x, y) in enumerate(extreme_xy):
-        #     extreme_odict = copy.deepcopy(base_odict)
-        #     extreme_odict["shape"] = shapes[odict_idx]
-        #     extreme_odict["color"] = colors[odict_idx]
-        #     extreme_odict["position"] = [x, y, utils.H_MAX / 2]
-        #     bullet_state["objects"][odict_idx] = extreme_odict
-
-        bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
-            camera_control=args.camera_control,
-            # bullet_odicts=None,
-            # use_oids=False,
-            should_save=True,
-            should_send=False,
-            position=first_object_cam_target,
-        )
-
-        # print("bullet state objects:")
-        # pprint.pprint(bullet_state["objects"])
-        # input("x")
 
         # Encode, send, receive, and decode.
         message = interface.encode(
@@ -106,7 +81,6 @@ async def send_to_client(websocket, path):
         )
         await websocket.send(message)
         reply = await websocket.recv()
-        # input("enter")
         data = interface.decode(msg_id, reply, bullet_cam_targets=bullet_camera_targets)
         saver.save(msg_id, data)
 
@@ -115,12 +89,35 @@ async def send_to_client(websocket, path):
         print(f"Average iteration time: {avg_iter_time:.2f}")
 
         # Store the current trial as the "last trial".
-        if args.update_cam_target_every_frame:
+        if args.missing_trial_info:
             pass
         else:
             last_trial = trial
     print(f"Time elapsed: {time.time() - start}")
     sys.exit(0)
+
+
+# Create a state with extreme object locations and sides.
+# extreme_xy = [
+#     (utils.TX_MIN, utils.TY_MIN),
+#     (utils.TX_MIN + 0.15, utils.TY_MAX - 0.15),
+#     (utils.TX_MAX, utils.TY_MIN),
+#     (utils.TX_MAX, utils.TY_MAX),
+# ]
+# base_odict = {
+#     "radius": utils.HALF_W_MAX,
+#     "height": utils.H_MAX,
+#     "orientation": [0.0, 0.0, 0.0, 1.0],
+# }
+# colors = ["red", "green", "blue", "yellow"]
+# shapes = ["cylinder", "box", "cylinder", "box"]
+# bullet_state = {"objects": {}}
+# for odict_idx, (x, y) in enumerate(extreme_xy):
+#     extreme_odict = copy.deepcopy(base_odict)
+#     extreme_odict["shape"] = shapes[odict_idx]
+#     extreme_odict["color"] = colors[odict_idx]
+#     extreme_odict["position"] = [x, y, utils.H_MAX / 2]
+#     bullet_state["objects"][odict_idx] = extreme_odict
 
 
 if __name__ == "__main__":
@@ -145,6 +142,15 @@ if __name__ == "__main__":
         help="The directory of states to read from and send to client.",
     )
     parser.add_argument(
+        "--cam_dir",
+        required=True,
+        type=str,
+        help="The output directory to save client data to.",
+    )
+    parser.add_argument(
+        "--stage", required=True, type=str, help="The stage of the dataset.",
+    )
+    parser.add_argument(
         "--start_id",
         required=True,
         type=int,
@@ -154,22 +160,9 @@ if __name__ == "__main__":
         "--end_id", required=True, type=int, help="The state ID to end generation at.",
     )
     parser.add_argument(
-        "--camera_control",
-        required=True,
-        type=str,
-        choices=["all", "center", "stack", "position"],
-        help="The method of camera control.",
-    )
-    parser.add_argument(
-        "--update_cam_target_every_frame",
+        "--missing_trial_info",
         action="store_true",
-        help="Whether to recompute / update cam target every frame.",
-    )
-    parser.add_argument(
-        "--cam_dir",
-        required=True,
-        type=str,
-        help="The output directory to save client data to.",
+        help="Whether it's missing trial info in the states, so we recompute / update cam target every frame.",
     )
     args = parser.parse_args()
     main()
