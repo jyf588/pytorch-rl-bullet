@@ -24,11 +24,16 @@ def main():
 async def send_to_client(websocket, path):
     global args
 
+    # Ensure that the unity dir exists but the captures dir does not.
+    captures_dir = os.path.join(args.unity_dir, "Captures")
+    assert os.path.exists(args.unity_dir)
+    assert not os.path.exists(captures_dir)
+
     loader = DatasetLoader(
         states_dir=args.states_dir, start_id=args.start_id, end_id=args.end_id
     )
     saver = UnitySaver(
-        out_dir=args.out_dir, save_keys=["camera_position", "camera_orientation"],
+        cam_dir=args.cam_dir, save_keys=["camera_position", "camera_orientation"],
     )
     # cam_target_position = [0.075, 0.2, 0.155]
     # cam_target_position = [-0.06, 0.3, 0.0]
@@ -43,18 +48,19 @@ async def send_to_client(websocket, path):
         if bullet_state is None:
             break
 
-        # This is the first frame of the trial if the trial of the current
-        # state is different from the last trial.
-        trial = bullet_state["trial"]
-        first_frame = trial != last_trial
+        # We update every frame if trial info is not provided.
+        if args.update_cam_target_every_frame:
+            update_cam_target = True
+        else:
+            # This is the first frame of the trial if the trial of the current
+            # state is different from the last trial.
+            trial = bullet_state["trial"]
+            update_cam_target = trial != last_trial
 
-        if first_frame:
+        if update_cam_target:
             first_object_cam_target = bullet2unity.states.get_object_camera_target(
                 bullet_odicts=list(bullet_state["objects"].values()), oidx=0
             )
-        # print(f"first_frame: {first_frame}")
-        # print(f"first_object_cam_target: {first_object_cam_target}")
-        # input("x")
 
         # Create a state with extreme object locations and sides.
         # extreme_xy = [
@@ -109,7 +115,11 @@ async def send_to_client(websocket, path):
         print(f"Average iteration time: {avg_iter_time:.2f}")
 
         # Store the current trial as the "last trial".
-        last_trial = trial
+        if args.update_cam_target_every_frame:
+            pass
+        else:
+            last_trial = trial
+    print(f"Time elapsed: {time.time() - start}")
     sys.exit(0)
 
 
@@ -121,6 +131,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--port", type=int, default=8000, help="The port of the server."
+    )
+    parser.add_argument(
+        "--unity_dir",
+        required=True,
+        type=str,
+        help="The directory of the unity executable.",
     )
     parser.add_argument(
         "--states_dir",
@@ -145,11 +161,15 @@ if __name__ == "__main__":
         help="The method of camera control.",
     )
     parser.add_argument(
-        "--out_dir",
+        "--update_cam_target_every_frame",
+        action="store_true",
+        help="Whether to recompute / update cam target every frame.",
+    )
+    parser.add_argument(
+        "--cam_dir",
         required=True,
         type=str,
         help="The output directory to save client data to.",
     )
     args = parser.parse_args()
-
     main()
