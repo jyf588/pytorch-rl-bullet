@@ -13,6 +13,9 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     scene_place_dst_idx=1,
     scene_stack_src_idx=0,
     scene_stack_dst_idx=1,
+    start_sid=None,  # Inclusive
+    end_sid=None,  # Exclusive
+    task_subset=None,
     obs_mode=None,
     obs_noise=False,
     position_noise=0.03,
@@ -25,7 +28,7 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     render_frequency=100,
     render_obs=False,
     animate_head=False,
-    save_states=False,
+    save_states=True,
     container_dir=None,
     policy_id="0404",  # [0404, 0411, 0510]
     save_first_pov_image=False,
@@ -40,7 +43,6 @@ VISION_STATES_OPTIONS.enable_reaching = False
 VISION_STATES_OPTIONS.enable_retract = False
 VISION_STATES_OPTIONS.obs_mode = "gt"
 VISION_STATES_OPTIONS.obs_noise = False
-VISION_STATES_OPTIONS.save_states = True
 VISION_STATES_OPTIONS.container_dir = "/home/mguo/container_data_v1"
 
 UNITY_DATASET_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
@@ -51,24 +53,26 @@ TEST_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 TEST_OPTIONS.enable_reaching = True
 TEST_OPTIONS.enable_retract = True
 TEST_OPTIONS.container_dir = None
+TEST_OPTIONS.container_dir = "/home/mguo/container_data_v1"
+
+TEST_GT_OPTIONS = copy.deepcopy(TEST_OPTIONS)
+TEST_GT_OPTIONS.obs_mode = "gt"
 
 TEST_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_VISION_OPTIONS.obs_mode = "vision"
 TEST_VISION_OPTIONS.render_unity = True
 TEST_VISION_OPTIONS.render_obs = True
 TEST_VISION_OPTIONS.save_first_pov_image = True
-TEST_VISION_OPTIONS.container_dir = "/home/mguo/container_data_v1"
+TEST_VISION_OPTIONS.start_sid = 0
+TEST_VISION_OPTIONS.end_sid = 1
+TEST_VISION_OPTIONS.task_subset = ["stack"]
 
-TEST_GT_OPTIONS = copy.deepcopy(TEST_OPTIONS)
-TEST_GT_OPTIONS.obs_mode = "gt"
-TEST_GT_OPTIONS.container_dir = None
 
 DEBUG_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 DEBUG_VISION_OPTIONS.obs_mode = "vision"
 DEBUG_VISION_OPTIONS.render_unity = True
 DEBUG_VISION_OPTIONS.render_obs = True
 DEBUG_VISION_OPTIONS.save_first_pov_image = True
-DEBUG_VISION_OPTIONS.container_dir = "/home/mguo/container_data_v1"
 DEBUG_VISION_OPTIONS.enable_reaching = False
 DEBUG_VISION_OPTIONS.enable_retract = False
 
@@ -136,15 +140,18 @@ def get_policy_options_and_paths(policy_id: str):
 
 
 VISION_OPTIONS = argparse.Namespace(
+    seed=1,
     renderer="unity",
     use_segmentation_module=True,
     separate_vision_modules=True,
     use_gt_obs=False,
     seg_checkpoint_path="/home/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
-    planning_checkpoint_path="/home/mguo/outputs/planning_v003_20K/checkpoint_best.pt",
+    # planning_checkpoint_path="/home/mguo/outputs/planning_v003_20K/2020_04_19_07_14_00/checkpoint_best.pt",
     # placing_checkpoint_path="/home/mguo/outputs/placing_v003_2K_20K/2020_04_22_04_35/checkpoint_best.pt",
+    # stacking_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/2020_04_19_22_12_00/checkpoint_best.pt",
+    planning_checkpoint_path="/home/mguo/outputs/planning_v003_20K/2020_05_15_23_43_08/checkpoint_best.pt",
     placing_checkpoint_path="/home/mguo/outputs/placing_v003_2K_20K/2020_05_15_02_18_08/checkpoint_best.pt",
-    stacking_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/checkpoint_best.pt",
+    stacking_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/2020_05_15_21_35_20/checkpoint_best.pt",
     # seg_checkpoint_path="/home/mguo/outputs/detectron/seg_tiny/2020_05_11_20_52_07/model_final.pth",
     # attr_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/checkpoint_best.pt",
     # attr_checkpoint_path="/home/mguo/outputs/attr_net/seg_tiny/checkpoint_best.pt",

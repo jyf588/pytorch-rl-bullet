@@ -7,6 +7,7 @@ import pprint
 import imageio
 import argparse
 import warnings
+import numpy as np
 import pybullet as p
 from typing import *
 
@@ -61,12 +62,14 @@ async def send_to_client(websocket, path):
     system.openrave.check_clean_container(container_dir=opt.container_dir)
 
     # Define paths.
-    assert not os.path.exists(opt.unity_captures_dir)
+    util.delete_and_create_dir(opt.unity_captures_dir)
     run_time_str = util.get_time_dirname()
     run_dir = os.path.join(opt.root_outputs_dir, args.exp, opt.policy_id, run_time_str)
     outputs_dir = os.path.join(run_dir, "pickle")
+    states_dir = os.path.join(run_dir, "states")
     successes_path = os.path.join(run_dir, "successes.json")
     os.makedirs(outputs_dir)
+    os.makedirs(states_dir)
 
     # Preparing models.
     policy_opt, shape2policy_paths = system.options.get_policy_options_and_paths(
@@ -93,7 +96,6 @@ async def send_to_client(websocket, path):
 
     success_metrics = {"overall": {}, "scenes": {}}
     for set_name, set_opt in set_name2opt.items():
-
         success_metrics["overall"][set_name] = {
             "n_success": 0,
             "n_or_success": 0,
@@ -101,13 +103,18 @@ async def send_to_client(websocket, path):
         }
         success_metrics["scenes"][set_name] = {}
 
-        if opt.save_states and not set_opt["save_states"]:
-            continue
         set_loader = exp.loader.SetLoader(exp_name=args.exp, set_name=set_name)
         id2scene = set_loader.load_id2scene()
         task = set_opt["task"]
 
-        for scene_id, scene in id2scene.items():
+        if opt.task_subset is not None and task not in opt.task_subset:
+            continue
+
+        for scene_idx, (scene_id, scene) in enumerate(id2scene.items()):
+            if opt.start_sid is not None and int(scene_idx) < opt.start_sid:
+                continue
+            elif opt.end_sid is not None and int(scene_idx) >= opt.end_sid:
+                continue
             bullet_cam_targets = {}
             # Modify the scene for placing, and determine placing destination.
             place_dst_xy, place_dest_object = None, None
@@ -145,28 +152,21 @@ async def send_to_client(websocket, path):
                     vision_models_dict=vision_models_dict,
                 )
 
-            # Initalize the directory if we are saving states.
-            if opt.save_states:
-                scene_loader = exp.loader.SceneLoader(
-                    exp_name=args.exp, set_name=set_name, scene_id=scene_id
-                )
-                os.makedirs(scene_loader.states_dir)
-
             n_frames = 0
             frames_start = time.time()
             update_camera_target = False
             while 1:
+                frame_id = f"{task}_{scene_id}_{env.timestep:06}"
                 stage = env.stage
-                # Save the current state, if the current stage is a stage that should
-                # be saved for the current set. The state is the state of the world
-                # BEFORE apply the action at the current timestep.
-                if opt.save_states and env.stage == set_opt["stage"]:
-                    scene_loader.save_state(
-                        scene_id=scene_id, timestep=env.timestep, state=env.get_state()
+                # The state is the state of the world BEFORE applying the action at the
+                # current timestep.
+                if opt.save_states:
+                    state_path = os.path.join(states_dir, f"{frame_id}.p")
+                    util.save_pickle(
+                        state_path, data=env.get_state(), check_override=False
                     )
 
                 if stage in ["plan", "place", "stack"] and env.stage_ts == 0:
-                    # if stage in ["plan", "place", "stack"]:
                     update_camera_target = True
 
                 is_render_step = False
@@ -184,7 +184,6 @@ async def send_to_client(websocket, path):
                     # Render unity and step.
                     if env.timestep % render_frequency == 0:
                         is_render_step = True
-                        frame_id = f"{task}_{scene_id}_{env.timestep:06}"
                         u_opt = get_unity_options(args.mode, opt, env)
                         for (rend_obs, rend_place, send_image, should_step) in u_opt:
                             # Compute camera targets.
@@ -279,23 +278,25 @@ def load_vision_models():
     vision_models_dict = {}
     if VISION_OPTIONS.use_segmentation_module:
         vision_models_dict["seg"] = DASHSegModule(
+            seed=VISION_OPTIONS.seed,
             mode="eval_single",
             checkpoint_path=VISION_OPTIONS.seg_checkpoint_path,
             vis_dir=None,
         )
     if VISION_OPTIONS.separate_vision_modules:
+        seed = VISION_OPTIONS.seed
         vision_models_dict["plan"] = VisionModule(
-            load_checkpoint_path=VISION_OPTIONS.planning_checkpoint_path,
+            seed, load_checkpoint_path=VISION_OPTIONS.planning_checkpoint_path,
         )
         vision_models_dict["place"] = VisionModule(
-            load_checkpoint_path=VISION_OPTIONS.placing_checkpoint_path,
+            seed, load_checkpoint_path=VISION_OPTIONS.placing_checkpoint_path,
         )
         vision_models_dict["stack"] = VisionModule(
-            load_checkpoint_path=VISION_OPTIONS.stacking_checkpoint_path,
+            seed, load_checkpoint_path=VISION_OPTIONS.stacking_checkpoint_path,
         )
     else:
         vision_models_dict["combined"] = VisionModule(
-            load_checkpoint_path=VISION_OPTIONS.attr_checkpoint_path,
+            seed, load_checkpoint_path=VISION_OPTIONS.attr_checkpoint_path,
         )
     return vision_models_dict
 
@@ -310,7 +311,7 @@ def get_unity_options(mode, opt, env):
                 render_cur_step = False
                 if env.stage == "plan":
                     render_cur_step = True
-                elif env.stage == "place" and env.stage_progress() < 0.3:
+                elif env.stage == "place" and env.stage_progress() < 0.2:
                     render_cur_step = True
 
                 unity_options = [(False, False, True, True)]

@@ -1,5 +1,6 @@
 import os
 import cv2
+import random
 import imageio
 import numpy as np
 from typing import *
@@ -16,7 +17,9 @@ from ns_vqa_dart.scene_parse.attr_net.options import BaseOptions
 
 
 class VisionModule:
-    def __init__(self, load_checkpoint_path: str):
+    def __init__(self, seed: int, load_checkpoint_path: str):
+        self.seed_everything(seed)
+
         options = self.get_options(load_checkpoint_path=load_checkpoint_path)
         self.model = get_model(options)
         self.model.eval_mode()
@@ -27,6 +30,16 @@ class VisionModule:
                 transforms.Normalize(mean=[0.5] * 6, std=[0.225] * 6),
             ]
         )
+
+    def seed_everything(self, seed):
+        np.random.seed(seed)
+        random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        os.environ["PYTHONHASHSEED"] = str(seed)
 
     def get_options(self, load_checkpoint_path: str):
         """Creates the options namespace to define the vision model."""

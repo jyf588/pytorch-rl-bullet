@@ -55,6 +55,9 @@ class DemoEnvironment:
             place_dst_xy: The destination (x, y) location to place at. Used 
                 only if `task` is `place`.
         """
+        # Set seed.
+        np.random.seed(opt.seed)
+
         print("**********CREATING DEMO ENVIRONMENT**********")
         self.opt = opt
         self.bullet_opt = bullet_opt
@@ -70,8 +73,6 @@ class DemoEnvironment:
         self.command = command
         self.place_dst_xy = place_dst_xy
         self.vision_models_dict = vision_models_dict
-
-        np.random.seed(self.opt.seed)
 
         self.timestep = 0
         self.planning_complete = False
