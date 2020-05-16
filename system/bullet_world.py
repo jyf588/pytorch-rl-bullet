@@ -311,6 +311,24 @@ class BulletWorld:
         fin_q = self.robot_env.robot.get_q_dq(self.robot_env.robot.fin_actdofs)[0]
         return arm_q, fin_q
 
+    def get_robot_dq(self):
+        """Retrieves joint vels.
+
+        Returns:
+            arm_dq: Arm joint vels in the following joint order:
+                r_shoulder_out_joint
+                r_shoulder_lift_joint
+                r_upper_arm_roll_joint
+                r_elbow_flex_joint
+                r_elbow_roll_joint
+                rh_WRJ2
+                rh_WRJ1
+            fin_dq: The finger pose.
+        """
+        arm_dq = self.robot_env.robot.get_q_dq(self.robot_env.robot.arm_dofs)[1]
+        fin_dq = self.robot_env.robot.get_q_dq(self.robot_env.robot.fin_actdofs)[1]
+        return arm_dq, fin_dq
+
     def step(self, timestep: int):
         self.bc.stepSimulation()
         time.sleep(self.opt.ts)

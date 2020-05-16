@@ -16,11 +16,11 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     position_noise=0.03,
     upv_noise=0.04,
     height_noise=0.02,
-    render_unity=False,
+    render_unity=True,
     render_bullet=False,
     visualize_unity=False,
-    use_control_skip=True,
-    render_frequency=100,
+    use_control_skip=False,
+    render_frequency=6,
     render_obs=False,
     animate_head=False,
     save_states=False,
@@ -43,7 +43,7 @@ UNITY_DATASET_OPTIONS.render_unity = True
 TEST_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 TEST_OPTIONS.enable_reaching = True
 TEST_OPTIONS.enable_retract = True
-TEST_OPTIONS.container_dir = "/home/mguo/container_data_v2"
+TEST_OPTIONS.container_dir = "/home/yifengj/container_data"     # TODO
 
 TEST_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_VISION_OPTIONS.obs_mode = "vision"
@@ -76,8 +76,11 @@ POLICY_OPTIONS = argparse.Namespace(
     seed=101,
     init_noise=True,
     restore_fingers=True,
-    use_height=False,
+    use_height=True,
+    use_place_stack_bit=True,
+    use_slow_policy=True,
     n_plan_steps=305,
+    n_retract_steps=405,
     grasp_control_steps=35,
     place_control_steps=75,
     control_skip=6,
@@ -87,9 +90,12 @@ POLICY_OPTIONS = argparse.Namespace(
 )
 
 UNIVERSAL_POLICY_NAMES = argparse.Namespace(
-    grasp_pi="0411_0_n_25_45",
-    grasp_dir="./trained_models_0411_0_n/ppo/",
-    place_dir="./trained_models_0411_0_n_place_0411_0/ppo/",
+    # grasp_pi="0411_0_n_25_45",
+    # grasp_dir="./trained_models_0411_0_n/ppo/",
+    # place_dir="./trained_models_0411_0_n_place_0411_0/ppo/",
+    grasp_pi="0510_0_n_25_45",
+    grasp_dir="./trained_models_0514_3_n/ppo/",         # TODO
+    place_dir="./trained_models_0510_0_n_place_0510_0/ppo/",
 )
 
 SPHERE_POLICY_NAMES = argparse.Namespace(

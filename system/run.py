@@ -24,7 +24,10 @@ import ns_vqa_dart.bullet.util as util
 import bullet2unity.interface as interface
 from exp.options import EXPERIMENT_OPTIONS
 from system.vision_module import VisionModule
-from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
+try:
+    from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
+except ImportError as e:
+    print(e)
 from system.options import (
     SYSTEM_OPTIONS,
     BULLET_OPTIONS,
@@ -77,7 +80,7 @@ async def send_to_client(websocket, path):
     for set_name, set_opt in set_name2opt.items():
         set2success[set_name] = {"n_success": 0, "n_or_success": 0, "n_trials": 0}
 
-        if set_name != "place":
+        if set_name != "stack":
             continue
 
         if opt.save_states and not set_opt["save_states"]:
@@ -194,9 +197,9 @@ async def send_to_client(websocket, path):
                 if not is_render_step:
                     is_done, openrave_success = env.step()
 
-                # Skip retract if placing failed.
-                if stage == "retract" and not env.check_success():
-                    is_done = True
+                # # Skip retract if placing failed.
+                # if stage == "retract" and not env.check_success():
+                #     is_done = True
 
                 # Break out if we're done with the sequence, or it failed.
                 if is_done or not openrave_success:

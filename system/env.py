@@ -23,8 +23,10 @@ from NLP_module import NLPmod
 import ns_vqa_dart.bullet.seg
 import my_pybullet_envs.utils as utils
 from ns_vqa_dart.bullet import dash_object, util
-from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
-
+try:
+    from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
+except ImportError as e:
+    print(e)
 
 class DemoEnvironment:
     def __init__(
@@ -133,8 +135,8 @@ class DemoEnvironment:
         n_place = self.policy_opt.place_control_steps
 
         if not self.opt.use_control_skip:
-            n_grasp *= self.opt.control_skip
-            n_place *= self.opt.control_skip
+            n_grasp *= self.policy_opt.control_skip
+            n_place *= self.policy_opt.control_skip
 
         grasp_end = grasp_start + n_grasp
         transport_start = grasp_end
@@ -152,7 +154,7 @@ class DemoEnvironment:
             stage2ts_bounds["reach"] = (reach_start, reach_end)
         if self.opt.enable_retract:
             retract_start = place_end
-            retract_end = retract_start + self.policy_opt.n_plan_steps
+            retract_end = retract_start + self.policy_opt.n_retract_steps
             stage2ts_bounds["retract"] = (retract_start, retract_end)
 
         n_total_steps = 0
@@ -475,6 +477,9 @@ class DemoEnvironment:
             q_end = self.q_transport_dst
         elif stage == "retract":
             q_start = self.w.get_robot_q()[0]
+            q_end = [-0.238, 0.349, -0.755,
+                     -1.915, -0.743, 0.132,
+                     -1.021]
 
             # Instead of using the initial observation, we use the latest
             # observation.
@@ -501,6 +506,19 @@ class DemoEnvironment:
             src_base_z_post_placing=expected_src_base_z_post_placing,
             container_dir=self.opt.container_dir,
         )
+
+        if stage == "retract" and trajectory is not None and len(trajectory) > 0:
+            from scipy import interpolate
+            n = self.policy_opt.n_retract_steps - 5  # interpolated trajectory resolution
+            end = 300
+            t = np.arange(0, end, 1)
+            T = np.linspace(0, end - 1, n - 1)
+            Traj_I = np.zeros((n - 1, 7))  # TODO
+            for i in range(7):
+                f = interpolate.interp1d(t, trajectory[:end, i], kind="quadratic")
+                Traj_I[:, i] = f(T)
+            trajectory = np.concatenate((Traj_I, trajectory[end:]), axis=0)
+
         return trajectory
 
     def grasp(self, stage_ts: int):
@@ -512,7 +530,11 @@ class DemoEnvironment:
                 obs, self.hidden_states, self.masks, deterministic=self.bullet_opt.det
             )
         self.w.step_robot(
-            action=system.policy.unwrap_action(action=action, is_cuda=self.opt.is_cuda),
+            action=system.policy.unwrap_action(
+                action=action,
+                is_cuda=self.opt.is_cuda,
+                clip=self.policy_opt.use_slow_policy,
+            ),
             timestep=self.timestep,
         )
         self.masks.fill_(1.0)
@@ -553,12 +575,23 @@ class DemoEnvironment:
             self.init_tar_fin_q = self.w.robot_env.robot.tar_fin_q
             self.last_tar_arm_q, self.init_fin_q = self.w.get_robot_q()
 
+            self.init_arm_q = self.last_tar_arm_q
+            self.init_arm_dq, _ = self.w.get_robot_dq()
+
         if stage_ts > len(self.trajectory) - 1:
             tar_arm_q = self.trajectory[-1]
         else:
             tar_arm_q = self.trajectory[stage_ts]
 
+        if restore_fingers:
+            proj_arm_q = self.init_arm_q + (stage_ts+1) * self.init_arm_dq * self.bullet_opt.ts
+            blending = np.clip(
+                stage_ts / (len(self.trajectory) * 0.8), 0.0, 1.0
+            )
+            tar_arm_q = tar_arm_q * blending + proj_arm_q * (1 - blending)
+
         tar_arm_vel = (tar_arm_q - self.last_tar_arm_q) / self.bullet_opt.ts
+
         max_force = self.w.robot_env.robot.maxForce
 
         p.setJointMotorControlArray(
@@ -572,21 +605,21 @@ class DemoEnvironment:
 
         if restore_fingers and stage_ts >= len(self.trajectory) * 0.1:
             blending = np.clip(
-                (stage_ts - len(self.trajectory) * 0.1) / (len(self.trajectory) * 0.6),
+                (stage_ts - len(self.trajectory) * 0.1) / (len(self.trajectory) * 0.8),
                 0.0,
                 1.0,
             )
-            cur_fin_q = self.w.robot_env.robot.get_q_dq(
-                self.w.robot_env.robot.fin_actdofs
-            )[0]
-            tar_fin_q = self.w.robot_env.robot.init_fin_q * blending + cur_fin_q * (
+            # cur_fin_q = self.w.robot_env.robot.get_q_dq(
+            #     self.w.robot_env.robot.fin_actdofs
+            # )[0]
+            tar_fin_q = self.w.robot_env.robot.init_fin_q * blending + self.init_fin_q * (
                 1 - blending
             )
         else:
             # try to keep fin q close to init_fin_q (keep finger pose)
             # add at most offset 0.05 in init_tar_fin_q direction so that grasp is tight
             tar_fin_q = np.clip(
-                self.init_tar_fin_q, self.init_fin_q - 0.05, self.init_fin_q + 0.05,
+                self.init_tar_fin_q, self.init_fin_q - 0.1, self.init_fin_q + 0.1,
             )
 
         # clip to joint limit
@@ -673,6 +706,15 @@ class DemoEnvironment:
                 b_pos=b_pos,
                 b_up=b_up,
             )
+
+        if self.policy_opt.use_place_stack_bit:
+            if self.task == "place":
+                p_obs.extend([1.0])
+            elif self.task == "stack":
+                p_obs.extend([-1.0])
+            else:
+                assert False
+
         return p_obs
 
     def get_observation(self):
