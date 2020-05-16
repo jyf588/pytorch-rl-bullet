@@ -311,7 +311,7 @@ def get_unity_options(mode, opt, env):
                 render_cur_step = False
                 if env.stage == "plan":
                     render_cur_step = True
-                elif env.stage == "place" and env.stage_progress() < 0.4:
+                elif env.stage == "place" and env.stage_progress() < 0.3:
                     render_cur_step = True
 
                 unity_options = [(False, False, True, True)]
