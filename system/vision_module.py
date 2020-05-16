@@ -16,8 +16,7 @@ from ns_vqa_dart.scene_parse.attr_net.options import BaseOptions
 
 
 class VisionModule:
-    def __init__(self, load_checkpoint_path: str, debug_dir=None):
-        self.debug_dir = debug_dir
+    def __init__(self, load_checkpoint_path: str):
         options = self.get_options(load_checkpoint_path=load_checkpoint_path)
         self.model = get_model(options)
         self.model.eval_mode()
@@ -66,9 +65,7 @@ class VisionModule:
             data.append(X)
 
         # Writing images for debugging.
-        inputs_img = self.gen_debug_images(
-            data=data, show_window=False, save_path=inputs_path,
-        )
+        inputs_img = self.gen_input_rgb(data=data, show_window=False)
 
         # Predict.
         data = np.array(data)
@@ -107,9 +104,7 @@ class VisionModule:
         pred = self.model.get_pred()
         return pred
 
-    def gen_debug_images(
-        self, data: List[np.ndarray], show_window=False, save_path=None
-    ):
+    def gen_input_rgb(self, data: List[np.ndarray], show_window=False):
         """
         Args:
             data: A list of data tensors, one for each object.
@@ -117,15 +112,10 @@ class VisionModule:
         rows = []
         for object_data in data:
             rows.append(np.hstack([object_data[:, :, :3], object_data[:, :, 3:6]]))
-        image = np.vstack(rows)
+        input_rgb = np.vstack(rows)
 
         if show_window:
-            image = cv2.resize(image, (0, 0), fx=0.5, fy=0.5)
-            cv2.imshow("data", image[:, :, ::-1])
+            input_rgb_resized = cv2.resize(input_rgb, (0, 0), fx=0.5, fy=0.5)
+            cv2.imshow("data", input_rgb_resized[:, :, ::-1])
             cv2.waitKey(0)
-
-        if save_path is not None:
-            os.makedirs()
-            imageio.imwrite(save_path, image)
-            print(f"Wrote image of vision module inputs to: {save_path}")
-        return image
+        return input_rgb
