@@ -5,7 +5,8 @@ import ns_vqa_dart.bullet.util as util
 
 
 # UNITY_NAME = "Linux8000_0512"
-UNITY_NAME = "Linux8001_0515"
+# UNITY_NAME = "Linux8001_0515"
+UNITY_NAME = "Linux8002_0515"
 
 BASE_SYSTEM_OPTIONS = argparse.Namespace(
     seed=101,
@@ -32,10 +33,10 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     render_obs=False,
     animate_head=False,
     save_states=True,
-    container_dir=None,
     policy_id="0404",  # [0404, 0411, 0510]
     save_first_pov_image=False,
     root_outputs_dir=os.path.join(util.get_user_homedir(), "outputs/system"),
+    container_dir="/home/mguo/container_data_v3",
     unity_captures_dir=os.path.join(
         util.get_user_homedir(), f"unity/builds/{UNITY_NAME}/Captures"
     ),
@@ -46,7 +47,6 @@ VISION_STATES_OPTIONS.enable_reaching = False
 VISION_STATES_OPTIONS.enable_retract = False
 VISION_STATES_OPTIONS.obs_mode = "gt"
 VISION_STATES_OPTIONS.obs_noise = False
-VISION_STATES_OPTIONS.container_dir = "/home/mguo/container_data_v1"
 
 UNITY_DATASET_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 UNITY_DATASET_OPTIONS.render_frequency = 1  # Render and save every state.
@@ -55,7 +55,6 @@ UNITY_DATASET_OPTIONS.render_unity = True
 TEST_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 TEST_OPTIONS.enable_reaching = True
 TEST_OPTIONS.enable_retract = False  # Retract is excluded from Table 1 evaluation.
-TEST_OPTIONS.container_dir = "/home/mguo/container_data_v2"
 
 TEST_GT_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_GT_OPTIONS.obs_mode = "gt"
@@ -157,10 +156,10 @@ stack_model = VISION_V2_MODELS["stack"]
 VISION_OPTIONS = argparse.Namespace(
     seed=None,
     renderer="unity",
-    use_segmentation_module=False,
+    use_segmentation_module=True,
     separate_vision_modules=True,
     use_gt_obs=False,
-    # seg_checkpoint_path="/home/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
+    seg_checkpoint_path="/home/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
     planning_checkpoint_path=f"/home/mguo/outputs/planning_v003_20K/{plan_model}/checkpoint_best.pt",
     placing_checkpoint_path=f"/home/mguo/outputs/placing_v003_2K_20K/{place_model}/checkpoint_best.pt",
     stacking_checkpoint_path=f"/home/mguo/outputs/stacking_v003_2K_20K/{stack_model}/checkpoint_best.pt",
