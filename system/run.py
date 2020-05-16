@@ -36,7 +36,6 @@ from system.options import (
 global args
 
 
-PLAN_TARGET_POSITION = [-0.06, 0.3, 0.0]
 STAGE2ANIMATION_Z_OFFSET = {
     "plan": 0.3,
     "reach": 0.1,
@@ -327,34 +326,28 @@ def get_unity_options(mode, opt, env):
 
 
 def compute_bullet_camera_targets(opt, env, send_image, save_image):
-    task = env.task
-    if env.stage == "plan":
-        cam_target = PLAN_TARGET_POSITION
-    elif env.stage == "place":
-        if task == "place":
-            # TODO: This is using ground truth.
-            cam_target = bullet2unity.states.get_object_camera_target(
-                bullet_odicts=list(env.get_state()["objects"].values()),
-                oidx=opt.scene_place_src_idx,
-            )
+    odicts, oidx = None, None
+    if env.stage == "place":
+        if env.task == "place":
+            # GT version: We use the current object states.
+            odicts = list(env.get_state()["objects"].values())
+            oidx = opt.scene_place_src_idx
 
             # TODO: predicted version.
             # cam_target = env.place_dst_xy + [env.initial_obs[env.src_idx]["height"]]
-        elif task == "stack":
-            cam_target = bullet2unity.states.get_object_camera_target(
-                bullet_odicts=env.initial_obs, oidx=env.dst_idx
-            )
-    else:
-        raise ValueError(f"Invalid task: {task}")
-
-    # Set the camera target.
-    bullet_camera_targets = bullet2unity.states.create_bullet_camera_targets(
-        camera_control="position",
-        should_save=save_image,
-        should_send=send_image,
-        position=cam_target,
+        elif env.task == "stack":
+            # We use the predictions from the initial observation.
+            odicts = env.initial_obs
+            oidx = env.dst_idx
+        else:
+            raise ValueError(f"Invalid task: {env.task}")
+    bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
+        stage=env.stage,
+        send_image=send_image,
+        save_image=save_image,
+        odicts=odicts,
+        oidx=oidx,
     )
-    print(f"bullet_camera_targets: {bullet_camera_targets}")
     return bullet_camera_targets
 
 
