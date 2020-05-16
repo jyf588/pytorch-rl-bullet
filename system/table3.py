@@ -12,8 +12,8 @@ from ns_vqa_dart.bullet.metrics import Metrics
 from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule, register_dataset
 
 
-def main():
-    run_dir = "/home/mguo/outputs/system/t1/0404/2020_05_16_12_01_27"
+def main(args):
+    run_dir = f"/home/mguo/outputs/system/t1/0404/{args.run_name}"
     pickle_dir = os.path.join(run_dir, "pickle")
     metrics_dir = os.path.join(run_dir, "metrics")
     successes_path = os.path.join(run_dir, "successes.json")
@@ -49,7 +49,8 @@ def main():
 
     # Loop over the scenes that have recorded successes.
     for task in success_dict.keys():
-        for sid in success_dict[task].keys():
+        print(f"Computing task {task}...")
+        for sid in tqdm(success_dict[task].keys()):
             # Determine whether to include the example in each of the denominator types.
             # For `all`, we include all examples. For other denominator types, we only
             # include the example if the example is enabled for the tag.
@@ -123,7 +124,7 @@ def main():
 
 
 if __name__ == "__main__":
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("exp_name", type=str, help="The name of the experiment to run.")
-    # args = parser.parse_args()
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("run_name", type=str, help="The name of the run dir.")
+    args = parser.parse_args()
+    main(args)
