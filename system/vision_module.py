@@ -17,8 +17,9 @@ from ns_vqa_dart.scene_parse.attr_net.options import BaseOptions
 
 
 class VisionModule:
-    def __init__(self, seed: int, load_checkpoint_path: str):
-        self.seed_everything(seed)
+    def __init__(self, load_checkpoint_path: str, seed=None):
+        if seed is not None:
+            self.seed_everything(seed)
 
         options = self.get_options(load_checkpoint_path=load_checkpoint_path)
         self.model = get_model(options)

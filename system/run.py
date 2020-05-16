@@ -286,17 +286,17 @@ def load_vision_models():
     if VISION_OPTIONS.separate_vision_modules:
         seed = VISION_OPTIONS.seed
         vision_models_dict["plan"] = VisionModule(
-            seed, load_checkpoint_path=VISION_OPTIONS.planning_checkpoint_path,
+            seed=seed, load_checkpoint_path=VISION_OPTIONS.planning_checkpoint_path,
         )
         vision_models_dict["place"] = VisionModule(
-            seed, load_checkpoint_path=VISION_OPTIONS.placing_checkpoint_path,
+            seed=seed, load_checkpoint_path=VISION_OPTIONS.placing_checkpoint_path,
         )
         vision_models_dict["stack"] = VisionModule(
-            seed, load_checkpoint_path=VISION_OPTIONS.stacking_checkpoint_path,
+            seed=seed, load_checkpoint_path=VISION_OPTIONS.stacking_checkpoint_path,
         )
     else:
         vision_models_dict["combined"] = VisionModule(
-            seed, load_checkpoint_path=VISION_OPTIONS.attr_checkpoint_path,
+            seed=seed, load_checkpoint_path=VISION_OPTIONS.attr_checkpoint_path,
         )
     return vision_models_dict
 

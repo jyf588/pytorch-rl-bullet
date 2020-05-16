@@ -404,9 +404,9 @@ class DemoEnvironment:
             if not self.policy_opt.use_height:
                 policy_z = utils.H_MAX
 
-        dst_xyz = [dst_x, dst_y, z]
-        plan_xyz = [dst_x, dst_y, z + utils.PLACE_START_CLEARANCE]
-        policy_dst_xyz = [dst_x, dst_y, policy_z]
+        dst_xyz = [dst_x, dst_y, z]  # 0/H
+        plan_xyz = [dst_x, dst_y, z + utils.PLACE_START_CLEARANCE]  # 0/H + clear
+        policy_dst_xyz = [dst_x, dst_y, policy_z]  # 0/H or max
         return src_idx, dst_idx, dst_xyz, plan_xyz, policy_dst_xyz, is_sphere
 
     def compute_qs(self, src_xy: List[float], dst_xyz: List[float]) -> Tuple:

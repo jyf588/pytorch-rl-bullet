@@ -51,8 +51,7 @@ UNITY_DATASET_OPTIONS.render_unity = True
 
 TEST_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 TEST_OPTIONS.enable_reaching = True
-TEST_OPTIONS.enable_retract = True
-TEST_OPTIONS.container_dir = None
+TEST_OPTIONS.enable_retract = False  # Retract is excluded from Table 1 evaluation.
 TEST_OPTIONS.container_dir = "/home/mguo/container_data_v1"
 
 TEST_GT_OPTIONS = copy.deepcopy(TEST_OPTIONS)
@@ -63,9 +62,6 @@ TEST_VISION_OPTIONS.obs_mode = "vision"
 TEST_VISION_OPTIONS.render_unity = True
 TEST_VISION_OPTIONS.render_obs = True
 TEST_VISION_OPTIONS.save_first_pov_image = True
-TEST_VISION_OPTIONS.start_sid = 0
-TEST_VISION_OPTIONS.end_sid = 1
-TEST_VISION_OPTIONS.task_subset = ["stack"]
 
 
 DEBUG_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
@@ -139,19 +135,32 @@ def get_policy_options_and_paths(policy_id: str):
     return policy_options, shape2policy_paths
 
 
+VISION_V1_MODELS = {
+    "plan": "2020_04_19_07_14_00",
+    "place": "2020_04_22_04_35",
+    "stack": "2020_04_19_22_12_00",
+}
+
+VISION_V2_MODELS = {
+    "plan": "2020_05_15_23_43_08",
+    "place": "2020_05_15_02_18_08",
+    "stack": "2020_05_16_02_36_30",
+}
+
+plan_model = VISION_V1_MODELS["plan"]
+place_model = VISION_V2_MODELS["place"]
+stack_model = VISION_V1_MODELS["stack"]
+
 VISION_OPTIONS = argparse.Namespace(
-    seed=1,
+    seed=None,
     renderer="unity",
-    use_segmentation_module=True,
+    use_segmentation_module=False,
     separate_vision_modules=True,
     use_gt_obs=False,
-    seg_checkpoint_path="/home/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
-    # planning_checkpoint_path="/home/mguo/outputs/planning_v003_20K/2020_04_19_07_14_00/checkpoint_best.pt",
-    # placing_checkpoint_path="/home/mguo/outputs/placing_v003_2K_20K/2020_04_22_04_35/checkpoint_best.pt",
-    # stacking_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/2020_04_19_22_12_00/checkpoint_best.pt",
-    planning_checkpoint_path="/home/mguo/outputs/planning_v003_20K/2020_05_15_23_43_08/checkpoint_best.pt",
-    placing_checkpoint_path="/home/mguo/outputs/placing_v003_2K_20K/2020_05_15_02_18_08/checkpoint_best.pt",
-    stacking_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/2020_05_15_21_35_20/checkpoint_best.pt",
+    # seg_checkpoint_path="/home/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
+    planning_checkpoint_path=f"/home/mguo/outputs/planning_v003_20K/{plan_model}/checkpoint_best.pt",
+    placing_checkpoint_path=f"/home/mguo/outputs/placing_v003_2K_20K/{place_model}/checkpoint_best.pt",
+    stacking_checkpoint_path=f"/home/mguo/outputs/stacking_v003_2K_20K/{stack_model}/checkpoint_best.pt",
     # seg_checkpoint_path="/home/mguo/outputs/detectron/seg_tiny/2020_05_11_20_52_07/model_final.pth",
     # attr_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/checkpoint_best.pt",
     # attr_checkpoint_path="/home/mguo/outputs/attr_net/seg_tiny/checkpoint_best.pt",
