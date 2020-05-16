@@ -7,16 +7,16 @@ import ns_vqa_dart.bullet.util as util
 
 
 class UnitySaver:
-    def __init__(self, out_dir: str, save_keys: List[str]):
+    def __init__(self, cam_dir: str, save_keys: List[str]):
         """
         Args:
-            out_dir: The output directory to save data into.
+            cam_dir: The output directory to save data into.
             save_keys: A list of keys for which to save data for.
         """
-        self.out_dir = out_dir
+        self.cam_dir = cam_dir
         self.save_keys = save_keys
 
-        os.makedirs(out_dir, exist_ok=True)
+        util.delete_and_create_dir(cam_dir)
 
     def save(self, msg_id: str, data: Dict):
         """Saves unity data. The generated output files format is the 
@@ -45,7 +45,7 @@ class UnitySaver:
         Note that only `camera_position` and `camera_orientation` are currently
         being saved.
         """
-        path = os.path.join(self.out_dir, f"{msg_id}.json")
+        path = os.path.join(self.cam_dir, f"{msg_id}.json")
         data_to_save = {}
         for tag_id, tag_data in data.items():
             data_to_save[tag_id] = {}
