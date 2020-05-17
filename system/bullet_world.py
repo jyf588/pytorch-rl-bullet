@@ -129,7 +129,6 @@ class BulletWorld:
             withVel=False,
             diffTar=True,
             robot_mu=self.opt.hand_mu,
-            control_skip=self.policy_opt.control_skip,
         )
         init_fin_q = np.array(
             [0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.1]
@@ -344,7 +343,7 @@ class BulletWorld:
         # Here we have the option to step `control_skip` instead, if the flag
         # is enabled.
         if self.use_control_skip:
-            for _ in range(self.policy_opt.control_skip):
+            for _ in range(self.robot_env.control_skip):
                 self.robot_env.step_sim(action=action)
         else:
             self.robot_env.step_sim(action=action)

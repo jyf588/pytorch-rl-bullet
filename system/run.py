@@ -77,6 +77,7 @@ async def send_to_client(websocket, path):
         p.connect(p.DIRECT)
 
     set2success = {}
+    FIRST_COMMAND=True
     for set_name, set_opt in set_name2opt.items():
         set2success[set_name] = {"n_success": 0, "n_or_success": 0, "n_trials": 0}
 
@@ -86,10 +87,15 @@ async def send_to_client(websocket, path):
         if opt.save_states and not set_opt["save_states"]:
             continue
         set_loader = exp.loader.SetLoader(exp_name=args.exp, set_name=set_name)
-        id2scene = set_loader.load_id2scene()
+        id2scene = set_loader.load_id2scene_json()
         task = set_opt["task"]
 
         for scene_id, scene in id2scene.items():
+
+            start_q = [0.0] * 7 if FIRST_COMMAND else \
+                [-0.238, 0.509, -0.255,
+                 -2.115, -0.743, 0.132, -0.209]
+
             bullet_cam_targets = {}
 
             # Modify the scene for placing, and determine placing destination.
@@ -125,6 +131,7 @@ async def send_to_client(websocket, path):
                     task=task,
                     place_dst_xy=place_dst_xy,
                     vision_models_dict=vision_models_dict,
+                    start_q=start_q
                 )
 
             # Initalize the directory if we are saving states.
@@ -229,6 +236,7 @@ async def send_to_client(websocket, path):
                         util.save_json(path=t1_path, data=set2success)
                     break
                 n_frames += 1
+            # FIRST_COMMAND = False
 
     sys.exit(0)
 

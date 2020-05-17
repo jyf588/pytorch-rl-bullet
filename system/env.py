@@ -44,6 +44,7 @@ class DemoEnvironment:
         command: Optional[str] = None,
         place_dst_xy: Optional[List[float]] = None,
         vision_models_dict: Dict = None,
+        start_q=[0.0]*7,
     ):
         """
         Args:
@@ -70,6 +71,8 @@ class DemoEnvironment:
         self.command = command
         self.place_dst_xy = place_dst_xy
         self.vision_models_dict = vision_models_dict
+
+        self.start_q = start_q
 
         np.random.seed(self.opt.seed)
 
@@ -126,7 +129,7 @@ class DemoEnvironment:
     def compute_stages(self):
         if self.opt.enable_reaching:
             reach_start = 0
-            reach_end = reach_start + self.policy_opt.n_plan_steps
+            reach_end = reach_start + self.policy_opt.n_reach_steps
             grasp_start = reach_end
         else:
             grasp_start = 0
@@ -135,12 +138,12 @@ class DemoEnvironment:
         n_place = self.policy_opt.place_control_steps
 
         if not self.opt.use_control_skip:
-            n_grasp *= self.policy_opt.control_skip
-            n_place *= self.policy_opt.control_skip
+            n_grasp *= self.policy_opt.grasp_control_skip
+            n_place *= self.policy_opt.place_control_skip
 
         grasp_end = grasp_start + n_grasp
         transport_start = grasp_end
-        transport_end = transport_start + self.policy_opt.n_plan_steps
+        transport_end = transport_start + self.policy_opt.n_transport_steps
         place_start = transport_end
         place_end = place_start + n_place
 
@@ -317,8 +320,8 @@ class DemoEnvironment:
         # If reaching is disabled, set the robot arm directly to the dstination
         # of reaching.
         if self.opt.enable_reaching:
-            q_zero = [0.0] * len(self.q_reach_dst)
-            self.w.robot_env.robot.reset_with_certain_arm_q(q_zero)
+            # q_zero = [0.0] * len(self.q_reach_dst)
+            self.w.robot_env.robot.reset_with_certain_arm_q(self.start_q)
         else:
             self.w.robot_env.robot.reset_with_certain_arm_q(self.q_reach_dst)
 
@@ -466,20 +469,22 @@ class DemoEnvironment:
         return q_reach_dst, q_transport_dst
 
     def compute_trajectory(self, stage: str) -> np.ndarray:
-        q_start, q_end = None, None
         expected_src_base_z_post_placing = None
         odicts = self.initial_obs
 
         if stage == "reach":
+            q_start = self.start_q
             q_end = self.q_reach_dst
         elif stage == "transport":
             q_start = self.w.get_robot_q()[0]
             q_end = self.q_transport_dst
         elif stage == "retract":
             q_start = self.w.get_robot_q()[0]
-            q_end = [-0.238, 0.349, -0.755,
-                     -1.915, -0.743, 0.132,
-                     -1.021]
+            # q_end = [-0.238, 0.349, -0.755,
+            #          -1.915, -0.743, 0.132,
+            #          -1.021]
+            q_end = [-0.238, 0.509, -0.255,
+                     -2.115, -0.743, 0.132, -0.209]
 
             # Instead of using the initial observation, we use the latest
             # observation.
@@ -507,31 +512,37 @@ class DemoEnvironment:
             container_dir=self.opt.container_dir,
         )
 
-        if stage == "retract" and trajectory is not None and len(trajectory) > 0:
-            from scipy import interpolate
-            n = self.policy_opt.n_retract_steps - 5  # interpolated trajectory resolution
-            end = 300
-            t = np.arange(0, end, 1)
-            T = np.linspace(0, end - 1, n - 1)
-            Traj_I = np.zeros((n - 1, 7))  # TODO
-            for i in range(7):
-                f = interpolate.interp1d(t, trajectory[:end, i], kind="quadratic")
-                Traj_I[:, i] = f(T)
-            trajectory = np.concatenate((Traj_I, trajectory[end:]), axis=0)
+        # if stage == "transport" and trajectory is not None and len(trajectory) > 0:
+        #     from scipy import interpolate
+        #     n = 600  # interpolated trajectory resolution
+        #     end = 400
+        #     t = np.arange(0, end, 1)
+        #     T = np.linspace(0, end - 1, n - 1)
+        #     Traj_I = np.zeros((n - 1, 7))  # TODO
+        #     for i in range(7):
+        #         f = interpolate.interp1d(t, trajectory[:end, i], kind="quadratic")
+        #         Traj_I[:, i] = f(T)
+        #     trajectory = np.concatenate((Traj_I, trajectory[end:]), axis=0)
 
         return trajectory
 
     def grasp(self, stage_ts: int):
-        obs = system.policy.wrap_obs(
-            self.get_grasp_observation(), is_cuda=self.opt.is_cuda
-        )
-        with torch.no_grad():
-            _, action, _, self.hidden_states = self.grasp_policy.act(
-                obs, self.hidden_states, self.masks, deterministic=self.bullet_opt.det
+        if stage_ts == 0:
+            self.w.robot_env.change_control_skip_scaling(
+                c_skip=self.policy_opt.grasp_control_skip
             )
+
+        if stage_ts % self.policy_opt.grasp_control_skip == 0 or self.opt.use_control_skip:
+            self.grasp_obs = system.policy.wrap_obs(
+                self.get_grasp_observation(), is_cuda=self.opt.is_cuda
+            )
+            with torch.no_grad():
+                _, self.grasp_action, _, self.hidden_states = self.grasp_policy.act(
+                    self.grasp_obs, self.hidden_states, self.masks, deterministic=self.bullet_opt.det
+                )
         self.w.step_robot(
             action=system.policy.unwrap_action(
-                action=action,
+                action=self.grasp_action,
                 is_cuda=self.opt.is_cuda,
                 clip=self.policy_opt.use_slow_policy,
             ),
@@ -542,20 +553,32 @@ class DemoEnvironment:
     def place(self, stage_ts: int):
         if stage_ts == 0:
             self.w.robot_env.change_control_skip_scaling(
-                c_skip=self.policy_opt.control_skip
+                c_skip=self.policy_opt.place_control_skip
             )
 
-        # Get the current observation.
-        obs = system.policy.wrap_obs(
-            self.get_place_observation(), is_cuda=self.opt.is_cuda
-        )
-        with torch.no_grad():
-            _, action, _, self.hidden_states = self.place_policy.act(
-                obs, self.hidden_states, self.masks, deterministic=self.bullet_opt.det
+        if self.opt.use_control_skip:
+            skip = self.policy_opt.vision_delay
+        else:
+            skip = self.policy_opt.vision_delay * self.policy_opt.place_control_skip
+        # Update the observation only every `vision_delay` steps.
+        if stage_ts % skip == 0:
+            self.obs = self.get_observation()       # this is vision obs
+
+        if stage_ts % self.policy_opt.place_control_skip == 0 or self.opt.use_control_skip:
+            # Get the current observation.
+            self.place_obs = system.policy.wrap_obs(
+                self.get_place_observation(), is_cuda=self.opt.is_cuda
             )
+            with torch.no_grad():
+                _, self.place_action, _, self.hidden_states = self.place_policy.act(
+                    self.place_obs, self.hidden_states, self.masks, deterministic=self.bullet_opt.det
+                )
 
         self.w.step_robot(
-            action=system.policy.unwrap_action(action=action, is_cuda=self.opt.is_cuda),
+            action=system.policy.unwrap_action(
+                action=self.place_action,
+                is_cuda=self.opt.is_cuda,
+                clip=self.policy_opt.use_slow_policy),
             timestep=self.timestep,
         )
 
@@ -578,17 +601,24 @@ class DemoEnvironment:
             self.init_arm_q = self.last_tar_arm_q
             self.init_arm_dq, _ = self.w.get_robot_dq()
 
+            if self.policy_opt.place_clip_init_tar:
+                value = self.policy_opt.place_clip_init_tar_value
+                self.w.robot_env.robot.tar_fin_q = \
+                    np.clip(self.init_tar_fin_q, self.init_fin_q - value, self.init_fin_q + value)
+
         if stage_ts > len(self.trajectory) - 1:
             tar_arm_q = self.trajectory[-1]
         else:
             tar_arm_q = self.trajectory[stage_ts]
 
-        if restore_fingers:
-            proj_arm_q = self.init_arm_q + (stage_ts+1) * self.init_arm_dq * self.bullet_opt.ts
-            blending = np.clip(
-                stage_ts / (len(self.trajectory) * 0.8), 0.0, 1.0
-            )
-            tar_arm_q = tar_arm_q * blending + proj_arm_q * (1 - blending)
+        if self.policy_opt.use_arm_blending:
+            blend_end = 0.8 if stage == "retract" else 0.6      # else == "transport"
+            if stage != "reach":
+                proj_arm_q = self.init_arm_q + (stage_ts+1) * self.init_arm_dq * self.bullet_opt.ts
+                blending = np.clip(
+                    stage_ts / (len(self.trajectory) * blend_end), 0.0, 1.0
+                )
+                tar_arm_q = tar_arm_q * blending + proj_arm_q * (1 - blending)
 
         tar_arm_vel = (tar_arm_q - self.last_tar_arm_q) / self.bullet_opt.ts
 
@@ -664,10 +694,6 @@ class DemoEnvironment:
         return obs
 
     def get_place_observation(self):
-        # Update the observation only every `vision_delay` steps.
-        if self.timestep % self.policy_opt.vision_delay == 0:
-            self.obs = self.get_observation()
-
         # Compute the observation vector from object poses and placing position.
         tx, ty, tz = self.policy_dst_xyz  # this should be dst xy rather than src xy
 
