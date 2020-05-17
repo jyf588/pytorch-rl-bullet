@@ -282,15 +282,15 @@ async def send_to_client(websocket, path):
 
 def load_vision_models():
     vision_models_dict = {}
+    seed = VISION_OPTIONS.seed
     if VISION_OPTIONS.use_segmentation_module:
         vision_models_dict["seg"] = DASHSegModule(
-            seed=VISION_OPTIONS.seed,
+            seed=seed,
             mode="eval_single",
             checkpoint_path=VISION_OPTIONS.seg_checkpoint_path,
             vis_dir=None,
         )
     if VISION_OPTIONS.separate_vision_modules:
-        seed = VISION_OPTIONS.seed
         vision_models_dict["plan"] = VisionModule(
             seed=seed, load_checkpoint_path=VISION_OPTIONS.planning_checkpoint_path,
         )

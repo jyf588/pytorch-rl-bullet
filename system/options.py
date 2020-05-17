@@ -4,15 +4,17 @@ import argparse
 import ns_vqa_dart.bullet.util as util
 
 
-# UNITY_NAME = "Linux8000_0512"
-# UNITY_NAME = "Linux8001_0515"
-# UNITY_NAME = "Linux8002_0515"
-# UNITY_CAPTURES_DIR = os.path.join(
-#     util.get_user_homedir(), f"unity/builds/{UNITY_NAME}/Captures"
-# )
-UNITY_CAPTURES_DIR = None
+CONTAINER_DIR = "/home/mguo/container_data_v2"
 
-CONTAINER_DIR = "/home/mguo/container_data_v1"
+# UNITY_NAME = "Linux8000_0512"
+UNITY_NAME = "Linux8001_0515"
+# UNITY_NAME = "Linux8002_0515"
+
+# UNITY_CAPTURES_DIR = None
+UNITY_CAPTURES_DIR = os.path.join(
+    util.get_user_homedir(), f"unity/builds/{UNITY_NAME}/Captures"
+)
+
 
 BASE_SYSTEM_OPTIONS = argparse.Namespace(
     seed=101,
@@ -162,15 +164,13 @@ VISION_OPTIONS = argparse.Namespace(
     seed=None,
     renderer="unity",
     use_segmentation_module=False,
-    separate_vision_modules=True,
+    separate_vision_modules=False,
     use_gt_obs=False,
-    seg_checkpoint_path="/home/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
-    planning_checkpoint_path=f"/home/mguo/outputs/planning_v003_20K/{plan_model}/checkpoint_best.pt",
-    placing_checkpoint_path=f"/home/mguo/outputs/placing_v003_2K_20K/{place_model}/checkpoint_best.pt",
-    stacking_checkpoint_path=f"/home/mguo/outputs/stacking_v003_2K_20K/{stack_model}/checkpoint_best.pt",
-    # seg_checkpoint_path="/home/mguo/outputs/detectron/seg_tiny/2020_05_11_20_52_07/model_final.pth",
-    # attr_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/checkpoint_best.pt",
-    # attr_checkpoint_path="/home/mguo/outputs/attr_net/seg_tiny/checkpoint_best.pt",
+    attr_checkpoint_path="/home/mguo/outputs/combined/2020_05_16_22_47_25/checkpoint_best.pt",
+    # seg_checkpoint_path="/home/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
+    # planning_checkpoint_path=f"/home/mguo/outputs/planning_v003_20K/{plan_model}/checkpoint_best.pt",
+    # placing_checkpoint_path=f"/home/mguo/outputs/placing_v003_2K_20K/{place_model}/checkpoint_best.pt",
+    # stacking_checkpoint_path=f"/home/mguo/outputs/stacking_v003_2K_20K/{stack_model}/checkpoint_best.pt",
     coordinate_frame="unity_camera",
     save_predictions=True,
 )
