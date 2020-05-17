@@ -62,7 +62,8 @@ async def send_to_client(websocket, path):
     system.openrave.check_clean_container(container_dir=opt.container_dir)
 
     # Define paths.
-    util.delete_and_create_dir(opt.unity_captures_dir)
+    if opt.unity_captures_dir is not None:
+        util.delete_and_create_dir(opt.unity_captures_dir)
     run_time_str = util.get_time_dirname()
     run_dir = os.path.join(opt.root_outputs_dir, args.exp, opt.policy_id, run_time_str)
     outputs_dir = os.path.join(run_dir, "pickle")
@@ -159,7 +160,8 @@ async def send_to_client(websocket, path):
                 frame_id = f"{task}_{scene_id}_{env.timestep:06}"
                 stage = env.stage
                 # The state is the state of the world BEFORE applying the action at the
-                # current timestep.
+                # current timestep. We currently save states primarily to check for
+                # reproducibility of runs.
                 if opt.save_states:
                     state_path = os.path.join(states_dir, f"{frame_id}.p")
                     util.save_pickle(

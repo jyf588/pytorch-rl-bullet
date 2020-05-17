@@ -6,7 +6,13 @@ import ns_vqa_dart.bullet.util as util
 
 # UNITY_NAME = "Linux8000_0512"
 # UNITY_NAME = "Linux8001_0515"
-UNITY_NAME = "Linux8002_0515"
+# UNITY_NAME = "Linux8002_0515"
+# UNITY_CAPTURES_DIR = os.path.join(
+#     util.get_user_homedir(), f"unity/builds/{UNITY_NAME}/Captures"
+# )
+UNITY_CAPTURES_DIR = None
+
+CONTAINER_DIR = "/home/mguo/container_data_v1"
 
 BASE_SYSTEM_OPTIONS = argparse.Namespace(
     seed=101,
@@ -32,14 +38,12 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     render_frequency=100,
     render_obs=False,
     animate_head=False,
-    save_states=True,
+    save_states=True,  # To check reproducibility.
     policy_id="0404",  # [0404, 0411, 0510]
     save_first_pov_image=False,
     root_outputs_dir=os.path.join(util.get_user_homedir(), "outputs/system"),
-    container_dir="/home/mguo/container_data_v3",
-    unity_captures_dir=os.path.join(
-        util.get_user_homedir(), f"unity/builds/{UNITY_NAME}/Captures"
-    ),
+    container_dir=CONTAINER_DIR,
+    unity_captures_dir=UNITY_CAPTURES_DIR,
 )
 
 VISION_STATES_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
