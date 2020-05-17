@@ -288,13 +288,6 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
         reward -= self.robot.get_4_finger_deviation() * 1.5
 
-        vel_palm = np.linalg.norm(self.robot.get_link_v_w(self.robot.ee_id)[0])
-        # print(vel_palm)
-        reward += -vel_palm * 10
-
-        # if self.timer < 20 * self.control_skip:
-        #     input("press enter")
-
         # object dropped during testing
         if top_pos[2] < (self.tz_act + 0.04) and self.timer > self.test_start * self.control_skip:
             reward += -15.
