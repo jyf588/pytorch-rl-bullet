@@ -17,10 +17,10 @@ import exp.loader
 import system.policy
 import system.options
 import system.openrave
-import system.base_scenes
 import bullet2unity.states
 import scene.util as scene_util
 from states_env import StatesEnv
+import scene.generate as scene_gen
 from system.env import DemoEnvironment
 import my_pybullet_envs.utils as utils
 import ns_vqa_dart.bullet.util as util
@@ -90,6 +90,7 @@ async def send_to_client(websocket, path):
         vision_opt=VISION_OPTIONS,
     )
 
+    # Connect to bullet.
     if opt.render_bullet:
         p.connect(p.GUI)
     else:
@@ -97,6 +98,9 @@ async def send_to_client(websocket, path):
 
     success_metrics = {"overall": {}, "scenes": {}}
     for set_name, set_opt in set_name2opt.items():
+        task = set_opt["task"]
+
+        # Initialize data structures to track success.
         success_metrics["overall"][set_name] = {
             "n_success": 0,
             "n_or_success": 0,
@@ -104,17 +108,17 @@ async def send_to_client(websocket, path):
         }
         success_metrics["scenes"][set_name] = {}
 
-        set_loader = exp.loader.SetLoader(exp_name=args.exp, set_name=set_name)
-        id2scene = set_loader.load_id2scene()
-        task = set_opt["task"]
+        # Load scenes.
+        scenes_dir = os.path.join(opt.scenes_root_dir, args.exp)
+        scenes = scene_gen.load_scenes(load_dir=scenes_dir, task=task)
 
         if opt.task_subset is not None and task not in opt.task_subset:
             continue
 
-        for scene_idx, (scene_id, scene) in enumerate(id2scene.items()):
-            if opt.start_sid is not None and int(scene_idx) < opt.start_sid:
+        for scene_id, scene in enumerate(scenes):
+            if opt.start_sid is not None and int(scene_id) < opt.start_sid:
                 continue
-            elif opt.end_sid is not None and int(scene_idx) >= opt.end_sid:
+            elif opt.end_sid is not None and int(scene_id) >= opt.end_sid:
                 continue
             bullet_cam_targets = {}
             # Modify the scene for placing, and determine placing destination.

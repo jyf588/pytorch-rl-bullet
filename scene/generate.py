@@ -78,6 +78,16 @@ def save_scenes(dst_dir: str, task: str, scenes: List[Dict]):
     print(f"Saved {task} scenes to: {task_dir}")
 
 
+def load_scenes(load_dir: str, task: str) -> List[Dict]:
+    task_dir = os.path.join(load_dir, task)
+    scenes = []
+    for f in sorted(os.listdir(task_dir)):
+        path = os.path.join(task_dir, f)
+        scene = util.load_json(path=path)
+        scenes.append(scene)
+    return scenes
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
