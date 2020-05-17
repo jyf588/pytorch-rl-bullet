@@ -485,6 +485,7 @@ class DemoEnvironment:
             #          -1.021]
             q_end = [-0.238, 0.509, -0.255,
                      -2.115, -0.743, 0.132, -0.209]
+            # q_end = [0.0] * 7
 
             # Instead of using the initial observation, we use the latest
             # observation.
