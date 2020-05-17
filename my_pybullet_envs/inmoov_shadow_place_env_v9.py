@@ -425,9 +425,9 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
         # print(vel_metric * 5)
         # print("upright", reward)
 
-        diff_norm = self.robot.get_norm_diff_tar()  # TODO: necessary?
-        reward += 10.0 / (diff_norm + 1.0)
-        # # print(10. / (diff_norm + 1.))
+        # diff_norm = self.robot.get_norm_diff_tar()  # TODO: necessary?
+        # reward += 10.0 / (diff_norm + 1.0)
+        # # # print(10. / (diff_norm + 1.))
 
         any_hand_contact = False
         hand_r = 0
@@ -442,10 +442,10 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
                 any_hand_contact = True
             else:
                 hand_r += 0.5
-        reward += hand_r - 7
+        reward += (hand_r - 7) * np.minimum(self.timer / (20.0 * self.control_skip), 1.0)
         # print("no contact", hand_r - 7.0)
 
-        reward -= self.robot.get_4_finger_deviation() * 0.3
+        reward -= self.robot.get_4_finger_deviation() * 0.5
 
         #
         # if self.timer == 99 * self.control_skip:
@@ -456,6 +456,7 @@ class InmoovShadowHandPlaceEnvV9(gym.Env):
             rot_metric > 0.9
             and xyz_metric > 0.6
             and vel_metric > 0.6
+            and self.timer > (20.0 * self.control_skip)
             # and meaningful_c
         ):  # close to placing
             reward += 5.0
