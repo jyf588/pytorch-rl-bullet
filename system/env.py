@@ -660,14 +660,13 @@ class DemoEnvironment:
         else:
             tar_arm_q = self.trajectory[stage_ts]
 
-        if self.policy_opt.use_arm_blending:
-            blend_end = 0.8 if stage == "retract" else 0.6      # else == "transport"
-            if stage != "reach":
-                proj_arm_q = self.init_arm_q + (stage_ts+1) * self.init_arm_dq * self.bullet_opt.ts
-                blending = np.clip(
-                    stage_ts / (len(self.trajectory) * blend_end), 0.0, 1.0
-                )
-                tar_arm_q = tar_arm_q * blending + proj_arm_q * (1 - blending)
+        if self.policy_opt.use_arm_blending and stage != "reach":
+            blend_end = 0.6
+            proj_arm_q = self.init_arm_q + (stage_ts+1) * self.init_arm_dq * self.bullet_opt.ts
+            blending = np.clip(
+                stage_ts / (len(self.trajectory) * blend_end), 0.0, 1.0
+            )
+            tar_arm_q = tar_arm_q * blending + proj_arm_q * (1 - blending)
 
         tar_arm_vel = (tar_arm_q - self.last_tar_arm_q) / self.bullet_opt.ts
 
@@ -732,14 +731,14 @@ class DemoEnvironment:
 
         odict = self.initial_obs[self.src_idx]
         half_height = odict["height"] / 2
-        is_box = odict["shape"] == "box"
+        shape = utils.NAME_TO_SHAPE_IND_MAP[odict["shape"]]
 
-        if self.policy_opt.use_height:
+        if self.policy_opt.use_height and not self.is_sphere:
             obs = self.w.robot_env.get_robot_contact_txtytz_halfh_shape_obs_no_dup(
-                x, y, 0.0, half_height, is_box
+                x, y, 0.0, half_height, shape
             )
         else:
-            obs = self.w.robot_env.get_robot_contact_txty_shape_obs_no_dup(x, y, is_box)
+            obs = self.w.robot_env.get_robot_contact_txty_shape_obs_no_dup(x, y, shape)
         return obs
 
     def get_place_observation(self):
@@ -748,8 +747,11 @@ class DemoEnvironment:
 
         tdict = self.obs[self.src_idx]
         t_pos = tdict["position"]
-        t_up = tdict["up_vector"]
-        is_box = tdict["shape"] == "box"  # should not matter if use init_obs or obs
+        if tdict["shape"] == "sphere":
+            t_up = [0.0, 0.0, 1.0]      # sph does not have up vec
+        else:
+            t_up = tdict["up_vector"]
+        shape = utils.NAME_TO_SHAPE_IND_MAP[tdict["shape"]]  # should not matter if use init_obs or obs
 
         if self.task == "stack":
             bdict = self.obs[self.dst_idx]
@@ -759,13 +761,13 @@ class DemoEnvironment:
             b_pos = [0.0, 0.0, 0.0]
             b_up = [0.0, 0.0, 1.0]
 
-        if self.policy_opt.use_height:
+        if self.policy_opt.use_height and not self.is_sphere:
             p_obs = self.w.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
                 tx=tx,
                 ty=ty,
                 tz=tz,
                 half_h=tdict["height"] / 2,
-                shape=is_box,
+                shape=shape,
                 t_pos=t_pos,
                 t_up=t_up,
                 b_pos=b_pos,
@@ -775,14 +777,14 @@ class DemoEnvironment:
             p_obs = self.w.robot_env.get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
                 tx=tx,
                 ty=ty,
-                shape=is_box,
+                shape=shape,
                 t_pos=t_pos,
                 t_up=t_up,
                 b_pos=b_pos,
                 b_up=b_up,
             )
 
-        if self.policy_opt.use_place_stack_bit:
+        if self.policy_opt.use_place_stack_bit and not self.is_sphere:
             if self.task == "place":
                 p_obs.extend([1.0])
             elif self.task == "stack":
