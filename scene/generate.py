@@ -23,16 +23,14 @@ def main(args: argparse.Namespace):
     for task in ["stack", "place"]:
         opt = task2opt[task]
         # Create the scene generator. Seeds are specified at the task-level.
-        generators = create_generators(
-            seed=opt["seed"], generator_options=task2gen_opt[task]
-        )
-        scenes = generate_scenes(n_scenes=opt["n_scenes"], generators=generators)
+        type2gen = create_generators(seed=opt["seed"], type2gen_opt=task2gen_opt[task])
+        scenes = generate_scenes(n_scenes=opt["n_scenes"], type2gen=type2gen)
 
         # Save the scenes.
         save_scenes(dst_dir, task, scenes)
 
 
-def create_generators(seed: int, generator_options: List) -> List:
+def create_generators(seed: int, type2gen_opt: Dict) -> Dict:
     """Create RandomObjectsGenerator's given generator options.
 
     Args:
@@ -41,11 +39,13 @@ def create_generators(seed: int, generator_options: List) -> List:
     Returns:
         generators: A list of RandomObjectsGenerator's.
     """
-    generators = [SceneGenerator(seed=seed, opt=opt) for opt in generator_options]
-    return generators
+    type2gen = {}
+    for k, opt_list in type2gen_opt.items():
+        type2gen[k] = [SceneGenerator(seed=seed, opt=opt) for opt in opt_list]
+    return type2gen
 
 
-def generate_scenes(n_scenes: int, generators: List):
+def generate_scenes(n_scenes: int, type2gen: Dict):
     """
     Args:
         n_scenes: The number of scenes to generate.
@@ -58,13 +58,22 @@ def generate_scenes(n_scenes: int, generators: List):
     """
     scenes = []
     for _ in tqdm(range(n_scenes)):
-        scene: List[Dict] = []
-        for generator in generators:
-            # Enforce uniqueness between manipulated objects and surrounding objects.
-            # (But not within surrounding objects themselves)
-            scene += generator.generate_tabletop_objects(
-                existing_odicts=scene, unique_odicts=scene
+        # Generate manipulable objects before generating surrounding objects.
+        # Enforce uniqueness between manipulated objects and surrounding objects.
+        # (But not within surrounding objects themselves).
+        manip_scene: List[Dict] = []
+        for gen in type2gen["manip"]:
+            manip_scene += gen.generate_tabletop_objects(
+                existing_odicts=manip_scene, unique_odicts=manip_scene
             )
+        surround_scene = []
+        for gen in type2gen["surround"]:
+            surround_scene += gen.generate_tabletop_objects(
+                existing_odicts=manip_scene, unique_odicts=manip_scene
+            )
+
+        # Combine the scenes. Ensure that manipulable objects come first.
+        scene = manip_scene + surround_scene
         scenes.append(scene)
     return scenes
 

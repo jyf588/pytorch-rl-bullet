@@ -1,8 +1,8 @@
 import os
 import ns_vqa_dart.bullet.util as util
 
-dir1 = "/home/mguo/data/dash/t1_0513"
-dir2 = "/home/mguo/data/dash/t1"
+dir1 = "/home/mguo/data/dash/t1"
+dir2 = "/home/mguo/data/dash/t1_repro_test"
 
 
 for task in ["place", "stack"]:
@@ -14,8 +14,8 @@ for task in ["place", "stack"]:
         path1 = os.path.join(t1, fname1)
         path2 = os.path.join(t2, fname1)
 
-        x1 = util.load_pickle(path=path1)
-        x2 = util.load_pickle(path=path2)
+        x1 = util.load_json(path=path1)
+        x2 = util.load_json(path=path2)
 
         if x1 != x2:
             n_diff += 1

@@ -49,10 +49,12 @@ def create_options(json_path: str):
     place_sur_opt["n"] = compute_sur_bounds(min_objects, max_objects, N_PLACE_MANIP)
     stack_sur_opt["n"] = compute_sur_bounds(min_objects, max_objects, N_STACK_MANIP)
 
-    # Order matters here!
     task2gen_opt = {
-        "place": [place_manip_opt, place_sur_opt],
-        "stack": [stack_top_opt, stack_btm_opt, stack_sur_opt],
+        "place": {"manip": [place_manip_opt], "surround": [place_sur_opt],},
+        "stack": {
+            "manip": [stack_top_opt, stack_btm_opt],
+            "surround": [stack_sur_opt],
+        },
     }
     return task2opt, task2gen_opt
 
