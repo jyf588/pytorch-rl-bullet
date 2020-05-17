@@ -7,7 +7,7 @@ from typing import *
 
 
 class SceneGenerator:
-    def __init__(self, seed: int, opt: argparse.Namespace):
+    def __init__(self, seed: int, opt: Dict):
         """
         Args:
             seed: The random seed.
@@ -45,9 +45,10 @@ class SceneGenerator:
         # Randomly select the number of objects to generate.
         n_objects = self.generate_n_objects()
 
-        odicts, n_tries = [], 0
+        odicts: List[Dict] = []
+        n_tries = 0
         # Generate `n_objects` objects, one by one.
-        while len(odicts) < n_objects and n_tries < self.opt.max_retries:
+        while len(odicts) < n_objects and n_tries < self.opt["max_retries"]:
             odict = self.generate_object()
 
             # Check if generated object is too close to others.
@@ -55,7 +56,7 @@ class SceneGenerator:
             if self.any_close(src_odict=odict, other_odicts=other_odicts):
                 n_tries += 1
             # Check whether the generated object is unique from `unique_odicts`.
-            elif self.opt.check_uniqueness and self.found_matching_object(
+            elif unique_odicts is not None and self.found_matching_object(
                 src_odict=odict, unique_odicts=unique_odicts
             ):
                 n_tries += 1
@@ -71,33 +72,33 @@ class SceneGenerator:
         Returns:
             odict: The randomly generated object dictionary.
         """
-        shape = random.choice(self.opt.shapes)
+        shape = random.choice(self.opt["shapes"])
         radius, height = self.generate_random_size(shape=shape)
         position = self.generate_random_xyz(height=height)
 
         odict = {
             "shape": shape,
-            "color": random.choice(self.opt.colors),
+            "color": random.choice(self.opt["colors"]),
             "radius": radius,
             "height": height,
             "position": position,
             "orientation": self.generate_orientation(shape=shape),
-            "mass": self.sample_float(self.opt.mass),
-            "mu": self.sample_float(self.opt.mu),
+            "mass": self.sample_float(self.opt["mass"]),
+            "mu": self.sample_float(self.opt["mu"]),
         }
         return odict
 
     def generate_n_objects(self) -> int:
-        value_type = type(self.opt.n_objects)
+        value_type = type(self.opt["n"])
         if value_type == int:
-            return self.opt.n_objects
-        elif value_type == tuple:
-            # `self.opt.n_objects[1]` is exclusive while `random.randint` is
+            return self.opt["n"]
+        elif value_type in [tuple, list]:
+            # `self.opt.n[1]` is exclusive while `random.randint` is
             # inclusive, so that's why we subtract one from the max.
-            min_objs, max_objs = self.opt.n_objects
+            min_objs, max_objs = self.opt["n"]
             n_objects = random.randint(min_objs, max_objs - 1)
         else:
-            raise ValueError(f"Invalid type for self.opt.n_objects: {value_type}")
+            raise ValueError(f"Invalid type for n_objects: {value_type}")
         return n_objects
 
     def generate_random_size(self, shape: str) -> Tuple[float, float]:
@@ -111,8 +112,8 @@ class SceneGenerator:
             radius: The radius of the object.
             height: The height of the object. This is 2*r for sphere.
         """
-        radius = self.sample_float(self.opt.radius)
-        height = self.sample_float(self.opt.height)
+        radius = self.sample_float(self.opt["radius"])
+        height = self.sample_float(self.opt["height"])
         if shape == "sphere":
             height *= 0.75
             radius = height / 2
@@ -120,40 +121,40 @@ class SceneGenerator:
             radius *= 0.8
         return radius, height
 
-    def generate_random_xyz(self, height: Optional[float] = None) -> List[int]:
+    def generate_random_xyz(self, height: Optional[float] = None) -> List[float]:
         """Generates a random xyz based on axis bounds.
 
         Returns:
             xyz: The randomly generated xyz values.
         """
         xyz = []
-        for axis_range in [self.opt.x_pos, self.opt.y_pos, self.opt.z_pos]:
+        for axis_range in [self.opt["x_pos"], self.opt["y_pos"], self.opt["z_pos"]]:
             axis_value = self.sample_float(range=axis_range)
             xyz.append(axis_value)
 
         # Modify the z coordinate depending on whether the user wants
         # the z coordinate of the com or the base.
-        if self.opt.position_mode == "com":
+        if self.opt["position_mode"] == "com" and height is not None:
             xyz[2] += height / 2
-        elif self.opt.position_mode == "base":
+        elif self.opt["position_mode"] == "base":
             pass
         else:
-            raise ValueError(f"Invalid position mode: {self.opt.position_mode}")
+            raise ValueError(f'Invalid position mode: {self.opt["position_mode"]}')
         return xyz
 
     def generate_orientation(self, shape):
-        if self.opt.z_rot is None or shape == "sphere":
+        if self.opt["z_rot"] == 0.0 or shape == "sphere":
             orientation = [0.0, 0.0, 0.0, 1.0]
         else:
             orientation = pybullet.getQuaternionFromEuler(
-                [0.0, 0.0, self.sample_float(self.opt.z_rot)]
+                [0.0, 0.0, self.sample_float(self.opt["z_rot"])]
             )
         return orientation
 
     def sample_float(self, range) -> float:
         if type(range) == float:
             return range
-        elif type(range) == tuple:
+        elif type(range) in [tuple, list] and len(range) == 2:
             low, high = range
             return np.random.uniform(low=low, high=high)
         else:
@@ -195,7 +196,7 @@ class SceneGenerator:
             Whether the distance between the two points is less than or equal
                 to the threshold distance.
         """
-        return (ax - bx) ** 2 + (ay - by) ** 2 <= self.opt.obj_dist_thresh ** 2
+        return (ax - bx) ** 2 + (ay - by) ** 2 <= self.opt["dist_thresh"] ** 2
 
     def found_matching_object(self, src_odict: Dict, unique_odicts: List[Dict]):
         """Checks whether we were able to find a matching object between the source
@@ -220,3 +221,8 @@ class SceneGenerator:
                 return True
         # We were not able to find any matching objects.
         return False
+
+
+def gen_rand_color(colors):
+    c = random.choice(colors)
+    return c

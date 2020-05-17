@@ -31,16 +31,16 @@ EXPERIMENT_OPTIONS = {
         },
     },
     "t1": {
-        "stack": {
-            "seed": 5,
-            "task": "stack",
+        "place": {
+            "seed": 4,
+            "task": "place",
             "stage": "place",
             "n_scenes": N_TABLE1_SCENES,
             "save_states": False,
         },
-        "place": {
-            "seed": 4,
-            "task": "place",
+        "stack": {
+            "seed": 5,
+            "task": "stack",
             "stage": "place",
             "n_scenes": N_TABLE1_SCENES,
             "save_states": False,

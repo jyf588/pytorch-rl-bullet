@@ -1,0 +1,80 @@
+{
+    "task_options": {
+        "place": {
+            "n_scenes": 100,
+            "seed": 4
+        },
+        "stack": {
+            "n_scenes": 100,
+            "seed": 5
+        }
+    },
+    "generator_options": {
+        "min_objects": 4,
+        "max_objects": 6,
+        "base": {
+            "seed": null,
+            "n": null,
+            "dist_thresh": 0.25,
+            "max_retries": 50,
+            "position_mode": "com",
+            "shapes": null,
+            "colors": [
+                "red",
+                "yellow",
+                "green",
+                "blue"
+            ],
+            "radius": [
+                0.03,
+                0.05
+            ],
+            "height": [
+                0.13,
+                0.18
+            ],
+            "x_pos": [
+                -0.1,
+                0.25
+            ],
+            "y_pos": [
+                -0.1,
+                0.5
+            ],
+            "z_pos": 0.0,
+            "z_rot": 0.0,
+            "mass": [
+                1.0,
+                5.0
+            ],
+            "mu": [
+                0.8,
+                1.2
+            ]
+        },
+        "surround": {
+            "shapes": [
+                "box",
+                "cylinder",
+                "sphere"
+            ]
+        },
+        "manip": {
+            "shapes": [
+                "box",
+                "cylinder"
+            ]
+        },
+        "stack_manip": {},
+        "stack_top": {
+            "n": 1
+        },
+        "stack_btm": {
+            "n": 1,
+            "radius": 0.045
+        },
+        "place_manip": {
+            "n": 2
+        }
+    }
+}

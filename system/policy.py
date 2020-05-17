@@ -7,24 +7,23 @@ from typing import *
 import pybullet as pb
 
 import my_pybullet_envs.utils as utils
-from system.options import SHAPE2POLICY_NAMES, POLICY_OPTIONS
 
 
-def get_shape2policy_dict(opt):
+def get_shape2policy_dict(opt, policy_opt, shape2policy_paths):
     shape2policy_dict = {}
-    for shape, policy_names in SHAPE2POLICY_NAMES.items():
+    for shape, policy_names in shape2policy_paths.items():
         grasp_policy, _, _, _ = load(
-            policy_dir=policy_names.grasp_dir,
-            env_name=POLICY_OPTIONS.grasp_env_name,
+            policy_dir=policy_names["grasp_dir"],
+            env_name=policy_opt.grasp_env_name,
             is_cuda=opt.is_cuda,
         )
         place_policy, _, hidden_states, masks = load(
-            policy_dir=policy_names.place_dir,
-            env_name=POLICY_OPTIONS.place_env_name,
+            policy_dir=policy_names["place_dir"],
+            env_name=policy_opt.place_env_name,
             is_cuda=opt.is_cuda,
         )
         (o_pos_pf_ave, o_quat_pf_ave, _,) = utils.read_grasp_final_states_from_pickle(
-            policy_names.grasp_pi
+            policy_names["grasp_pi"]
         )
         p_pos_of_ave, p_quat_of_ave = pb.invertTransform(o_pos_pf_ave, o_quat_pf_ave)
 
@@ -59,6 +58,7 @@ def load(policy_dir: str, env_name: str, is_cuda: bool, iter: Optional[int] = No
         path = os.path.join(policy_dir, env_name + "_" + str(iter) + ".pt")
     else:
         path = os.path.join(policy_dir, env_name + ".pt")
+    print(f"| loading policy from {path}")
     if is_cuda:
         actor_critic, ob_rms = torch.load(path)
     else:

@@ -1,10 +1,14 @@
+import argparse
 import asyncio
 import websockets
+
+global args
 
 
 @asyncio.coroutine
 def hello():
-    websocket = yield from websockets.connect("ws://localhost:8000/")
+    global args
+    websocket = yield from websockets.connect(f"ws://localhost:{args.port}/")
 
     print("Connected!")
 
@@ -19,6 +23,8 @@ def hello():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=8000)
+    args = parser.parse_args()
+
     asyncio.get_event_loop().run_until_complete(hello())
-    # ws = websocket.WebSocket()
-    # ws.connect("ws://localhost:8000")

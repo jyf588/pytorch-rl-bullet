@@ -50,10 +50,10 @@ class StateSaver:
         self.poses = []
         self.robot_id = None
         self.oid2state = []
-        self.sid = 0
+        self.sid = None
         self.oid2attr = {}
 
-    def track(self, trial: int, odicts: Dict[int, Dict], robot_id: int):
+    def track(self, trial, task, tx_act, ty_act, tx, ty, odicts, robot_id):
         """
         Tracks objects and robot.
         
@@ -71,9 +71,20 @@ class StateSaver:
                 }
             robot_id: The ID of the robot.
         """
+        self.trial = trial
+        self.task = task
+        self.tx_act = tx_act
+        self.ty_act = ty_act
+        self.tx = tx
+        self.ty = ty
+
         self.robot_id = robot_id
         self.oid2attr = odicts
-        self.trial = trial
+
+        self.sid = 0
+        print(f"Saving states for trial: {trial}")
+        self.trial_dir = os.path.join(self.out_dir, f"{self.trial:06}")
+        os.makedirs(self.trial_dir)
 
     def save_state(self):
         """
@@ -85,15 +96,20 @@ class StateSaver:
         # Combine in a state dictionary.
         state = {
             "trial": self.trial,
+            "task": self.task,
+            "tx_act": self.tx_act,
+            "ty_act": self.ty_act,
+            "tx": self.tx,
+            "ty": self.ty,
             "objects": object_states,
             "robot": robot_state,
         }
 
         # Save into a pickle file.
-        path = os.path.join(self.out_dir, f"{self.sid:07}.p")
+        path = os.path.join(self.trial_dir, f"{self.sid:07}.p")
         my_pybullet_envs.utils.save_pickle(path=path, data=state)
-        print(f"Saved poses to: {path}")
-        print(f"trial: {self.trial}")
+        # print(f"Saved poses to: {path}")
+        # print(f"trial: {self.trial}")
         self.sid += 1
 
     def get_object_states(self) -> List[Dict]:
@@ -139,9 +155,7 @@ class StateSaver:
         """
         robot_state = {}
         for joint_idx in range(p.getNumJoints(self.robot_id)):
-            joint_name = p.getJointInfo(self.robot_id, joint_idx)[1].decode(
-                "utf-8"
-            )
+            joint_name = p.getJointInfo(self.robot_id, joint_idx)[1].decode("utf-8")
             joint_angle = p.getJointState(
                 bodyUniqueId=self.robot_id, jointIndex=joint_idx
             )[0]

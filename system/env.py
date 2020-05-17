@@ -42,6 +42,7 @@ class DemoEnvironment:
         scene_id: int,
         scene: List[Dict],
         task: str,
+        outputs_dir: str,
         command: Optional[str] = None,
         place_dst_xy: Optional[List[float]] = None,
         vision_models_dict: Dict = None,
@@ -58,6 +59,9 @@ class DemoEnvironment:
             place_dst_xy: The destination (x, y) location to place at. Used 
                 only if `task` is `place`.
         """
+        # Set seed.
+        np.random.seed(opt.seed)
+
         print("**********CREATING DEMO ENVIRONMENT**********")
         self.opt = copy.deepcopy(opt)       # TODO
         self.bullet_opt = bullet_opt
@@ -69,13 +73,12 @@ class DemoEnvironment:
         self.scene_id = scene_id
         self.scene = scene
         self.task = task
+        self.outputs_dir = outputs_dir
         self.command = command
         self.place_dst_xy = place_dst_xy
         self.vision_models_dict = vision_models_dict
 
         self.start_q = start_q
-
-        np.random.seed(self.opt.seed)
 
         self.timestep = 0
         self.planning_complete = False
@@ -117,18 +120,6 @@ class DemoEnvironment:
         self.n_total_steps = self.duration_list[-1]
 
         self.stage, self.stage_ts = self.get_current_stage()
-
-        # Initialize the vision module if we are using vision for our
-        # observations.
-        if self.opt.obs_mode == "vision":
-            self.scene_loader = exp.loader.SceneLoader(
-                exp_name=f"system_{self.exp_name}",
-                set_name=self.set_name,
-                scene_id=self.scene_id,
-            )
-            if vision_opt.save_predictions:
-                os.makedirs(self.scene_loader.rgb_dir)
-            self.exp_time_dirname = util.get_time_dirname()
 
     def cleanup(self):
         # p.disconnect()
@@ -214,6 +205,10 @@ class DemoEnvironment:
         else:
             start_ts = 0 if stage_idx == 0 else self.duration_list[stage_idx-1]
             return self.stage_list[stage_idx], self.timestep - start_ts
+
+    def stage_progress(self):
+        completion_frac = self.stage_ts / self.stage2steps[self.stage]
+        return completion_frac
 
     def step(self):
         """Policy performs a single action based on the current state.
@@ -444,9 +439,9 @@ class DemoEnvironment:
             if not self.policy_opt.use_height:
                 policy_z = utils.H_MAX
 
-        dst_xyz = [dst_x, dst_y, z]
-        plan_xyz = [dst_x, dst_y, z + utils.PLACE_START_CLEARANCE]
-        policy_dst_xyz = [dst_x, dst_y, policy_z]
+        dst_xyz = [dst_x, dst_y, z]  # 0/H
+        plan_xyz = [dst_x, dst_y, z + utils.PLACE_START_CLEARANCE]  # 0/H + clear
+        policy_dst_xyz = [dst_x, dst_y, policy_z]  # 0/H or max
         return src_idx, dst_idx, dst_xyz, plan_xyz, policy_dst_xyz, is_sphere
 
     def compute_qs(self, src_xy: List[float], dst_xyz: List[float]) -> Tuple:
@@ -841,16 +836,14 @@ class DemoEnvironment:
             vision_module = self.vision_models_dict["combined"]
 
         # Retrieves the image, camera pose, and object segmentation masks.
-        rgb, oid2mask, cam_position, cam_orientation = self.get_images()
+        rgb, oid2mask, masks, cam_position, cam_orientation = self.get_images()
 
         # Either predict segmentations or use ground truth.
         if self.vision_opt.use_segmentation_module:
             masks = self.vision_models_dict["seg"].eval_example(bgr=rgb[:, :, ::-1])
-        else:
-            masks = oid2mask.values()
 
         # Predict attributes for all the segmentations.
-        pred = vision_module.predict(rgb=rgb, masks=masks, debug_id=self.timestep)
+        pred, inputs_img = vision_module.predict(rgb=rgb, masks=masks)
 
         pred_odicts = []
         for y in pred:
@@ -880,30 +873,27 @@ class DemoEnvironment:
 
         # Save the predicted and ground truth object dictionaries.
         if self.vision_opt.save_predictions:
-            path = os.path.join(
-                "/home/mguo/outputs/system",
-                self.exp_name,
-                self.exp_time_dirname,
-                self.set_name,
-                self.scene_id,
-                f"{self.timestep:06}.p",
-            )
-            os.makedirs(os.path.dirname(path), exist_ok=True)
+            frame_fname = f"{self.task}_{self.scene_id}_{self.timestep:06}"
+            path = os.path.join(self.outputs_dir, f"{frame_fname}.p",)
             util.save_pickle(
                 path=path,
                 data={
-                    "gt": {"oid2odict": self.get_state()["objects"],},
+                    "task": self.task,
+                    "scene_id": self.scene_id,
+                    "timestep": self.timestep,
+                    "stage": self.stage,
+                    "stage_ts": self.stage_ts,
+                    "gt": {"oid2odict": self.get_state()["objects"]},
                     "pred": {"odicts": pred_obs},
                     "s2d_idxs": s2d_idxs,
                     "src_idx": self.src_idx,
                     "dst_idx": self.dst_idx,
+                    "rgb": rgb,
+                    "masks": masks,
+                    "gt_masks": oid2mask,
+                    "vision_inputs": inputs_img,
                 },
             )
-            # Save ground truth masks for evaluation later on.
-            self.scene_loader.save_rgb(timestep=self.timestep, rgb=rgb)
-            self.scene_loader.create_masks_dir(timestep=self.timestep)
-            for oid, mask in oid2mask.items():
-                self.scene_loader.save_mask(timestep=self.timestep, mask=mask, oid=oid)
         return pred_obs
 
     def match_predictions_with_initial_obs(self, pred_odicts: List[Dict]) -> List:
@@ -983,7 +973,7 @@ class DemoEnvironment:
 
         masks, oids = ns_vqa_dart.bullet.seg.seg_img_to_map(seg_img)
         oid2mask = {oid: mask for mask, oid in zip(masks, oids)}
-        return rgb, oid2mask, camera_position, camera_orientation
+        return rgb, oid2mask, masks, camera_position, camera_orientation
 
     def set_unity_data(self, data: Dict):
         """Sets the data received from Unity.

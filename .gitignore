@@ -110,3 +110,4 @@ baselines/
 train_*.sh
 
 .vscode/
+*.mypy_cache/*

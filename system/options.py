@@ -1,5 +1,19 @@
+import os
 import copy
 import argparse
+import ns_vqa_dart.bullet.util as util
+
+
+CONTAINER_DIR = "/home/mguo/container_data_v2"
+
+# UNITY_NAME = "Linux8000_0512"
+UNITY_NAME = "Linux8001_0515"
+# UNITY_NAME = "Linux8002_0515"
+
+# UNITY_CAPTURES_DIR = None
+UNITY_CAPTURES_DIR = os.path.join(
+    util.get_user_homedir(), f"unity/builds/{UNITY_NAME}/Captures"
+)
 
 
 BASE_SYSTEM_OPTIONS = argparse.Namespace(
@@ -11,6 +25,9 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     scene_place_dst_idx=1,
     scene_stack_src_idx=0,
     scene_stack_dst_idx=1,
+    start_sid=None,  # Inclusive
+    end_sid=None,  # Exclusive
+    task_subset=None,
     obs_mode=None,
     obs_noise=False,
     position_noise=0.03,
@@ -23,9 +40,13 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     render_frequency=6,
     render_obs=False,
     animate_head=True,
-    save_states=False,
-    container_dir=None,
-    table1_dir="figures/table1",
+    save_states=True,  # To check reproducibility.
+    policy_id="0404",  # [0404, 0411, 0510]
+    save_first_pov_image=False,
+    scenes_root_dir=os.path.join(util.get_user_homedir(), "data/dash"),
+    root_outputs_dir=os.path.join(util.get_user_homedir(), "outputs/system"),
+    container_dir=CONTAINER_DIR,
+    unity_captures_dir=UNITY_CAPTURES_DIR,
     two_commands=False
 )
 
@@ -34,8 +55,6 @@ VISION_STATES_OPTIONS.enable_reaching = False
 VISION_STATES_OPTIONS.enable_retract = False
 VISION_STATES_OPTIONS.obs_mode = "gt"
 VISION_STATES_OPTIONS.obs_noise = False
-VISION_STATES_OPTIONS.save_states = True
-VISION_STATES_OPTIONS.container_dir = "/home/mguo/container_data_v1"
 
 UNITY_DATASET_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 UNITY_DATASET_OPTIONS.render_frequency = 1  # Render and save every state.
@@ -43,16 +62,24 @@ UNITY_DATASET_OPTIONS.render_unity = True
 
 TEST_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 TEST_OPTIONS.enable_reaching = True
-TEST_OPTIONS.enable_retract = True
-TEST_OPTIONS.container_dir = "/home/yifengj/container_data"     # TODO
-
-TEST_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
-TEST_VISION_OPTIONS.obs_mode = "vision"
-TEST_VISION_OPTIONS.render_obs = False
-TEST_VISION_OPTIONS.render_unity = True
+TEST_OPTIONS.enable_retract = False  # Retract is excluded from Table 1 evaluation.
 
 TEST_GT_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_GT_OPTIONS.obs_mode = "gt"
+
+TEST_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
+TEST_VISION_OPTIONS.obs_mode = "vision"
+TEST_VISION_OPTIONS.render_unity = True
+TEST_VISION_OPTIONS.render_obs = True
+TEST_VISION_OPTIONS.save_first_pov_image = True
+
+DEBUG_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
+DEBUG_VISION_OPTIONS.obs_mode = "vision"
+DEBUG_VISION_OPTIONS.render_unity = True
+DEBUG_VISION_OPTIONS.render_obs = True
+DEBUG_VISION_OPTIONS.save_first_pov_image = True
+DEBUG_VISION_OPTIONS.enable_reaching = False
+DEBUG_VISION_OPTIONS.enable_retract = False
 
 
 SYSTEM_OPTIONS = {
@@ -60,7 +87,7 @@ SYSTEM_OPTIONS = {
     "unity_dataset": UNITY_DATASET_OPTIONS,
     "test_vision": TEST_VISION_OPTIONS,
     "test_gt": TEST_GT_OPTIONS,
-    "demo": None,
+    "debug_vision": DEBUG_VISION_OPTIONS,
 }
 
 
@@ -95,43 +122,90 @@ POLICY_OPTIONS = argparse.Namespace(
     vision_delay=2,
 )
 
-UNIVERSAL_POLICY_NAMES = argparse.Namespace(
-    # grasp_pi="0411_0_n_25_45",
-    # grasp_dir="./trained_models_0411_0_n/ppo/",
-    # place_dir="./trained_models_0411_0_n_place_0411_0/ppo/",
-    # grasp_pi="0404_0_n_20_40",
-    # grasp_dir="./trained_models_0404_0_n/ppo/",
-    # place_dir="./trained_models_0404_0_n_place_0404_0/ppo/",
-    grasp_pi="0510_0_n_25_45",
-    grasp_dir="./trained_models_0510_0_n/ppo/",         # TODO
-    place_dir="./trained_models_0510_0_n_place_0510_0/ppo/",
-)
 
-SPHERE_POLICY_NAMES = argparse.Namespace(
-    grasp_pi="0422_sph_n_25_45",
-    grasp_dir="./trained_models_0422_sph_n/ppo/",
-    place_dir="./trained_models_0422_sph_n_place_0422_sph/ppo/",
-)
+def get_policy_options_and_paths(policy_id: str):
+    policy_options = copy.deepcopy(POLICY_OPTIONS)
+    if policy_id == "0411":
+        grasp_pi = f"0411_0_n_25_45"
+        grasp_dir = f"./trained_models_0411_0_n/ppo/"
+        place_dir = f"./trained_models_0411_0_n_place_0411_0/ppo/"
+    elif policy_id == "0404":
+        policy_options.use_height = True
+        grasp_pi = f"0404_0_n_20_40"
+        grasp_dir = f"./trained_models_%s/ppo/" % "0404_0_n"
+        place_pi = f"0404_0_n_place_0404_0"
+        place_dir = f"./trained_models_%s/ppo/" % place_pi
+    #     grasp_pi="0510_0_n_25_45",
+    #     grasp_dir="./trained_models_0510_0_n/ppo/",         # TODO
+    #     place_dir="./trained_models_0510_0_n_place_0510_0/ppo/",
 
-SHAPE2POLICY_NAMES = {
-    "universal": UNIVERSAL_POLICY_NAMES,
-    "sphere": SPHERE_POLICY_NAMES,
+    shape2policy_paths = {
+        "universal": {
+            "grasp_pi": grasp_pi,
+            "grasp_dir": grasp_dir,
+            "place_dir": place_dir,
+        },
+        "sphere": {
+            "grasp_pi": "0422_sph_n_25_45",
+            "grasp_dir": "./trained_models_0422_sph_n/ppo/",
+            "place_dir": "./trained_models_0422_sph_n_place_0422_sph/ppo/",
+        },
+    }
+    return policy_options, shape2policy_paths
+
+
+VISION_V1_MODELS = {
+    "plan": "2020_04_19_07_14_00",
+    "place": "2020_04_22_04_35",
+    "stack": "2020_04_19_22_12_00",
 }
 
+VISION_V2_MODELS = {
+    "plan": "2020_05_15_23_43_08",
+    "place": "2020_05_15_02_18_08",
+    "stack": "2020_05_16_02_36_30",
+}
+
+plan_model = VISION_V2_MODELS["plan"]
+place_model = VISION_V2_MODELS["place"]
+stack_model = VISION_V2_MODELS["stack"]
 
 VISION_OPTIONS = argparse.Namespace(
+    seed=None,
     renderer="unity",
-    use_segmentation_module=True,
-    separate_vision_modules=True,
+    use_segmentation_module=False,
+    separate_vision_modules=False,
     use_gt_obs=False,
-    seg_checkpoint_path="/home/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
-    planning_checkpoint_path="/home/mguo/outputs/planning_v003_20K/checkpoint_best.pt",
-    placing_checkpoint_path="/home/mguo/outputs/placing_v003_2K_20K/checkpoint_best.pt",
-    stacking_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/checkpoint_best.pt",
-    # seg_checkpoint_path="/home/mguo/outputs/detectron/seg_tiny/2020_05_11_20_52_07/model_final.pth",
-    # attr_checkpoint_path="/home/mguo/outputs/stacking_v003_2K_20K/checkpoint_best.pt",
-    # attr_checkpoint_path="/home/mguo/outputs/attr_net/seg_tiny/checkpoint_best.pt",
+    attr_checkpoint_path="/home/mguo/outputs/combined/2020_05_16_22_47_25/checkpoint_best.pt",
+    # seg_checkpoint_path="/home/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
+    # planning_checkpoint_path=f"/home/mguo/outputs/planning_v003_20K/{plan_model}/checkpoint_best.pt",
+    # placing_checkpoint_path=f"/home/mguo/outputs/placing_v003_2K_20K/{place_model}/checkpoint_best.pt",
+    # stacking_checkpoint_path=f"/home/mguo/outputs/stacking_v003_2K_20K/{stack_model}/checkpoint_best.pt",
     coordinate_frame="unity_camera",
     save_predictions=True,
-    debug_dir=None,
 )
+
+
+def print_and_save_options(
+    run_dir: str, system_opt, bullet_opt, policy_opt, vision_opt
+):
+    options_dir = os.path.join(run_dir, "options")
+    os.makedirs(options_dir)
+    name2opt = {
+        "system": system_opt,
+        "bullet": bullet_opt,
+        "policy": policy_opt,
+        "vision": vision_opt,
+    }
+    for name, opt in name2opt.items():
+        args = vars(opt)
+        print("| options")
+        for k, v in args.items():
+            print("%s: %s" % (str(k), str(v)))
+
+        filename = f"{name}.txt"
+        file_path = os.path.join(options_dir, filename)
+        with open(file_path, "wt") as fout:
+            fout.write("| options\n")
+            for k, v in sorted(args.items()):
+                fout.write("%s: %s\n" % (str(k), str(v)))

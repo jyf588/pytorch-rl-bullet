@@ -16,11 +16,30 @@ import ns_vqa_dart.bullet.util as util
 from ns_vqa_dart.bullet.seg import UNITY_OIDS
 
 
+PLAN_TARGET_POSITION = [-0.06, 0.3, 0.0]
+
+
+def compute_bullet_camera_targets(
+    stage, send_image, save_image, odicts=None, oidx=None
+):
+    if stage == "plan":
+        cam_target = PLAN_TARGET_POSITION
+    elif stage == "place":
+        assert odicts is not None
+        assert oidx is not None
+        cam_target = get_object_camera_target(bullet_odicts=odicts, oidx=oidx)
+    else:
+        raise ValueError(f"Invalid stage: {stage}")
+
+    # Set the camera target.
+    bullet_camera_targets = create_bullet_camera_targets(
+        position=cam_target, should_save=save_image, should_send=send_image,
+    )
+    return bullet_camera_targets
+
+
 def create_bullet_camera_targets(
-    camera_control: str,
-    should_save: bool,
-    should_send: bool,
-    position: Optional[List[float]] = None,
+    position, should_save: bool, should_send: bool,
 ):
     """ Creates bullet camera targets.
 
@@ -41,39 +60,13 @@ def create_bullet_camera_targets(
                 }
             }
     """
-    # Tell unity to look at every single object.
-    if camera_control == "all":
-        bullet_camera_targets = {}
-        for idx, odict in enumerate(bullet_odicts):
-            # cam_tid = oid if use_oids else idx
-            cam_tid = idx
-            bullet_camera_targets[cam_tid] = {
-                "position": odict["position"],
-                "should_save": should_save,
-                "should_send": should_send,
-            }
-    # Only look once.
-    elif camera_control in ["center", "stack", "position"]:
-        # Tell unity to look only once at the center of the object distribution.
-        if camera_control == "center":
-            raise NotImplementedError
-        elif camera_control == "stack":
-            raise NotImplementedError
-            # Assumes that the first object in the object states corresponds to
-            # the destination object (i.e., the "bottom" object in the stack).
-        # Control the camera with a specified position.
-        elif camera_control == "position":
-            assert position is not None
-        bullet_camera_targets = {
-            0: {
-                "position": position,
-                "should_save": should_save,
-                "should_send": should_send,
-            }
+    bullet_camera_targets = {
+        0: {
+            "position": position,
+            "should_save": should_save,
+            "should_send": should_send,
         }
-
-    else:
-        raise ValueError(f"Invalid camera control method: {camera_control}")
+    }
     return bullet_camera_targets
 
 

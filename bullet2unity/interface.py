@@ -89,7 +89,7 @@ def encode(
     # Combine the id and state, and stringify into a msg.
     message = [state_id] + unity_state
     message = str(message)
-    print(f"Sending to unity: state {state_id}\tTime: {time.time()}")
+    print(f"Sending to unity: state {state_id}")
     return message
 
 
@@ -131,7 +131,7 @@ def decode(message_id: str, reply: str, bullet_cam_targets):
                 ...
             }
     """
-    print(f"Received from client: {len(reply)} characters\tTime: {time.time()}")
+    print(f"Received from client: {len(reply)} characters")
 
     # Split components by comma.
     reply = reply.split(",")
