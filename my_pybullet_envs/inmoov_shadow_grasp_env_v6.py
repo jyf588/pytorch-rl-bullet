@@ -242,7 +242,7 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
         top_xy_ideal = np.array([self.tx_act, self.ty_act])
         xy_dist = np.linalg.norm(top_xy_ideal - np.array(top_pos[:2]))
-        reward += -np.minimum(xy_dist, 0.4) * 4.0
+        reward += -np.minimum(xy_dist, 0.4) * 12.0
 
         for i in self.robot.fin_tips[:4]:
             tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
@@ -269,10 +269,9 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         #     rot_metric = np.array(z_axis).dot(np.array([0, 0, 1]))
         #     reward += np.maximum(rot_metric * 20 - 15, 0.0) * 2
 
-        con_reward = 0
         cps = p.getContactPoints(self.top_obj['id'], self.robot.arm_id, -1, self.robot.ee_id)    # palm
         if len(cps) > 0:
-            con_reward += 5.0
+            reward += 5.0
         f_bp = [0, 3, 6, 9, 12, 17]     # 3*4+5
         for ind_f in range(5):
             con = False
@@ -283,10 +282,9 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
                 if len(cps) > 0:
                     con = True
             if con:
-                con_reward += 5.0
+                reward += 5.0
             if con and ind_f == 4:
-                con_reward += 20.0        # reward thumb even more
-        reward += con_reward * np.minimum(self.timer / (20.0 * self.control_skip), 1.0)
+                reward += 20.0        # reward thumb even more
 
         reward -= self.robot.get_4_finger_deviation() * 1.5
 
@@ -375,8 +373,18 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
             shape = self.top_obj['shape']
             dim = utils.to_bullet_dimension(shape, self.top_obj['half_width'], self.top_obj['height'])
 
+            # try to keep fin q close to init_fin_q (keep finger pose)
+            # add at most offset 0.05 in init_tar_fin_q direction so that grasp is tight
+            fin_q_act, _ = self.robot.get_q_dq(self.robot.fin_actdofs)
+            tar_fin_q = np.clip(self.robot.tar_fin_q, fin_q_act - 0.2, fin_q_act + 0.2)     # TODO
+            tar_fin_q = np.clip(
+                tar_fin_q,
+                self.robot.ll[self.robot.fin_actdofs],
+                self.robot.ul[self.robot.fin_actdofs],
+            )
+
             state = {'obj_pos_in_palm': o_p_hf, 'obj_quat_in_palm': o_q_hf,
-                     'all_fin_q': fin_q, 'fin_tar_q': self.robot.tar_fin_q,
+                     'all_fin_q': fin_q, 'fin_tar_q': tar_fin_q,
                      'obj_dim': dim, 'obj_shape': shape}
             # print(state)
             # print(self.robot.get_joints_last_tau(self.robot.all_findofs))
