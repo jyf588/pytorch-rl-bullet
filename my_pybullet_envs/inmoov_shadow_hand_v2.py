@@ -71,8 +71,10 @@ class InmoovShadowNew:
                  timestep=1. / 240,
                  np_random=None,
                  conservative_clip=False,
-                 conservative_range=None
+                 conservative_range=None,
+                 sim=p
                  ):
+        self.sim = sim
         self.init_noise = init_noise
         self._timestep = timestep
         self.conservative_clip = conservative_clip
@@ -98,55 +100,55 @@ class InmoovShadowNew:
         self.maxForce = 200.    # TODO
         self.np_random = np_random
 
-        self.arm_id = p.loadURDF(os.path.join(currentdir,
+        self.arm_id = self.sim.loadURDF(os.path.join(currentdir,
                                              "assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand_v2_2.urdf"),
-                                 list(self.base_init_pos), p.getQuaternionFromEuler(list(self.base_init_euler)),
-                                 flags=p.URDF_USE_SELF_COLLISION | p.URDF_USE_INERTIA_FROM_FILE
-                                       | p.URDF_USE_SELF_COLLISION_EXCLUDE_ALL_PARENTS,
+                                 list(self.base_init_pos), self.sim.getQuaternionFromEuler(list(self.base_init_euler)),
+                                 flags=self.sim.URDF_USE_SELF_COLLISION | self.sim.URDF_USE_INERTIA_FROM_FILE
+                                       | self.sim.URDF_USE_SELF_COLLISION_EXCLUDE_ALL_PARENTS,
                                  useFixedBase=1)
 
         # self.print_all_joints_info()
 
-        for i in range(-1, p.getNumJoints(self.arm_id)):
-            p.changeDynamics(self.arm_id, i, jointDamping=0.0, linearDamping=0.0, angularDamping=0.0)
+        for i in range(-1, self.sim.getNumJoints(self.arm_id)):
+            self.sim.changeDynamics(self.arm_id, i, jointDamping=0.0, linearDamping=0.0, angularDamping=0.0)
 
         self.scale_mass_inertia(-1, self.ee_id, 0.01)
-        self.scale_mass_inertia(self.ee_id, p.getNumJoints(self.arm_id), 10.0)
+        self.scale_mass_inertia(self.ee_id, self.sim.getNumJoints(self.arm_id), 10.0)
 
         if self.np_random:
             mu = self.np_random.uniform(0.8, 1.2)
-            for i in range(self.ee_id, p.getNumJoints(self.arm_id)):
-                p.changeDynamics(self.arm_id, i, lateralFriction=mu)
+            for i in range(self.ee_id, self.sim.getNumJoints(self.arm_id)):
+                self.sim.changeDynamics(self.arm_id, i, lateralFriction=mu)
 
         # use np for multi-indexing
-        self.ll = np.array([p.getJointInfo(self.arm_id, i)[8] for i in range(p.getNumJoints(self.arm_id))])
-        self.ul = np.array([p.getJointInfo(self.arm_id, i)[9] for i in range(p.getNumJoints(self.arm_id))])
+        self.ll = np.array([self.sim.getJointInfo(self.arm_id, i)[8] for i in range(self.sim.getNumJoints(self.arm_id))])
+        self.ul = np.array([self.sim.getJointInfo(self.arm_id, i)[9] for i in range(self.sim.getNumJoints(self.arm_id))])
 
-        p.enableJointForceTorqueSensor(self.arm_id, self.ee_id, 1)
+        self.sim.enableJointForceTorqueSensor(self.arm_id, self.ee_id, 1)
 
-        # p.stepSimulation()
+        # self.sim.stepSimulation()
         # input("press enter")
 
     def change_hand_friction(self, mu):
-        for i in range(self.ee_id, p.getNumJoints(self.arm_id)):
-            p.changeDynamics(self.arm_id, i, lateralFriction=mu)
+        for i in range(self.ee_id, self.sim.getNumJoints(self.arm_id)):
+            self.sim.changeDynamics(self.arm_id, i, lateralFriction=mu)
 
     def print_all_joints_info(self):
-        for i in range(p.getNumJoints(self.arm_id)):
-            print(p.getJointInfo(self.arm_id, i)[0:3],
-                  p.getJointInfo(self.arm_id, i)[8], p.getJointInfo(self.arm_id, i)[9])
+        for i in range(self.sim.getNumJoints(self.arm_id)):
+            print(self.sim.getJointInfo(self.arm_id, i)[0:3],
+                  self.sim.getJointInfo(self.arm_id, i)[8], self.sim.getJointInfo(self.arm_id, i)[9])
 
     def scale_mass_inertia(self, start, end, ratio=1.0):
         total_m = 0
         for i in range(start, end):
-            dyn = p.getDynamicsInfo(self.arm_id, i)
+            dyn = self.sim.getDynamicsInfo(self.arm_id, i)
             mass = dyn[0]
             mass = mass * ratio
             lid = dyn[2]
             lid = (lid[0] * ratio, lid[1] * ratio, lid[2] * ratio,)
             total_m += mass
-            p.changeDynamics(self.arm_id, i, mass=mass)
-            p.changeDynamics(self.arm_id, i, localInertiaDiagonal=lid)
+            self.sim.changeDynamics(self.arm_id, i, mass=mass)
+            self.sim.changeDynamics(self.arm_id, i, localInertiaDiagonal=lid)
         # print(total_m)
 
     def perturb(self, arr, r=0.02):
@@ -173,11 +175,11 @@ class InmoovShadowNew:
             init_fin_q = np.array(self.init_fin_q)
 
         for ind in range(len(self.arm_dofs)):
-            p.resetJointState(self.arm_id, self.arm_dofs[ind], init_arm_q[ind], 0.0)
+            self.sim.resetJointState(self.arm_id, self.arm_dofs[ind], init_arm_q[ind], 0.0)
         for ind in range(len(self.fin_actdofs)):
-            p.resetJointState(self.arm_id, self.fin_actdofs[ind], init_fin_q[ind], 0.0)
+            self.sim.resetJointState(self.arm_id, self.fin_actdofs[ind], init_fin_q[ind], 0.0)
         for ind in range(len(self.fin_zerodofs)):
-            p.resetJointState(self.arm_id, self.fin_zerodofs[ind], 0.0, 0.0)
+            self.sim.resetJointState(self.arm_id, self.fin_zerodofs[ind], 0.0, 0.0)
         self.tar_arm_q = init_arm_q
         self.tar_fin_q = init_fin_q
 
@@ -189,7 +191,7 @@ class InmoovShadowNew:
             all_fin_q = np.array(all_fin_q)
             tar_act_q = np.array(tar_act_q)
         for ind in range(len(self.all_findofs)):
-            p.resetJointState(self.arm_id, self.all_findofs[ind], all_fin_q[ind], 0.0)
+            self.sim.resetJointState(self.arm_id, self.all_findofs[ind], all_fin_q[ind], 0.0)
         self.tar_fin_q = np.array(tar_act_q)
 
     def reset_with_certain_arm_q_finger_states(self, arm_q, all_fin_q, tar_act_q):
@@ -198,7 +200,7 @@ class InmoovShadowNew:
         else:
             arm_q = np.array(arm_q)
         for ind in range(len(self.arm_dofs)):
-            p.resetJointState(self.arm_id, self.arm_dofs[ind], arm_q[ind], 0.0)
+            self.sim.resetJointState(self.arm_id, self.arm_dofs[ind], arm_q[ind], 0.0)
         self.tar_arm_q = arm_q
         self.reset_only_certain_finger_states(all_fin_q, tar_act_q)
 
@@ -219,18 +221,18 @@ class InmoovShadowNew:
         dist = 1e30
         while not closeEnough and iter < 50:
             for ind in range(len(self.arm_dofs)):
-                p.resetJointState(self.arm_id, self.arm_dofs[ind], sp[ind])
+                self.sim.resetJointState(self.arm_id, self.arm_dofs[ind], sp[ind])
 
-            jointPoses = p.calculateInverseKinematics(self.arm_id, self.ee_id, wx_trans, wx_quat,
+            jointPoses = self.sim.calculateInverseKinematics(self.arm_id, self.ee_id, wx_trans, wx_quat,
                                                       lowerLimits=ll.tolist(), upperLimits=ul.tolist(),
                                                       jointRanges=jr.tolist(),
                                                       restPoses=sp)
-            # jointPoses = p.calculateInverseKinematics(self.arm_id, self.ee_id, wx_trans, wx_quat)
+            # jointPoses = self.sim.calculateInverseKinematics(self.arm_id, self.ee_id, wx_trans, wx_quat)
 
             sp = np.array(jointPoses)[range(7)].tolist()
             # print(sp)
 
-            wx_now = p.getLinkState(self.arm_id, self.ee_id)[4]
+            wx_now = self.sim.getLinkState(self.arm_id, self.ee_id)[4]
             dist = np.linalg.norm(np.array(wx_now) - np.array(wx_trans))
             # print("dist=", dist)
             if dist < 1e-3: closeEnough = True
@@ -244,7 +246,7 @@ class InmoovShadowNew:
             good_init = False
             while not good_init:
                 self.reset_with_certain_arm_q(sp)
-                cps = p.getContactPoints(bodyA=self.arm_id)
+                cps = self.sim.getContactPoints(bodyA=self.arm_id)
                 # for cp in cps:
                 #     print(cp)
                 #     input("penter")
@@ -259,7 +261,7 @@ class InmoovShadowNew:
         wq, _ = self.get_q_dq(self.arm_dofs)
         n_dofs = len(self.arm_dofs+self.all_findofs)
         n_arm_dofs = len(self.arm_dofs)
-        [jac_t, jac_r] = p.calculateJacobian(self.arm_id, self.ee_id, [0] * 3,
+        [jac_t, jac_r] = self.sim.calculateJacobian(self.arm_id, self.ee_id, [0] * 3,
                                              list(wq)+list(self.get_q_dq(self.all_findofs)[0]),
                                              [0.] * n_dofs, [0.] * n_dofs)
         jac = np.array([jac_t[0][:n_arm_dofs], jac_t[1][:n_arm_dofs], jac_t[2][:n_arm_dofs],
@@ -315,22 +317,22 @@ class InmoovShadowNew:
             self.tar_arm_q = np.clip(self.tar_arm_q, self.ll[self.arm_dofs], self.ul[self.arm_dofs])
         self.tar_fin_q += self.act[len(self.arm_dofs):]
         self.tar_fin_q = np.clip(self.tar_fin_q, self.ll[self.fin_actdofs], self.ul[self.fin_actdofs])
-        p.setJointMotorControlArray(
+        self.sim.setJointMotorControlArray(
             bodyIndex=self.arm_id,
             jointIndices=self.arm_dofs,
-            controlMode=p.POSITION_CONTROL,
+            controlMode=self.sim.POSITION_CONTROL,
             targetPositions=list(self.tar_arm_q),
             forces=[self.maxForce * 3] * len(self.arm_dofs))  # TODO: wrist force limit?
-        p.setJointMotorControlArray(
+        self.sim.setJointMotorControlArray(
             bodyIndex=self.arm_id,
             jointIndices=self.fin_actdofs,
-            controlMode=p.POSITION_CONTROL,
+            controlMode=self.sim.POSITION_CONTROL,
             targetPositions=list(self.tar_fin_q),
             forces=[self.maxForce] * len(self.tar_fin_q))
-        p.setJointMotorControlArray(
+        self.sim.setJointMotorControlArray(
             bodyIndex=self.arm_id,
             jointIndices=self.fin_zerodofs,
-            controlMode=p.POSITION_CONTROL,
+            controlMode=self.sim.POSITION_CONTROL,
             targetPositions=[0.0]*len(self.fin_zerodofs),
             forces=[self.maxForce / 4.0] * len(self.fin_zerodofs))
 
@@ -338,7 +340,7 @@ class InmoovShadowNew:
         return len(self.get_robot_observation())
 
     def get_q_dq(self, dofs):
-        joints_state = p.getJointStates(self.arm_id, dofs)
+        joints_state = self.sim.getJointStates(self.arm_id, dofs)
         joints_q = np.array(joints_state)[:, [0]]
         joints_q = np.hstack(joints_q.flatten())
         joints_dq = np.array(joints_state)[:, [1]]
@@ -346,29 +348,29 @@ class InmoovShadowNew:
         return joints_q, joints_dq
 
     def get_joints_last_tau(self, dofs):
-        joints_state = p.getJointStates(self.arm_id, dofs)
+        joints_state = self.sim.getJointStates(self.arm_id, dofs)
         joints_taus = np.array(joints_state)[:, [3]]
         joints_taus = np.hstack(joints_taus.flatten())
         return joints_taus
 
     def get_link_pos_quat(self, l_id):
-        newPos = p.getLinkState(self.arm_id, l_id)[4]
-        newOrn = p.getLinkState(self.arm_id, l_id)[5]
+        newPos = self.sim.getLinkState(self.arm_id, l_id)[4]
+        newOrn = self.sim.getLinkState(self.arm_id, l_id)[5]
         return newPos, newOrn
 
     def get_link_v_w(self, l_id):
-        newLinVel = p.getLinkState(self.arm_id, l_id, computeForwardKinematics=1, computeLinkVelocity=1)[6]
-        newAngVel = p.getLinkState(self.arm_id, l_id, computeForwardKinematics=1, computeLinkVelocity=1)[7]
+        newLinVel = self.sim.getLinkState(self.arm_id, l_id, computeForwardKinematics=1, computeLinkVelocity=1)[6]
+        newAngVel = self.sim.getLinkState(self.arm_id, l_id, computeForwardKinematics=1, computeLinkVelocity=1)[7]
         return newLinVel, newAngVel
 
     def get_wrist_wrench(self):
         # TODO: do not know if moments include those produced by force
-        joint_reaction = list(p.getJointState(self.arm_id, self.ee_id)[2])
-        joint_reaction[3] = p.getJointState(self.arm_id, self.ee_id)[3]     # TODO: rot axis 1,0,0
+        joint_reaction = list(self.sim.getJointState(self.arm_id, self.ee_id)[2])
+        joint_reaction[3] = self.sim.getJointState(self.arm_id, self.ee_id)[3]     # TODO: rot axis 1,0,0
         _, p_quat = self.get_link_pos_quat(self.ee_id)
         # transform to world coord
-        f_xyz, _ = p.multiplyTransforms([0, 0, 0], p_quat, joint_reaction[:3], [0, 0, 0, 1])
-        m_xyz, _ = p.multiplyTransforms([0, 0, 0], p_quat, joint_reaction[3:], [0, 0, 0, 1])
+        f_xyz, _ = self.sim.multiplyTransforms([0, 0, 0], p_quat, joint_reaction[:3], [0, 0, 0, 1])
+        m_xyz, _ = self.sim.multiplyTransforms([0, 0, 0], p_quat, joint_reaction[3:], [0, 0, 0, 1])
         return list(f_xyz)+list(m_xyz)
 
     def get_4_finger_deviation(self):
@@ -390,7 +392,7 @@ if __name__ == "__main__":
 
     for i in range(100):
         sim.resetSimulation()
-        # p.setPhysicsEngineParameter(numSolverIterations=200)
+        # sim.setPhysicsEngineParameter(numSolverIterations=200)
 
         sim.setGravity(0, 0, 0)
         sim.setTimeStep(dt)
@@ -404,21 +406,21 @@ if __name__ == "__main__":
         # arm.reset([-0.18, 0.105 - 0.2, 0.13, 1.8, -1.57, 0])  # obj [0, -0.2, 0]
 
         print("init", arm.get_robot_observation())
-        ls = p.getLinkState(arm.arm_id, arm.ee_id)
+        ls = sim.getLinkState(arm.arm_id, arm.ee_id)
         newPos = ls[4]
-        print(newPos, p.getEulerFromQuaternion(ls[5]))
+        print(newPos, sim.getEulerFromQuaternion(ls[5]))
         input("press enter to continue")
 
         for t in range(400):
             arm.apply_action(arm.np_random.uniform(low=-0.003, high=0.003, size=7+17)+np.array([-0.005]*7+[-0.01]*17))
-            p.stepSimulation()
+            sim.stepSimulation()
             arm.get_robot_observation()
             time.sleep(1. / 240.)
         print("final obz", arm.get_robot_observation())
-        ls = p.getLinkState(arm.arm_id, arm.ee_id)
+        ls = sim.getLinkState(arm.arm_id, arm.ee_id)
         newPos = ls[4]
-        print(newPos, p.getEulerFromQuaternion(ls[5]))
+        print(newPos, sim.getEulerFromQuaternion(ls[5]))
 
-    p.disconnect()
+    sim.disconnect()
 
 

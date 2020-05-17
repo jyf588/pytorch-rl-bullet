@@ -16,7 +16,7 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     position_noise=0.03,
     upv_noise=0.04,
     height_noise=0.02,
-    render_unity=True,
+    render_unity=False,
     render_bullet=False,
     visualize_unity=False,
     use_control_skip=False,
@@ -26,6 +26,7 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     save_states=False,
     container_dir=None,
     table1_dir="figures/table1",
+    two_commands=False
 )
 
 VISION_STATES_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
