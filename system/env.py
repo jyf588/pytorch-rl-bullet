@@ -695,7 +695,6 @@ class DemoEnvironment:
             self.obs_to_render = obs
         elif self.opt.obs_mode == "vision":
             obs = self.get_vision_observation()
-            self.obs_to_render = obs
 
             if self.vision_opt.use_gt_obs:
                 obs = list(self.get_state()["objects"].values())
@@ -745,6 +744,8 @@ class DemoEnvironment:
             )
             pred_odicts.append(odict)
 
+        self.obs_to_render = copy.deepcopy(pred_odicts)
+
         # We track predicted objects throughout time by matching the attributes
         # predicted at the current timestep with the object attributes from the
         # initial observation.
@@ -771,14 +772,16 @@ class DemoEnvironment:
                     "timestep": self.timestep,
                     "stage": self.stage,
                     "stage_ts": self.stage_ts,
-                    "gt": {"oid2odict": self.get_state()["objects"]},
-                    "pred": {"odicts": pred_obs},
+                    "state": self.get_state(),
+                    "gt_masks": oid2mask,
+                    "rgb": rgb,
+                    "masks": masks,
+                    "pred": pred,
+                    "pred_obs": pred_obs,
+                    "pred_odicts": pred_odicts,
                     "s2d_idxs": s2d_idxs,
                     "src_idx": self.src_idx,
                     "dst_idx": self.dst_idx,
-                    "rgb": rgb,
-                    "masks": masks,
-                    "gt_masks": oid2mask,
                     "vision_inputs": inputs_img,
                 },
             )
