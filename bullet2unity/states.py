@@ -157,7 +157,7 @@ def bullet2unity_state(
     unity_robot_state = bullet2unity_robot(bullet_state=bullet_robot_state)
 
     # Convert object state from bullet to unity.
-    unity_object_states = bullet2unity_objects(bullet_state=bullet_state["objects"],)
+    unity_object_states = bullet2unity_objects(bullet_state=bullet_state["objects"])
 
     # Compute the target position in Unity coordinates.
     if bullet_animation_target:

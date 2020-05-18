@@ -12,10 +12,11 @@ import time
 from typing import *
 
 import bullet2unity.const as const
+from ns_vqa_dart.bullet import util
 
 
 class DatasetLoader:
-    def __init__(self, states_dir: str, start_id: int, end_id: int):
+    def __init__(self, states_dir: str, start_trial_incl: int, end_trial_incl: int):
         """
         Args:
             states_dir: The directory containing the states, with the following
@@ -40,10 +41,31 @@ class DatasetLoader:
                     }
         """
         self.states_dir = states_dir
-        self.end_id = end_id
-        self.scene_counter = start_id
+        self.start_trial_incl = start_trial_incl
+        self.end_trial_incl = end_trial_incl
 
-    def get_next_state(self) -> Tuple[str, Dict]:
+        self.idx = 0
+        self.examples = self.collect_examples()
+
+    def collect_examples(self):
+        examples = []
+        n_trials = 0
+        for t in sorted(os.listdir(self.states_dir)):
+            if self.start_trial_incl <= int(t) <= self.end_trial_incl:
+                t_dir = os.path.join(self.states_dir, t)
+                trial_examples = []
+                for f in sorted(os.listdir(t_dir)):
+                    sid = f.split(".")[0]
+                    path = os.path.join(t_dir, f)
+                    e = (t, sid, path)
+                    trial_examples.append(e)
+                examples += trial_examples
+                if len(trial_examples) > 0:
+                    n_trials += 1
+        print(f"Loaded {len(examples)} examples from {n_trials} trials.")
+        return examples
+
+    def get_next_state(self) -> Optional[Tuple]:
         """Retrieves the next bullet state and converts to Unity state.
         
         Returns:
@@ -67,15 +89,15 @@ class DatasetLoader:
                     }
                 }
         """
-        if self.scene_counter >= self.end_id:
+        # No more examples.
+        if self.idx > len(self.examples):
             return None, None
 
-        sid = f"{self.scene_counter:06}"
+        t, sid, path = self.examples[self.idx]
+        state = util.load_pickle(path)
+        assert int(t) == state["trial"]
 
-        # Loads the state for the current sid.
-        state_path = os.path.join(self.states_dir, f"{sid}.p")
-        with open(state_path, "rb") as f:
-            state = pickle.load(f)
+        example_id = f"{t}_{sid}"
 
-        self.scene_counter += 1
-        return sid, state
+        self.idx += 1
+        return example_id, state

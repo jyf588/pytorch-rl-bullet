@@ -12,6 +12,7 @@ import bullet2unity.states
 from system.dataset_loader import DatasetLoader
 from system.unity_saver import UnitySaver
 import my_pybullet_envs.utils as utils
+from ns_vqa_dart.bullet import util
 
 global args
 
@@ -27,10 +28,13 @@ async def send_to_client(websocket, path):
     # Ensure that the unity dir exists but the captures dir does not.
     captures_dir = os.path.join(args.unity_dir, "Captures")
     assert os.path.exists(args.unity_dir)
-    assert not os.path.exists(captures_dir)
+    util.delete_and_create_dir(captures_dir)
 
+    # Initialize a dataset loader.
     loader = DatasetLoader(
-        states_dir=args.states_dir, start_id=args.start_id, end_id=args.end_id
+        states_dir=args.states_dir,
+        start_trial_incl=args.start_trial_incl,
+        end_trial_incl=args.end_trial_incl,
     )
     saver = UnitySaver(
         cam_dir=args.cam_dir, save_keys=["camera_position", "camera_orientation"],
@@ -42,7 +46,7 @@ async def send_to_client(websocket, path):
     n_iter = 0
     last_trial = None
     while 1:
-        msg_id, bullet_state = loader.get_next_state()
+        example_id, bullet_state = loader.get_next_state()
 
         # No more states, so we are done.
         if bullet_state is None:
@@ -60,7 +64,7 @@ async def send_to_client(websocket, path):
         if update_cam_target:
             # GT index of target object is always 0.
             target_oidx = 0
-            odicts = list(bullet_state["objects"].values())
+            odicts = bullet_state["objects"]
 
             # We don't need the image sent but we need unity save the first person
             # images it generates.
@@ -72,17 +76,21 @@ async def send_to_client(websocket, path):
                 oidx=target_oidx,
             )
 
+        bullet_state["objects"] = assign_ids_to_objects(bullet_state["objects"])
+
         # Encode, send, receive, and decode.
         message = interface.encode(
-            state_id=msg_id,
+            state_id=example_id,
             bullet_state=bullet_state,
             bullet_animation_target=None,
             bullet_cam_targets=bullet_camera_targets,
         )
         await websocket.send(message)
         reply = await websocket.recv()
-        data = interface.decode(msg_id, reply, bullet_cam_targets=bullet_camera_targets)
-        saver.save(msg_id, data)
+        data = interface.decode(
+            example_id, reply, bullet_cam_targets=bullet_camera_targets
+        )
+        saver.save(example_id, data)
 
         n_iter += 1
         avg_iter_time = (time.time() - start) / n_iter
@@ -95,6 +103,11 @@ async def send_to_client(websocket, path):
             last_trial = trial
     print(f"Time elapsed: {time.time() - start}")
     sys.exit(0)
+
+
+def assign_ids_to_objects(odicts):
+    id2odict = {idx: odict for idx, odict in enumerate(odicts)}
+    return id2odict
 
 
 # Create a state with extreme object locations and sides.
@@ -151,13 +164,16 @@ if __name__ == "__main__":
         "--stage", required=True, type=str, help="The stage of the dataset.",
     )
     parser.add_argument(
-        "--start_id",
+        "--start_trial_incl",
         required=True,
         type=int,
         help="The state ID to start generation at.",
     )
     parser.add_argument(
-        "--end_id", required=True, type=int, help="The state ID to end generation at.",
+        "--end_trial_incl",
+        required=True,
+        type=int,
+        help="The state ID to end generation at.",
     )
     parser.add_argument(
         "--missing_trial_info",
