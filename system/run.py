@@ -405,14 +405,14 @@ def compute_render_state(
         )
         camera_target_odict = {
             "shape": "sphere",
-            "color": "clear",
+            # "color": "clear",
             "position": bullet_cam_targets[0]["position"],
             "radius": 0.02,
             "height": 0.02,
             "orientation": [0, 0, 0, 1],
         }
         render_state = add_hallucinations_to_state(
-            state=render_state, h_odicts=[camera_target_odict], color=None,
+            state=render_state, h_odicts=[camera_target_odict], color="clear",
         )
     if render_place:
         render_state = add_hallucinations_to_state(
