@@ -339,28 +339,47 @@ def get_unity_options(mode, opt, env):
 
 
 def compute_bullet_camera_targets(opt, env, send_image, save_image):
-    odicts, oidx = None, None
-    if env.stage == "place":
-        if env.task == "place":
-            # GT version: We use the current object states.
-            odicts = list(env.get_state()["objects"].values())
-            oidx = opt.scene_place_src_idx
+    assert opt.obs_mode == "vision"
+    if opt.cam_version == "v1":
+        odicts, oidx = None, None
+        if env.stage == "place":
+            if env.task == "place":
+                # GT version: We use the current object states.
+                odicts = list(env.get_state()["objects"].values())
+                oidx = opt.scene_place_src_idx
 
-            # TODO: predicted version.
-            # cam_target = env.place_dst_xy + [env.initial_obs[env.src_idx]["height"]]
-        elif env.task == "stack":
-            # We use the predictions from the initial observation.
-            odicts = env.initial_obs
-            oidx = env.dst_idx
-        else:
-            raise ValueError(f"Invalid task: {env.task}")
-    bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
-        stage=env.stage,
-        send_image=send_image,
-        save_image=save_image,
-        odicts=odicts,
-        oidx=oidx,
-    )
+                # TODO: predicted version.
+                # cam_target = env.place_dst_xy + [env.initial_obs[env.src_idx]["height"]]
+            elif env.task == "stack":
+                # We use the predictions from the initial observation.
+                odicts = env.initial_obs
+                oidx = env.dst_idx
+            else:
+                raise ValueError(f"Invalid task: {env.task}")
+        bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
+            version=opt.cam_version,
+            stage=env.stage,
+            send_image=send_image,
+            save_image=save_image,
+            odicts=odicts,
+            oidx=oidx,
+        )
+    elif opt.cam_version == "v2":
+        if env.stage == "plan":
+            tx, ty = None, None
+        elif env.stage == "place":
+            if env.task == "place":
+                tx, ty = env.place_dst_xy
+            elif env.task == "stack":
+                tx, ty, _ = env.initial_obs[env.dst_idx]["position"]
+        bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
+            version=opt.cam_version,
+            stage=env.stage,
+            send_image=send_image,
+            save_image=save_image,
+            tx=tx,
+            ty=ty,
+        )
     return bullet_camera_targets
 
 

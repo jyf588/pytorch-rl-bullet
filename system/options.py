@@ -4,10 +4,11 @@ import argparse
 import ns_vqa_dart.bullet.util as util
 
 
-CONTAINER_DIR = "/home/mguo/container_data_v2"
+CONTAINER_DIR = "/home/mguo/container_data_v1"
+# CONTAINER_DIR = "/home/mguo/container_data_v2"
 
-# UNITY_NAME = "Linux8000_0512"
-UNITY_NAME = "Linux8001_0515"
+UNITY_NAME = "Linux8000_0512"
+# UNITY_NAME = "Linux8001_0515"
 # UNITY_NAME = "Linux8002_0515"
 
 # UNITY_CAPTURES_DIR = None
@@ -36,6 +37,7 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     render_unity=False,
     render_bullet=False,
     visualize_unity=False,
+    cam_version="v2",
     use_control_skip=True,
     render_frequency=100,
     render_obs=False,
@@ -78,8 +80,11 @@ DEBUG_VISION_OPTIONS.obs_mode = "vision"
 DEBUG_VISION_OPTIONS.render_unity = True
 DEBUG_VISION_OPTIONS.render_obs = True
 DEBUG_VISION_OPTIONS.save_first_pov_image = True
-DEBUG_VISION_OPTIONS.enable_reaching = False
+DEBUG_VISION_OPTIONS.enable_reaching = True
 DEBUG_VISION_OPTIONS.enable_retract = False
+DEBUG_VISION_OPTIONS.start_sid = 31
+DEBUG_VISION_OPTIONS.end_sid = 32
+DEBUG_VISION_OPTIONS.task_subset = ["stack"]
 
 
 SYSTEM_OPTIONS = {
@@ -145,32 +150,39 @@ def get_policy_options_and_paths(policy_id: str):
 
 
 VISION_V1_MODELS = {
-    "plan": "2020_04_19_07_14_00",
-    "place": "2020_04_22_04_35",
-    "stack": "2020_04_19_22_12_00",
+    "plan": "planning_v003_20K/2020_04_19_07_14_00",
+    "place": "placing_v003_2K_20K/2020_04_22_04_35",
+    "stack": "stacking_v003_2K_20K/2020_04_19_22_12_00",
 }
 
-VISION_V2_MODELS = {
-    "plan": "2020_05_15_23_43_08",
-    "place": "2020_05_15_02_18_08",
-    "stack": "2020_05_16_02_36_30",
+VISION_V2_MODELS = {  # Reproduce v1 with re-rendered unity images.
+    "plan": "planning_v003_20K/2020_05_15_23_43_08",
+    "place": "placing_v003_2K_20K/2020_05_15_02_18_08",
+    "stack": "stacking_v003_2K_20K/2020_05_16_02_36_30",
 }
 
-plan_model = VISION_V2_MODELS["plan"]
-place_model = VISION_V2_MODELS["place"]
-stack_model = VISION_V2_MODELS["stack"]
+VISION_V3_MODELS = {  # With v2 camera.
+    "plan": "plan_20K_0518/2020_05_18_03_19_01",
+    "place": "place_2K_20K_0518/2020_05_18_02_39_29",
+    "stack": "stack_2K_20K_0518/2020_05_18_02_50_47",
+}
+
+
+plan_model = VISION_V3_MODELS["plan"]
+place_model = VISION_V3_MODELS["place"]
+stack_model = VISION_V3_MODELS["stack"]
 
 VISION_OPTIONS = argparse.Namespace(
     seed=None,
     renderer="unity",
     use_segmentation_module=False,
-    separate_vision_modules=False,
+    separate_vision_modules=True,
     use_gt_obs=False,
-    attr_checkpoint_path="/home/mguo/outputs/combined/2020_05_16_22_47_25/checkpoint_best.pt",
+    # attr_checkpoint_path="/home/mguo/outputs/combined/2020_05_16_22_47_25/checkpoint_best.pt",
     # seg_checkpoint_path="/home/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
-    # planning_checkpoint_path=f"/home/mguo/outputs/planning_v003_20K/{plan_model}/checkpoint_best.pt",
-    # placing_checkpoint_path=f"/home/mguo/outputs/placing_v003_2K_20K/{place_model}/checkpoint_best.pt",
-    # stacking_checkpoint_path=f"/home/mguo/outputs/stacking_v003_2K_20K/{stack_model}/checkpoint_best.pt",
+    planning_checkpoint_path=f"/home/mguo/outputs/{plan_model}/checkpoint_best.pt",
+    placing_checkpoint_path=f"/home/mguo/outputs/{place_model}/checkpoint_best.pt",
+    stacking_checkpoint_path=f"/home/mguo/outputs/{stack_model}/checkpoint_best.pt",
     coordinate_frame="unity_camera",
     save_predictions=True,
 )
