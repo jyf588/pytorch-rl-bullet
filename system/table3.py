@@ -48,6 +48,7 @@ def main(args):
         task2sid2paths[task][sid].append(path)
 
     # Loop over the scenes that have recorded successes.
+    task2n_success = collections.Counter()
     for task in success_dict.keys():
         print(f"Computing task {task}...")
         for sid in tqdm(success_dict[task].keys()):
@@ -58,6 +59,9 @@ def main(args):
             for denom in ["or_success", "success"]:
                 if success_dict[task][sid][denom]:
                     denoms += [denom]
+
+            if success_dict[task][sid]["success"]:
+                task2n_success[task] += 1
 
             # Loop over all the frames for the task-scene trial.
             for frame_path in task2sid2paths[task][sid]:
@@ -96,12 +100,14 @@ def main(args):
                                 gt_dict=gt_odict, pred_dict=pred_odict
                             )
 
+    print(task2n_success)
+
     for denom, name2metrics in denom2metrics.items():
         for name, metrics in name2metrics.items():
             if metrics.n_total > 0:
                 # Print to console.
-                sys.stdout = sys.__stdout__
-                metrics.print()
+                # sys.stdout = sys.__stdout__
+                # metrics.print()
 
                 # Print to file.
                 sys.stdout = open(denom2path[denom][name], "wt")

@@ -405,7 +405,7 @@ def compute_render_state(
         )
         camera_target_odict = {
             "shape": "sphere",
-            "color": "red",
+            "color": "clear",
             "position": bullet_cam_targets[0]["position"],
             "radius": 0.02,
             "height": 0.02,
