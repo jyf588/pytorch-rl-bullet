@@ -108,6 +108,6 @@ baselines/
 .idea/
 .fuse_hidden*
 train_*.sh
-
+figures/table1
 .vscode/
 *.mypy_cache/*
