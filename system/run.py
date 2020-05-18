@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import copy
+import random
 import pprint
 import imageio
 import argparse
@@ -61,6 +62,35 @@ async def send_to_client(websocket, path):
 
     system.openrave.check_clean_container(container_dir=opt.container_dir)
 
+    success_metrics = {"overall": {}, "scenes": {}}
+    examples = []
+    for set_name, set_opt in set_name2opt.items():
+        task = set_opt["task"]
+
+        # Initialize data structures to track success.
+        success_metrics["overall"][set_name] = {
+            "n_success": 0,
+            "n_or_success": 0,
+            "n_trials": 0,
+        }
+        success_metrics["scenes"][set_name] = {}
+
+        # Load scenes.
+        scenes_dir = os.path.join(opt.scenes_root_dir, args.exp)
+        scenes = scene_gen.load_scenes(load_dir=scenes_dir, task=task)
+
+        if opt.task_subset is not None and task not in opt.task_subset:
+            continue
+
+        for scene_id, scene in enumerate(scenes):
+            if opt.start_sid is not None and int(scene_id) < opt.start_sid:
+                continue
+            elif opt.end_sid is not None and int(scene_id) >= opt.end_sid:
+                continue
+            examples.append((set_name, set_opt, task, scene_id, scene))
+    random.seed(opt.seed)
+    random.shuffle(examples)
+
     # Define paths.
     if opt.unity_captures_dir is not None:
         util.delete_and_create_dir(opt.unity_captures_dir)
@@ -96,190 +126,163 @@ async def send_to_client(websocket, path):
     else:
         p.connect(p.DIRECT)
 
-    success_metrics = {"overall": {}, "scenes": {}}
-    for set_name, set_opt in set_name2opt.items():
-        task = set_opt["task"]
+    for set_name, set_opt, task, scene_id, scene in examples:
+        bullet_cam_targets = {}
+        # Modify the scene for placing, and determine placing destination.
+        place_dst_xy, place_dest_object = None, None
+        if task == "place":
+            (
+                scene,
+                place_dst_xy,
+                place_dest_object,
+            ) = scene_util.convert_scene_for_placing(opt, scene)
 
-        # Initialize data structures to track success.
-        success_metrics["overall"][set_name] = {
-            "n_success": 0,
-            "n_or_success": 0,
-            "n_trials": 0,
-        }
-        success_metrics["scenes"][set_name] = {}
+        if args.mode == "unity_dataset":
+            env = StatesEnv(
+                opt=opt,
+                experiment=args.exp,
+                set_name=set_name,
+                scene_id=scene_id,
+                scene=scene,
+                task=task,
+                place_dst_xy=place_dst_xy,
+            )
+        else:
+            env = DemoEnvironment(
+                opt=opt,
+                bullet_opt=BULLET_OPTIONS,
+                policy_opt=policy_opt,
+                shape2policy_dict=shape2policy_dict,
+                vision_opt=VISION_OPTIONS,
+                exp_name=args.exp,
+                set_name=set_name,
+                scene_id=scene_id,
+                scene=scene,
+                task=task,
+                outputs_dir=outputs_dir,
+                place_dst_xy=place_dst_xy,
+                vision_models_dict=vision_models_dict,
+            )
 
-        # Load scenes.
-        scenes_dir = os.path.join(opt.scenes_root_dir, args.exp)
-        scenes = scene_gen.load_scenes(load_dir=scenes_dir, task=task)
+        n_frames = 0
+        frames_start = time.time()
+        update_camera_target = False
+        while 1:
+            frame_id = f"{task}_{scene_id}_{env.timestep:06}"
+            stage = env.stage
+            # The state is the state of the world BEFORE applying the action at the
+            # current timestep. We currently save states primarily to check for
+            # reproducibility of runs.
+            if opt.save_states:
+                state_path = os.path.join(states_dir, f"{frame_id}.p")
+                util.save_pickle(state_path, data=env.get_state(), check_override=False)
 
-        if opt.task_subset is not None and task not in opt.task_subset:
-            continue
+            if (
+                opt.obs_mode == "vision"
+                and stage in ["plan", "place", "stack"]
+                and env.stage_ts == 0
+            ):
+                update_camera_target = True
 
-        for scene_id, scene in enumerate(scenes):
-            if opt.start_sid is not None and int(scene_id) < opt.start_sid:
-                continue
-            elif opt.end_sid is not None and int(scene_id) >= opt.end_sid:
-                continue
-            bullet_cam_targets = {}
-            # Modify the scene for placing, and determine placing destination.
-            place_dst_xy, place_dest_object = None, None
-            if task == "place":
-                (
-                    scene,
-                    place_dst_xy,
-                    place_dest_object,
-                ) = scene_util.convert_scene_for_placing(opt, scene)
+            is_render_step = False
+            if opt.render_unity:
+                # Modify the rendering frequency if we are using vision + policy,
+                # and it's during the planning or placing stage.
+                render_frequency = opt.render_frequency
+                if args.mode != "unity_dataset":
+                    if opt.obs_mode == "vision":
+                        if env.stage in "plan":
+                            render_frequency = 1
+                        elif env.stage == "place":
+                            render_frequency = policy_opt.vision_delay
 
-            if args.mode == "unity_dataset":
-                env = StatesEnv(
-                    opt=opt,
-                    experiment=args.exp,
-                    set_name=set_name,
-                    scene_id=scene_id,
-                    scene=scene,
-                    task=task,
-                    place_dst_xy=place_dst_xy,
-                )
-            else:
-                env = DemoEnvironment(
-                    opt=opt,
-                    bullet_opt=BULLET_OPTIONS,
-                    policy_opt=policy_opt,
-                    shape2policy_dict=shape2policy_dict,
-                    vision_opt=VISION_OPTIONS,
-                    exp_name=args.exp,
-                    set_name=set_name,
-                    scene_id=scene_id,
-                    scene=scene,
-                    task=task,
-                    outputs_dir=outputs_dir,
-                    place_dst_xy=place_dst_xy,
-                    vision_models_dict=vision_models_dict,
-                )
-
-            n_frames = 0
-            frames_start = time.time()
-            update_camera_target = False
-            while 1:
-                frame_id = f"{task}_{scene_id}_{env.timestep:06}"
-                stage = env.stage
-                # The state is the state of the world BEFORE applying the action at the
-                # current timestep. We currently save states primarily to check for
-                # reproducibility of runs.
-                if opt.save_states:
-                    state_path = os.path.join(states_dir, f"{frame_id}.p")
-                    util.save_pickle(
-                        state_path, data=env.get_state(), check_override=False
-                    )
-
-                if (
-                    opt.obs_mode == "vision"
-                    and stage in ["plan", "place", "stack"]
-                    and env.stage_ts == 0
-                ):
-                    update_camera_target = True
-
-                is_render_step = False
-                if opt.render_unity:
-                    # Modify the rendering frequency if we are using vision + policy,
-                    # and it's during the planning or placing stage.
-                    render_frequency = opt.render_frequency
-                    if args.mode != "unity_dataset":
-                        if opt.obs_mode == "vision":
-                            if env.stage in "plan":
-                                render_frequency = 1
-                            elif env.stage == "place":
-                                render_frequency = policy_opt.vision_delay
-
-                    # Render unity and step.
-                    if env.timestep % render_frequency == 0:
-                        is_render_step = True
-                        u_opt = get_unity_options(args.mode, opt, env)
-                        for (rend_obs, rend_place, send_image, should_step) in u_opt:
-                            # Compute camera targets.
-                            if update_camera_target:
-                                bullet_cam_targets = compute_bullet_camera_targets(
-                                    opt,
-                                    env,
-                                    send_image,
-                                    save_image=opt.save_first_pov_image,
-                                )
-                                update_camera_target = False
-
-                            render_state = compute_render_state(
+                # Render unity and step.
+                if env.timestep % render_frequency == 0:
+                    is_render_step = True
+                    u_opt = get_unity_options(args.mode, opt, env)
+                    for (rend_obs, rend_place, send_image, should_step) in u_opt:
+                        # Compute camera targets.
+                        if update_camera_target:
+                            bullet_cam_targets = compute_bullet_camera_targets(
+                                opt,
                                 env,
-                                place_dest_object,
-                                bullet_cam_targets,
-                                rend_obs,
-                                rend_place,
+                                send_image,
+                                save_image=opt.save_first_pov_image,
                             )
+                            update_camera_target = False
 
-                            # Compute the animation target.
-                            b_ani_tar = compute_b_ani_tar(opt, env)
+                        render_state = compute_render_state(
+                            env,
+                            place_dest_object,
+                            bullet_cam_targets,
+                            rend_obs,
+                            rend_place,
+                        )
 
-                            # Encode, send, receive, and decode.
-                            message = interface.encode(
-                                state_id=frame_id,
-                                bullet_state=render_state,
-                                bullet_animation_target=b_ani_tar,
-                                bullet_cam_targets=bullet_cam_targets,
-                            )
-                            await websocket.send(message)
-                            reply = await websocket.recv()
-                            data = interface.decode(
-                                frame_id, reply, bullet_cam_targets=bullet_cam_targets,
-                            )
+                        # Compute the animation target.
+                        b_ani_tar = compute_b_ani_tar(opt, env)
 
-                            # Hand the data to the env for processing.
-                            if send_image:
-                                env.set_unity_data(data)
-                            if should_step:
-                                is_done, openrave_success = env.step()
-                if not is_render_step:
-                    is_done, openrave_success = env.step()
+                        # Encode, send, receive, and decode.
+                        message = interface.encode(
+                            state_id=frame_id,
+                            bullet_state=render_state,
+                            bullet_animation_target=b_ani_tar,
+                            bullet_cam_targets=bullet_cam_targets,
+                        )
+                        await websocket.send(message)
+                        reply = await websocket.recv()
+                        data = interface.decode(
+                            frame_id, reply, bullet_cam_targets=bullet_cam_targets,
+                        )
 
-                # Skip retract if placing failed.
-                if stage == "retract" and not env.check_success():
-                    is_done = True
+                        # Hand the data to the env for processing.
+                        if send_image:
+                            env.set_unity_data(data)
+                        if should_step:
+                            is_done, openrave_success = env.step()
+            if not is_render_step:
+                is_done, openrave_success = env.step()
 
-                # Break out if we're done with the sequence, or it failed.
-                if is_done or not openrave_success:
-                    success_metrics["overall"][set_name]["n_trials"] += 1
-                    trial_succeeded = False
-                    if openrave_success:
-                        success_metrics["overall"][set_name]["n_or_success"] += 1
-                        # Only check for task success if OR didn't fail.
-                        if env.check_success():
-                            trial_succeeded = True
-                            success_metrics["overall"][set_name]["n_success"] += 1
-                    success_metrics["scenes"][set_name][scene_id] = {
-                        "success": trial_succeeded,
-                        "or_success": openrave_success,
-                        "stage": env.stage,
-                        "timestep": env.timestep,
-                    }
-                    env.cleanup()
-                    n_trials = success_metrics["overall"][set_name]["n_trials"]
-                    n_success = success_metrics["overall"][set_name]["n_success"]
-                    n_or_success = success_metrics["overall"][set_name]["n_or_success"]
-                    success_rate = 0.0 if n_trials == 0 else n_success / n_trials
-                    success_rate_wo_or = (
-                        0.0 if n_or_success == 0 else n_success / n_or_success
-                    )
-                    avg_time = (
-                        0 if n_trials == 0 else (time.time() - start_time) / n_trials
-                    )
-                    util.save_json(
-                        path=successes_path, data=success_metrics, check_override=False
-                    )
-                    print(
-                        f"Exp: {args.exp}\tSet: {set_name}\tTask: {task}\tScene ID: {scene_id}\tStage: {stage}\tTimestep: {env.timestep}\n"
-                        f"Frame rate: {n_frames / (time.time() - frames_start):.2f}\tAvg trial time: {avg_time:.2f}\n"
-                        f"Success rate: {success_rate:.2f} ({n_trials})\tSuccess w/o OR failures: {success_rate_wo_or:.2f} ({n_or_success})\t# Successes: {n_success}\n"
-                        f"Saved stats to: {successes_path}"
-                    )
-                    break
-                n_frames += 1
+            # Skip retract if placing failed.
+            if stage == "retract" and not env.check_success():
+                is_done = True
+
+            # Break out if we're done with the sequence, or it failed.
+            if is_done or not openrave_success:
+                success_metrics["overall"][set_name]["n_trials"] += 1
+                trial_succeeded = False
+                if openrave_success:
+                    success_metrics["overall"][set_name]["n_or_success"] += 1
+                    # Only check for task success if OR didn't fail.
+                    if env.check_success():
+                        trial_succeeded = True
+                        success_metrics["overall"][set_name]["n_success"] += 1
+                success_metrics["scenes"][set_name][scene_id] = {
+                    "success": trial_succeeded,
+                    "or_success": openrave_success,
+                    "stage": env.stage,
+                    "timestep": env.timestep,
+                }
+                env.cleanup()
+                n_trials = success_metrics["overall"][set_name]["n_trials"]
+                n_success = success_metrics["overall"][set_name]["n_success"]
+                n_or_success = success_metrics["overall"][set_name]["n_or_success"]
+                success_rate = 0.0 if n_trials == 0 else n_success / n_trials
+                success_rate_wo_or = (
+                    0.0 if n_or_success == 0 else n_success / n_or_success
+                )
+                avg_time = 0 if n_trials == 0 else (time.time() - start_time) / n_trials
+                util.save_json(
+                    path=successes_path, data=success_metrics, check_override=False
+                )
+                print(
+                    f"Exp: {args.exp}\tSet: {set_name}\tTask: {task}\tScene ID: {scene_id}\tStage: {stage}\tTimestep: {env.timestep}\n"
+                    f"Frame rate: {n_frames / (time.time() - frames_start):.2f}\tAvg trial time: {avg_time:.2f}\n"
+                    f"Success rate: {success_rate:.2f} ({n_trials})\tSuccess w/o OR failures: {success_rate_wo_or:.2f} ({n_or_success})\t# Successes: {n_success}\n"
+                    f"Saved stats to: {successes_path}"
+                )
+                break
+            n_frames += 1
     total_duration = time.time() - start_time
     print(f"Finished experiment.")
     print(f"Duration: {total_duration}")
