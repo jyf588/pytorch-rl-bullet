@@ -10,7 +10,7 @@ python ns_vqa_dart/scene_parse/attr_net/run_train.py \
     --run_dir $RUN_DIR \
     --checkpoint_every $CHECKPOINT_EVERY \
     --checkpoint_t 20000 \
-    --resume_dir $RUN_DIR/2020_05_15_21_35_20 \
-    --load_checkpoint_path $RUN_DIR/2020_05_15_21_35_20/checkpoint_iter00065000.pt \
+    --resume_dir $RUN_DIR/2020_05_15_19_51_41 \
+    --load_checkpoint_path $RUN_DIR/2020_05_15_19_51_41/checkpoint_iter00020000.pt \
     --num_iters $NUM_ITERS \
     --num_workers 8
