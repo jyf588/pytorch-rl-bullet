@@ -1,6 +1,6 @@
 ROOT_DIR=/home/mguo
-SRC_SET=stacking_v003_2K_20K
-DST_SET=stacking_v003_2K_20K
+SRC_SET=placing_v003_2K_20K_all
+DST_SET=placing_v003_2K_20K_all
 
 time python ns_vqa_dart/bullet/gen_dataset.py \
     --states_dir $ROOT_DIR/states/full/$SRC_SET \
@@ -11,4 +11,4 @@ time python ns_vqa_dart/bullet/gen_dataset.py \
     --coordinate_frame unity_camera \
     --start_sid 0 \
     --end_sid 20000 \
-    --objects_to_include 2
+    --objects_to_include -1
