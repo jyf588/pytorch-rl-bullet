@@ -403,21 +403,28 @@ def compute_render_state(
         render_state = add_hallucinations_to_state(
             state=render_state, h_odicts=env.obs_to_render, color=None,
         )
-        camera_target_odict = {
-            "shape": "sphere",
-            # "color": "clear",
-            "position": bullet_cam_targets[0]["position"],
-            "radius": 0.02,
-            "height": 0.02,
-            "orientation": [0, 0, 0, 1],
-        }
-        render_state = add_hallucinations_to_state(
-            state=render_state, h_odicts=[camera_target_odict], color="clear",
+        render_state = add_cam_target_visual(
+            render_state, bullet_cam_targets[0]["position"]
         )
     if render_place:
         render_state = add_hallucinations_to_state(
             state=render_state, h_odicts=[place_dest_object], color="clear",
         )
+    return render_state
+
+
+def add_cam_target_visual(render_state, cam_target):
+    camera_target_odict = {
+        "shape": "sphere",
+        # "color": "clear",
+        "position": cam_target,
+        "radius": 0.02,
+        "height": 0.02,
+        "orientation": [0, 0, 0, 1],
+    }
+    render_state = add_hallucinations_to_state(
+        state=render_state, h_odicts=[camera_target_odict], color="clear",
+    )
     return render_state
 
 

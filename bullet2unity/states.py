@@ -17,19 +17,30 @@ from ns_vqa_dart.bullet.seg import UNITY_OIDS
 
 
 PLAN_TARGET_POSITION = [-0.06, 0.3, 0.0]
+CAM_TARGET_Z = 0.23
 
 
 def compute_bullet_camera_targets(
-    stage, send_image, save_image, odicts=None, oidx=None
+    version,
+    send_image,
+    save_image,
+    tx=None,
+    ty=None,
+    stage=None,
+    odicts=None,
+    oidx=None,
 ):
-    if stage == "plan":
-        cam_target = PLAN_TARGET_POSITION
-    elif stage == "place":
-        assert odicts is not None
-        assert oidx is not None
-        cam_target = get_object_camera_target(bullet_odicts=odicts, oidx=oidx)
-    else:
-        raise ValueError(f"Invalid stage: {stage}")
+    if version == "v2":
+        cam_target = (tx, ty, CAM_TARGET_Z)
+    elif version == "v1":
+        if stage == "plan":
+            cam_target = PLAN_TARGET_POSITION
+        elif stage == "place":
+            assert odicts is not None
+            assert oidx is not None
+            cam_target = get_object_camera_target(bullet_odicts=odicts, oidx=oidx)
+        else:
+            raise ValueError(f"Invalid stage: {stage}")
 
     # Set the camera target.
     bullet_camera_targets = create_bullet_camera_targets(

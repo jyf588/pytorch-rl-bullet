@@ -5,6 +5,7 @@ import os
 import pprint
 import sys
 import time
+import numpy as np
 from typing import *
 
 import bullet2unity.interface as interface
@@ -13,6 +14,7 @@ from system.dataset_loader import DatasetLoader
 from system.unity_saver import UnitySaver
 import my_pybullet_envs.utils as utils
 from ns_vqa_dart.bullet import util
+from system.run import add_cam_target_visual
 
 global args
 
@@ -24,6 +26,8 @@ def main():
 
 async def send_to_client(websocket, path):
     global args
+
+    np.random.seed(args.seed)
 
     # Ensure that the unity dir exists but the captures dir does not.
     captures_dir = os.path.join(args.unity_dir, "Captures")
@@ -62,21 +66,43 @@ async def send_to_client(websocket, path):
             update_cam_target = trial != last_trial
 
         if update_cam_target:
-            # GT index of target object is always 0.
-            target_oidx = 0
-            odicts = bullet_state["objects"]
+            if args.cam_version == "v1":
+                # GT index of target object is always 0.
+                target_oidx = 0
+                odicts = bullet_state["objects"]
+                # We don't need the image sent but we need unity save the first person
+                # images it generates.
+                bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
+                    version=args.cam_version,
+                    send_image=False,
+                    save_image=True,
+                    stage=args.stage,
+                    odicts=odicts,
+                    oidx=target_oidx,
+                )
+            elif args.cam_version == "v2":
+                tx_act = bullet_state["tx_act"]
+                ty_act = bullet_state["ty_act"]
 
-            # We don't need the image sent but we need unity save the first person
-            # images it generates.
-            bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
-                stage=args.stage,
-                send_image=False,
-                save_image=True,
-                odicts=odicts,
-                oidx=target_oidx,
-            )
+                tx = utils.perturb_scalar(np.random, tx_act, 0.02)
+                ty = utils.perturb_scalar(np.random, ty_act, 0.02)
+
+                # We don't need the image sent but we need unity save the first person
+                # images it generates.
+                bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
+                    version=args.cam_version,
+                    send_image=False,
+                    save_image=True,
+                    tx=tx,
+                    ty=ty,
+                )
 
         bullet_state["objects"] = assign_ids_to_objects(bullet_state["objects"])
+
+        if args.visualize_cam_debug:
+            bullet_state = add_cam_target_visual(
+                bullet_state, bullet_camera_targets[0]["position"]
+            )
 
         # Encode, send, receive, and decode.
         message = interface.encode(
@@ -143,6 +169,9 @@ if __name__ == "__main__":
         "--port", type=int, default=8000, help="The port of the server."
     )
     parser.add_argument(
+        "--seed", required=True, type=int, help="The random seed.",
+    )
+    parser.add_argument(
         "--unity_dir",
         required=True,
         type=str,
@@ -161,7 +190,7 @@ if __name__ == "__main__":
         help="The output directory to save client data to.",
     )
     parser.add_argument(
-        "--stage", required=True, type=str, help="The stage of the dataset.",
+        "--stage", type=str, help="The stage of the dataset.",
     )
     parser.add_argument(
         "--start_trial_incl",
@@ -174,6 +203,17 @@ if __name__ == "__main__":
         required=True,
         type=int,
         help="The state ID to end generation at.",
+    )
+    parser.add_argument(
+        "--cam_version",
+        required=True,
+        type=str,
+        help="The version of camera target algorithm to use.",
+    )
+    parser.add_argument(
+        "--visualize_cam_debug",
+        action="store_true",
+        help="Whether to visualize cam target for debugging.",
     )
     parser.add_argument(
         "--missing_trial_info",
