@@ -16,7 +16,9 @@ from ns_vqa_dart.bullet import util
 
 
 class DatasetLoader:
-    def __init__(self, states_dir: str, start_trial_incl: int, end_trial_incl: int):
+    def __init__(
+        self, stage: str, states_dir: str, start_trial_incl: int, end_trial_incl: int
+    ):
         """
         Args:
             states_dir: The directory containing the states, with the following
@@ -40,6 +42,7 @@ class DatasetLoader:
                         }
                     }
         """
+        self.stage = stage
         self.states_dir = states_dir
         self.start_trial_incl = start_trial_incl
         self.end_trial_incl = end_trial_incl
@@ -49,20 +52,28 @@ class DatasetLoader:
 
     def collect_examples(self):
         examples = []
-        n_trials = 0
-        for t in sorted(os.listdir(self.states_dir)):
-            if self.start_trial_incl <= int(t) <= self.end_trial_incl:
-                t_dir = os.path.join(self.states_dir, t)
-                trial_examples = []
-                for f in sorted(os.listdir(t_dir)):
-                    sid = f.split(".")[0]
-                    path = os.path.join(t_dir, f)
-                    e = (t, sid, path)
-                    trial_examples.append(e)
-                examples += trial_examples
-                if len(trial_examples) > 0:
-                    n_trials += 1
-        print(f"Loaded {len(examples)} examples from {n_trials} trials.")
+        if self.stage == "plan":
+            for f in sorted(os.listdir(self.states_dir)):
+                example_id = f.split(".")[0]
+                path = os.path.join(self.states_dir, f)
+                e = (example_id, path)
+                examples.append(e)
+        elif self.stage == "place":
+            n_trials = 0
+            for t in sorted(os.listdir(self.states_dir)):
+                if self.start_trial_incl <= int(t) <= self.end_trial_incl:
+                    t_dir = os.path.join(self.states_dir, t)
+                    trial_examples = []
+                    for f in sorted(os.listdir(t_dir)):
+                        sid = f.split(".")[0]
+                        path = os.path.join(t_dir, f)
+                        example_id = f"{t}_{sid}"
+                        e = (example_id, path)
+                        trial_examples.append(e)
+                    examples += trial_examples
+                    if len(trial_examples) > 0:
+                        n_trials += 1
+            print(f"Loaded {len(examples)} examples from {n_trials} trials.")
         return examples
 
     def get_next_state(self) -> Optional[Tuple]:
@@ -93,11 +104,8 @@ class DatasetLoader:
         if self.idx > len(self.examples):
             return None, None
 
-        t, sid, path = self.examples[self.idx]
+        example_id, path = self.examples[self.idx]
         state = util.load_pickle(path)
-        assert int(t) == state["trial"]
-
-        example_id = f"{t}_{sid}"
 
         self.idx += 1
         return example_id, state

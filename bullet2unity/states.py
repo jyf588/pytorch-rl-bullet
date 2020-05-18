@@ -21,26 +21,19 @@ CAM_TARGET_Z = 0.23
 
 
 def compute_bullet_camera_targets(
-    version,
-    send_image,
-    save_image,
-    tx=None,
-    ty=None,
-    stage=None,
-    odicts=None,
-    oidx=None,
+    version, send_image, save_image, stage, tx=None, ty=None, odicts=None, oidx=None,
 ):
-    if version == "v2":
-        cam_target = (tx, ty, CAM_TARGET_Z)
-    elif version == "v1":
-        if stage == "plan":
-            cam_target = PLAN_TARGET_POSITION
-        elif stage == "place":
+    if stage == "plan":
+        cam_target = PLAN_TARGET_POSITION
+    elif stage == "place":
+        if version == "v2":
+            cam_target = (tx, ty, CAM_TARGET_Z)
+        elif version == "v1":
             assert odicts is not None
             assert oidx is not None
             cam_target = get_object_camera_target(bullet_odicts=odicts, oidx=oidx)
-        else:
-            raise ValueError(f"Invalid stage: {stage}")
+    else:
+        raise ValueError(f"Invalid stage: {stage}")
 
     # Set the camera target.
     bullet_camera_targets = create_bullet_camera_targets(

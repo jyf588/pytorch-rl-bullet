@@ -36,6 +36,7 @@ async def send_to_client(websocket, path):
 
     # Initialize a dataset loader.
     loader = DatasetLoader(
+        stage=args.stage,
         states_dir=args.states_dir,
         start_trial_incl=args.start_trial_incl,
         end_trial_incl=args.end_trial_incl,
@@ -56,17 +57,17 @@ async def send_to_client(websocket, path):
         if bullet_state is None:
             break
 
-        # We update every frame if trial info is not provided.
-        if args.missing_trial_info:
-            update_cam_target = True
-        else:
-            # This is the first frame of the trial if the trial of the current
-            # state is different from the last trial.
-            trial = bullet_state["trial"]
-            update_cam_target = trial != last_trial
+        if args.cam_version == "v1":
+            # We update every frame if trial info is not provided.
+            if args.missing_trial_info:
+                update_cam_target = True
+            else:
+                # This is the first frame of the trial if the trial of the current
+                # state is different from the last trial.
+                trial = bullet_state["trial"]
+                update_cam_target = trial != last_trial
 
-        if update_cam_target:
-            if args.cam_version == "v1":
+            if update_cam_target:
                 # GT index of target object is always 0.
                 target_oidx = 0
                 odicts = bullet_state["objects"]
@@ -80,22 +81,26 @@ async def send_to_client(websocket, path):
                     odicts=odicts,
                     oidx=target_oidx,
                 )
-            elif args.cam_version == "v2":
+        elif args.cam_version == "v2":
+            if args.stage == "place":
                 tx_act = bullet_state["tx_act"]
                 ty_act = bullet_state["ty_act"]
 
                 tx = utils.perturb_scalar(np.random, tx_act, 0.02)
                 ty = utils.perturb_scalar(np.random, ty_act, 0.02)
+            else:
+                tx, ty = None, None
 
-                # We don't need the image sent but we need unity save the first person
-                # images it generates.
-                bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
-                    version=args.cam_version,
-                    send_image=False,
-                    save_image=True,
-                    tx=tx,
-                    ty=ty,
-                )
+            # We don't need the image sent but we need unity save the first person
+            # images it generates.
+            bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
+                version=args.cam_version,
+                send_image=False,
+                save_image=True,
+                stage=args.stage,
+                tx=tx,
+                ty=ty,
+            )
 
         bullet_state["objects"] = assign_ids_to_objects(bullet_state["objects"])
 
@@ -123,10 +128,11 @@ async def send_to_client(websocket, path):
         print(f"Average iteration time: {avg_iter_time:.2f}")
 
         # Store the current trial as the "last trial".
-        if args.missing_trial_info:
-            pass
-        else:
-            last_trial = trial
+        if args.cam_version == "v1":
+            if args.missing_trial_info:
+                pass
+            else:
+                last_trial = trial
     print(f"Time elapsed: {time.time() - start}")
     sys.exit(0)
 
@@ -190,19 +196,13 @@ if __name__ == "__main__":
         help="The output directory to save client data to.",
     )
     parser.add_argument(
-        "--stage", type=str, help="The stage of the dataset.",
+        "--stage", required=True, type=str, help="The stage of the dataset.",
     )
     parser.add_argument(
-        "--start_trial_incl",
-        required=True,
-        type=int,
-        help="The state ID to start generation at.",
+        "--start_trial_incl", type=int, help="The state ID to start generation at.",
     )
     parser.add_argument(
-        "--end_trial_incl",
-        required=True,
-        type=int,
-        help="The state ID to end generation at.",
+        "--end_trial_incl", type=int, help="The state ID to end generation at.",
     )
     parser.add_argument(
         "--cam_version",
