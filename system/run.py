@@ -174,7 +174,11 @@ async def send_to_client(websocket, path):
                         state_path, data=env.get_state(), check_override=False
                     )
 
-                if stage in ["plan", "place", "stack"] and env.stage_ts == 0:
+                if (
+                    opt.obs_mode == "vision"
+                    and stage in ["plan", "place", "stack"]
+                    and env.stage_ts == 0
+                ):
                     update_camera_target = True
 
                 is_render_step = False
@@ -253,6 +257,8 @@ async def send_to_client(websocket, path):
                     success_metrics["scenes"][set_name][scene_id] = {
                         "success": trial_succeeded,
                         "or_success": openrave_success,
+                        "stage": env.stage,
+                        "timestep": env.timestep,
                     }
                     env.cleanup()
                     n_trials = success_metrics["overall"][set_name]["n_trials"]
@@ -392,15 +398,6 @@ def compute_render_state(
 ):
     state = env.get_state()
 
-    camera_target_odict = {
-        "shape": "sphere",
-        "color": "red",
-        "position": bullet_cam_targets[0]["position"],
-        "radius": 0.02,
-        "height": 0.02,
-        "orientation": [0, 0, 0, 1],
-    }
-
     # If we are rendering observations, add them to the
     # render state.
     render_state = copy.deepcopy(state)
@@ -408,6 +405,14 @@ def compute_render_state(
         render_state = add_hallucinations_to_state(
             state=render_state, h_odicts=env.obs_to_render, color=None,
         )
+        camera_target_odict = {
+            "shape": "sphere",
+            "color": "red",
+            "position": bullet_cam_targets[0]["position"],
+            "radius": 0.02,
+            "height": 0.02,
+            "orientation": [0, 0, 0, 1],
+        }
         render_state = add_hallucinations_to_state(
             state=render_state, h_odicts=[camera_target_odict], color=None,
         )
