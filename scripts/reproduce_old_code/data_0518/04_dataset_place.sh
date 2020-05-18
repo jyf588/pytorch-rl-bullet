@@ -11,4 +11,4 @@ time python ns_vqa_dart/bullet/gen_dataset.py \
     --coordinate_frame unity_camera \
     --start_sid 0 \
     --end_sid 20000 \
-    --objects_to_include -1
+    --objects_to_include 1
