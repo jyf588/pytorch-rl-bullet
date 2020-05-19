@@ -60,6 +60,7 @@ async def send_to_client(websocket, path):
     opt = SYSTEM_OPTIONS[args.mode]
     set_name2opt = exp.loader.ExpLoader(exp_name=args.exp).set_name2opt
 
+    opt = system.options.set_unity_container_cfgs(opt=opt, port=args.port)
     system.openrave.check_clean_container(container_dir=opt.container_dir)
 
     success_metrics = {"overall": {}, "scenes": {}}
@@ -126,7 +127,8 @@ async def send_to_client(websocket, path):
     else:
         p.connect(p.DIRECT)
 
-    for set_name, set_opt, task, scene_id, scene in examples:
+    for idx in range(args.start_idx, len(examples)):
+        set_name, set_opt, task, scene_id, scene = examples[idx]
         bullet_cam_targets = {}
         # Modify the scene for placing, and determine placing destination.
         place_dst_xy, place_dest_object = None, None
@@ -168,7 +170,7 @@ async def send_to_client(websocket, path):
         frames_start = time.time()
         update_camera_target = False
         while 1:
-            frame_id = f"{task}_{scene_id}_{env.timestep:06}"
+            frame_id = f"{idx:04}_{task}_{scene_id}_{env.timestep:06}"
             stage = env.stage
             # The state is the state of the world BEFORE applying the action at the
             # current timestep. We currently save states primarily to check for
@@ -276,7 +278,7 @@ async def send_to_client(websocket, path):
                     path=successes_path, data=success_metrics, check_override=False
                 )
                 print(
-                    f"Exp: {args.exp}\tSet: {set_name}\tTask: {task}\tScene ID: {scene_id}\tStage: {stage}\tTimestep: {env.timestep}\n"
+                    f"Idx: {idx}\tExp: {args.exp}\tSet: {set_name}\tTask: {task}\tScene ID: {scene_id}\tStage: {stage}\tTimestep: {env.timestep}\n"
                     f"Frame rate: {n_frames / (time.time() - frames_start):.2f}\tAvg trial time: {avg_time:.2f}\n"
                     f"Success rate: {success_rate:.2f} ({n_trials})\tSuccess w/o OR failures: {success_rate_wo_or:.2f} ({n_or_success})\t# Successes: {n_success}\n"
                     f"Saved stats to: {successes_path}"
@@ -296,8 +298,8 @@ def load_vision_models():
         vision_models_dict["seg"] = DASHSegModule(
             seed=seed,
             mode="eval_single",
+            dataset_name="eval_single",
             checkpoint_path=VISION_OPTIONS.seg_checkpoint_path,
-            vis_dir=None,
         )
     if VISION_OPTIONS.separate_vision_modules:
         vision_models_dict["plan"] = VisionModule(
@@ -471,6 +473,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("exp", type=str, help="The name of the experiment to run.")
     parser.add_argument("mode", type=str, help="The mode of the system to run.")
+    parser.add_argument(
+        "--start_idx",
+        type=int,
+        default=0,
+        help="The example index to start running from.",
+    )
     parser.add_argument(
         "--hostname",
         type=str,
