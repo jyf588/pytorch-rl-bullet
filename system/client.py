@@ -24,7 +24,7 @@ def hello():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("port", type=int)
     args = parser.parse_args()
 
     asyncio.get_event_loop().run_until_complete(hello())

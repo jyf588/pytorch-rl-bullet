@@ -95,6 +95,8 @@ def get_object_camera_target(bullet_odicts: List[Dict], oidx: int):
 def bullet2unity_state(
     bullet_state: Dict,
     bullet_animation_target: List[float],
+    head_speed: float,
+    save_third_pov_image: bool,
     bullet_camera_targets: Dict,
 ):
     """Converts a bullet state to a unity state.
@@ -194,6 +196,8 @@ def bullet2unity_state(
         + unity_robot_state
         + unity_object_states
         + unity_animation_target_position_shoulder
+        + [head_speed]
+        + [int(save_third_pov_image)]
         + [len(bullet_camera_targets)]
         + unity_cam_targets
     )

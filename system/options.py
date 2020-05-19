@@ -25,8 +25,10 @@ homedir = util.get_user_homedir()
 
 
 def set_unity_container_cfgs(opt, port):
-    unity_name = f"Linux{port}_0515"
-    unity_captures_dir = os.path.join(homedir, f"unity/builds/{unity_name}/Captures")
+    unity_name = f"Linux{port}"
+    unity_captures_dir = os.path.join(
+        homedir, f"unity/Builds0519/{unity_name}/Captures"
+    )
     opt.container_dir = f"/home/mguo/container_data_{port}"
     opt.unity_captures_dir = unity_captures_dir
     return opt
@@ -54,12 +56,14 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     visualize_unity=False,
     cam_version="v2",
     use_control_skip=True,
-    render_frequency=100,
+    render_frequency=30,
     render_obs=False,
     animate_head=True,
+    head_speed=100,
     save_states=True,  # To check reproducibility.
     policy_id="0411",  # [0404, 0411, 0510]
     save_first_pov_image=False,
+    save_third_pov_image=True,
     scenes_root_dir=os.path.join(util.get_user_homedir(), "data/dash"),
     root_outputs_dir=os.path.join(util.get_user_homedir(), "outputs/system"),
     container_dir=None,
@@ -88,10 +92,15 @@ DEMO_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 DEMO_OPTIONS.enable_reaching = True
 DEMO_OPTIONS.enable_retract = True
 DEMO_OPTIONS.render_unity = True
-DEMO_OPTIONS.visualize_unity = True
-DEMO_OPTIONS.render_bullet = True
+DEMO_OPTIONS.visualize_unity = False
+DEMO_OPTIONS.render_bullet = False
 DEMO_OPTIONS = copy.deepcopy(DEMO_OPTIONS)
 DEMO_OPTIONS.obs_mode = "gt"  # TODO
+DEMO_OPTIONS.save_third_pov_image = True
+# DEMO_OPTIONS.obs_mode = "vision"
+# DEMO_OPTIONS.render_obs = True
+DEMO_OPTIONS.render_frequency = 15
+DEMO_OPTIONS.use_control_skip = False
 # DEMO_OPTIONS.start_sid = 1
 # DEMO_OPTIONS.end_sid = 2
 
@@ -221,7 +230,7 @@ VISION_MODELS_DIR = os.path.join(homedir, "outputs/0518_results")
 VISION_OPTIONS = argparse.Namespace(
     seed=None,
     renderer="unity",
-    use_segmentation_module=True,
+    use_segmentation_module=False,
     separate_vision_modules=True,
     use_gt_obs=False,
     seg_checkpoint_path=os.path.join(VISION_MODELS_DIR, "mask_rcnn.pth"),

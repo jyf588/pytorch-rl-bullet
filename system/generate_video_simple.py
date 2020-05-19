@@ -16,13 +16,12 @@ def main(args: argparse.Namespace):
     # os.system(command)
 
     render_frequency = 6
-    speed_up_factor = 40./25
+    speed_up_factor = 40.0 / 25
 
     command = f'ffmpeg -i {args.src_dir}/%06d.png -frames:v 25000 -filter:v "setpts=PTS/{speed_up_factor},fps={fps}" -vb 20M -vcodec libx264 -preset veryslow -y {args.dst_path}'
     # command = f'ffmpeg -i {args.src_dir}/%06d.png -frames:v 50000 -vf "fps={fps}" -vb 20M -vcodec libx264 -preset veryslow -y {args.dst_path}'
 
     # command = f'ffmpeg -i {args.src_dir}/%06d.png -frames:v 50000 -filter:v -vb 20M -vcodec libx264 -preset veryslow -y {args.dst_path}'
-
 
     # command = f'ffmpeg -i {args.src_dir}/%06d.png -filter:v "setpts=PTS/{speed_up_factor},fps={fps}" -vb 20M -vcodec mpeg4 -y {args.dst_path}'
 
@@ -36,8 +35,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--src_dir",
         type=str,
-        default="/home/yifengj/Downloads/LinuxBuildLocalhost0512/Captures/temp/third/rgb",
-        # default="/Users/michelleguo/Desktop/dash/demo_video/vision/0507",
+        # default="/home/yifengj/Downloads/LinuxBuildLocalhost0512/Captures/temp/third/rgb",
+        default="/home/mguo/unity/Builds0519/Linux8001/Captures/temp/third/rgb",
         help="The directory containing the png images to convert into video format.",
     )
     parser.add_argument(
@@ -49,7 +48,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dst_path",
         type=str,
-        default="/home/yifengj/Downloads/test-4.mp4",
+        default="/home/mguo/test.mp4",
         help="The destination path to write the mp4 video to.",
     )
     args = parser.parse_args()

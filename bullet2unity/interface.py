@@ -39,6 +39,8 @@ def encode(
     state_id: str,
     bullet_state: List[Any],
     bullet_animation_target: List[float],
+    head_speed: float,
+    save_third_pov_image: bool,
     bullet_cam_targets: Dict,
 ) -> str:
     """Converts the provided bullet state into a Unity state, and encodes the
@@ -83,6 +85,8 @@ def encode(
     unity_state = bullet2unity.states.bullet2unity_state(
         bullet_state=bullet_state,
         bullet_animation_target=bullet_animation_target,
+        head_speed=head_speed,
+        save_third_pov_image=save_third_pov_image,
         bullet_camera_targets=bullet_cam_targets,
     )
 

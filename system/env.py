@@ -48,7 +48,7 @@ class DemoEnvironment:
         command: Optional[List[str]] = None,
         place_dst_xy: Optional[List[float]] = None,
         vision_models_dict: Dict = None,
-        start_q=np.array([0.0]*7),
+        start_q=np.array([0.0] * 7),
     ):
         """
         Args:
@@ -82,7 +82,7 @@ class DemoEnvironment:
 
         self.start_q = start_q
 
-        self.command_pointer = 0        # which to execute
+        self.command_pointer = 0  # which to execute
 
         self.timestep = 0
         self.planning_complete = False
@@ -235,7 +235,8 @@ class DemoEnvironment:
             step_succeeded = self.execute_plan(
                 stage=self.stage,
                 stage_ts=self.stage_ts,
-                restore_fingers=self.policy_opt.restore_fingers and self.command_pointer > 0,
+                restore_fingers=self.policy_opt.restore_fingers
+                and self.command_pointer > 0,
                 # restore_fingers=self.policy_opt.restore_fingers,
             )
         elif self.stage == "grasp":
@@ -244,7 +245,11 @@ class DemoEnvironment:
             step_succeeded = self.execute_plan(stage=self.stage, stage_ts=self.stage_ts)
         elif self.stage == "place":
             self.place(stage_ts=self.stage_ts)
-            if self.command and self.command_pointer < len(self.command) and self.stage_ts == self.n_place - 1:
+            if (
+                self.command
+                and self.command_pointer < len(self.command)
+                and self.stage_ts == self.n_place - 1
+            ):
                 self.planning_complete = False
         elif self.stage == "retract":
             step_succeeded = self.execute_plan(
@@ -424,10 +429,11 @@ class DemoEnvironment:
 
             # Feed through the language module.
             src_idx, (dst_x, dst_y), dst_idx = NLPmod(
-                sentence=self.command[self.command_pointer], vision_output=language_input
+                sentence=self.command[self.command_pointer],
+                vision_output=language_input,
             )
             self.task = "stack" if dst_idx else "place"
-            self.place_dst_xy = [dst_x, dst_y]      # used outside for head animation
+            self.place_dst_xy = [dst_x, dst_y]  # used outside for head animation
             self.command_pointer += 1
 
         # # We currently only support placing spheres, not stacking them.
@@ -558,7 +564,7 @@ class DemoEnvironment:
             q_start=q_start,
             q_end=q_end,
             stage=stage,
-            src_base_z_post_placing=0.0,        # deprecated
+            src_base_z_post_placing=0.0,  # deprecated
             container_dir=self.opt.container_dir,
         )
 

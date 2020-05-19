@@ -27,6 +27,7 @@ import ns_vqa_dart.bullet.util as util
 import bullet2unity.interface as interface
 from exp.options import EXPERIMENT_OPTIONS
 from system.vision_module import VisionModule
+
 try:
     from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
 except ImportError as e:
@@ -50,23 +51,18 @@ TASK2ANIMATION_Z_OFFSET = {"place": 0.1, "stack": 0.2}
 DEMO_COMMANDS = {
     0: [
         "Put the green cylinder on top of the blue box.",
-        "Then, put the red box on top of the blue cylinder."
+        "Then, put the red box on top of the blue cylinder.",
     ],
     1: [
         "Pick up the red sphere that is to the left of the green box, and place it in front of the blue cylinder.",
-        "Then, stack the yellow box on top of the blue cylinder."
+        "Then, stack the yellow box on top of the blue cylinder.",
     ],
-    2: [
-        "Put the blue box to the left of the green cylinder",
-    ],
-    3: [
-        "Put the blue box to the left of the green cylinder",
-    ],
+    2: ["Put the blue box to the left of the green cylinder",],
+    3: ["Put the blue box to the left of the green cylinder",],
 }
 
 START_ARM_Q = {
-    0: np.array([-0.238, 0.509, -0.255,
-                 -2.115, -0.743, 0.132, -0.209]),
+    0: np.array([-0.238, 0.509, -0.255, -2.115, -0.743, 0.132, -0.209]),
     1: np.array([0.0] * 7),
     2: np.array([0.0] * 7),
     3: np.array([0.0] * 7),
@@ -86,6 +82,7 @@ async def send_to_client(websocket, path):
     opt = SYSTEM_OPTIONS[args.mode]
     set_name2opt = exp.loader.ExpLoader(exp_name=args.exp).set_name2opt
 
+    opt = system.options.set_unity_container_cfgs(opt=opt, port=args.port)
     system.openrave.check_clean_container(container_dir=opt.container_dir)
 
     # Define paths.
@@ -138,7 +135,7 @@ async def send_to_client(websocket, path):
                 continue
             bullet_cam_targets = {}
             # Modify the scene for placing, and determine placing destination.
-            place_dst_xy, place_dest_object = None, None        # deprecated
+            place_dst_xy, place_dest_object = None, None  # deprecated
 
             assert args.mode != "unity_dataset"
 
@@ -152,12 +149,12 @@ async def send_to_client(websocket, path):
                 set_name=set_name,
                 scene_id=scene_id,
                 scene=scene,
-                task=None,      # set from command in env.
+                task=None,  # set from command in env.
                 outputs_dir=outputs_dir,
                 place_dst_xy=None,  # set from command in env.
                 vision_models_dict=vision_models_dict,
                 command=DEMO_COMMANDS[scene_id],
-                start_q=START_ARM_Q[scene_id]
+                start_q=START_ARM_Q[scene_id],
             )
 
             n_frames = 0
@@ -217,6 +214,8 @@ async def send_to_client(websocket, path):
                                 state_id=frame_id,
                                 bullet_state=render_state,
                                 bullet_animation_target=b_ani_tar,
+                                head_speed=opt.head_speed,
+                                save_third_pov_image=opt.save_third_pov_image,
                                 bullet_cam_targets=bullet_cam_targets,
                             )
                             await websocket.send(message)
@@ -255,8 +254,8 @@ def load_vision_models():
         vision_models_dict["seg"] = DASHSegModule(
             seed=seed,
             mode="eval_single",
+            dataset_name="eval_single",
             checkpoint_path=VISION_OPTIONS.seg_checkpoint_path,
-            vis_dir=None,
         )
     if VISION_OPTIONS.separate_vision_modules:
         vision_models_dict["plan"] = VisionModule(
@@ -280,7 +279,7 @@ def get_unity_options(mode, opt, env):
     #     unity_options = [(False, False, True, True)]
     assert mode != "unity_dataset"
 
-    render_place = False    # deprecated
+    render_place = False  # deprecated
     if opt.obs_mode == "vision":
         if env.stage in ["plan", "place"]:
             render_cur_step = False
@@ -303,28 +302,47 @@ def get_unity_options(mode, opt, env):
 
 
 def compute_bullet_camera_targets(opt, env, send_image, save_image):
-    odicts, oidx = None, None
-    if env.stage == "place":
-        if env.task == "place":
-            # GT version: We use the current object states.
-            odicts = list(env.get_state()["objects"].values())
-            oidx = opt.scene_place_src_idx
+    assert opt.obs_mode == "vision"
+    if opt.cam_version == "v1":
+        odicts, oidx = None, None
+        if env.stage == "place":
+            if env.task == "place":
+                # GT version: We use the current object states.
+                odicts = list(env.get_state()["objects"].values())
+                oidx = opt.scene_place_src_idx
 
-            # TODO: predicted version.
-            # cam_target = env.place_dst_xy + [env.initial_obs[env.src_idx]["height"]]
-        elif env.task == "stack":
-            # We use the predictions from the initial observation.
-            odicts = env.initial_obs
-            oidx = env.dst_idx
-        else:
-            raise ValueError(f"Invalid task: {env.task}")
-    bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
-        stage=env.stage,
-        send_image=send_image,
-        save_image=save_image,
-        odicts=odicts,
-        oidx=oidx,
-    )
+                # TODO: predicted version.
+                # cam_target = env.place_dst_xy + [env.initial_obs[env.src_idx]["height"]]
+            elif env.task == "stack":
+                # We use the predictions from the initial observation.
+                odicts = env.initial_obs
+                oidx = env.dst_idx
+            else:
+                raise ValueError(f"Invalid task: {env.task}")
+        bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
+            version=opt.cam_version,
+            stage=env.stage,
+            send_image=send_image,
+            save_image=save_image,
+            odicts=odicts,
+            oidx=oidx,
+        )
+    elif opt.cam_version == "v2":
+        if env.stage == "plan":
+            tx, ty = None, None
+        elif env.stage == "place":
+            if env.task == "place":
+                tx, ty = env.place_dst_xy
+            elif env.task == "stack":
+                tx, ty, _ = env.initial_obs[env.dst_idx]["position"]
+        bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
+            version=opt.cam_version,
+            stage=env.stage,
+            send_image=send_image,
+            save_image=save_image,
+            tx=tx,
+            ty=ty,
+        )
     return bullet_camera_targets
 
 
@@ -356,10 +374,10 @@ def compute_b_ani_tar(opt, env):
 
 
 def compute_render_state(
-        env, place_dest_object, bullet_cam_targets, render_obs, render_place
+    env, place_dest_object, bullet_cam_targets, render_obs, render_place
 ):
-    assert not render_place     # deprecated
-    assert not place_dest_object        # deprecated
+    assert not render_place  # deprecated
+    assert not place_dest_object  # deprecated
     state = env.get_state()
 
     # If we are rendering observations, add them to the
