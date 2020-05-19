@@ -71,20 +71,23 @@ class VisionModule:
         data = []
         _, W, _ = rgb.shape
 
-        # Construct the input data for each mask.
-        for mask in masks:
-            # Create the input X data to the model. We create the data tensor even
-            # if the mask is empty (i.e., object is completely occluded)
-            X = dash_object.compute_X(img=rgb, mask=mask, keep_occluded=True)
-            data.append(X)
+        if len(masks) > 0:
+            # Construct the input data for each mask.
+            for mask in masks:
+                # Create the input X data to the model. We create the data tensor even
+                # if the mask is empty (i.e., object is completely occluded)
+                X = dash_object.compute_X(img=rgb, mask=mask, keep_occluded=True)
+                data.append(X)
 
-        # Writing images for debugging.
-        inputs_img = self.gen_input_rgb(data=data, show_window=False)
+            # Writing images for debugging.
+            inputs_img = self.gen_input_rgb(data=data, show_window=False)
 
-        # Predict.
-        data = np.array(data)
-        assert data.shape == (len(masks), W, W, 6)  # (N, W, W, 6)
-        pred = self.predict_from_data(data=data)
+            # Predict.
+            data = np.array(data)
+            assert data.shape == (len(masks), W, W, 6)  # (N, W, W, 6)
+            pred = self.predict_from_data(data=data)
+        else:
+            pred, inputs_img = None, None
         return pred, inputs_img
 
     def predict_from_data(self, data: np.ndarray):
@@ -124,9 +127,12 @@ class VisionModule:
             data: A list of data tensors, one for each object.
         """
         rows = []
-        for object_data in data:
-            rows.append(np.hstack([object_data[:, :, :3], object_data[:, :, 3:6]]))
-        input_rgb = np.vstack(rows)
+        if len(data) > 0:
+            for object_data in data:
+                rows.append(np.hstack([object_data[:, :, :3], object_data[:, :, 3:6]]))
+            input_rgb = np.vstack(rows)
+        else:
+            input_rgb = None
 
         if show_window:
             input_rgb_resized = cv2.resize(input_rgb, (0, 0), fx=0.5, fy=0.5)

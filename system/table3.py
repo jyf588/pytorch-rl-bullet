@@ -13,7 +13,7 @@ from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule, register_data
 
 
 def main(args):
-    run_dir = f"/home/mguo/outputs/system/t1/0404/{args.run_name}"
+    run_dir = f"/home/mguo/outputs/system/t1/{args.policy_id}/{args.run_name}"
     pickle_dir = os.path.join(run_dir, "pickle")
     metrics_dir = os.path.join(run_dir, "metrics")
     successes_path = os.path.join(run_dir, "successes.json")
@@ -148,6 +148,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("policy_id", type=str, help="The policy ID.")
     parser.add_argument("run_name", type=str, help="The name of the run dir.")
     args = parser.parse_args()
     main(args)

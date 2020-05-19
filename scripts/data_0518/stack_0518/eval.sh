@@ -1,6 +1,8 @@
-DATA_DIRS_JSON=ns_vqa_dart/scripts/combined/data_dirs.json
-MODEL_NAME=2020_05_16_22_47_25
-MODEL_DIR=/home/mguo/outputs/combined/$MODEL_NAME
+SHORT_SET=stack_0518
+SET=stack_2K_20K_0518
+DATA_DIRS_JSON=scripts/data_0518/$SHORT_SET/data_dirs.json
+MODEL_NAME=2020_05_18_02_50_47
+MODEL_DIR=/home/mguo/outputs/$SET/$MODEL_NAME
 RUN_DIR=$MODEL_DIR/eval
 CHECKPOINT_PATH=$MODEL_DIR/checkpoint_best.pt
 
