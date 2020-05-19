@@ -108,7 +108,7 @@ def search_dep_tree_of_token(token, Attribute_list):
         vertex = queue.popleft()
         if vertex.text in Attribute_list:
             # print('Attribute found,', vertex.text)
-            return vertex.text
+            return vertex.text, vertex
 
         for neighbour in vertex.children:
             #        if neighbour not in visited:
@@ -153,8 +153,15 @@ def NLPmod(sentence, vision_output):
     print(doc)
 
     target_object = {}
+    target_token = None
     reference_objects = []
     relations = []
+    relations_modify = []     # what do each relation in relations[] modifies
+    # 1 modifies verb (primary)
+    # 2 modifies target obj
+    # 3 modifies reference obj
+    # tar&reference obj must not share same color/shape
+    # otherwise it will be like put the red box (that is...) on the red box (that is...)
 
     PlotTree(doc)
 
@@ -171,11 +178,12 @@ def NLPmod(sentence, vision_output):
         # if token.pos_ == "VERB":
         if token == root_word:      # asuume it is a verb
             print('Found the verb!', token)
-            target_object["shape"] = search_dep_tree_of_token(
+            target_object["shape"], target_token = search_dep_tree_of_token(
                 token, SHAPE_NAME_LIST
             )
+            # print(target_token.text)
             target_object["shape"] = SHAPE_NAME_MAP[target_object["shape"]]
-            target_object["color"] = search_dep_tree_of_token(
+            target_object["color"], _ = search_dep_tree_of_token(
                 token, COLOR_NAME_LIST
             )
 
@@ -196,6 +204,25 @@ def NLPmod(sentence, vision_output):
 
                 relations.append(RELATION_NAME_MAP[token.text])
 
+                # print(token.head.head)
+                # parent = token.parent
+                # while parent:
+
+                parent = token.head
+                while True:
+                    if parent.pos_ == "VERB":
+                        relations_modify.append(1)
+                        break
+                    if parent == target_token:
+                        relations_modify.append(2)
+                        break
+                    if parent.pos_ == "NOUN" and parent != target_token:
+                        relations_modify.append(3)
+                        break
+                    # print(parent)
+                    # print(relations_modify)
+                    parent = parent.head
+
                 if token.text == "between":
                     reference_object1 = {}
                     reference_object2 = {}
@@ -214,11 +241,11 @@ def NLPmod(sentence, vision_output):
                 else:
                     reference_object = {}
 
-                    reference_object["shape"] = search_dep_tree_of_token(
+                    reference_object["shape"], _ = search_dep_tree_of_token(
                         token, SHAPE_NAME_LIST
                     )
                     reference_object["shape"] = SHAPE_NAME_MAP[reference_object["shape"]]
-                    reference_object["color"] = search_dep_tree_of_token(
+                    reference_object["color"], _ = search_dep_tree_of_token(
                         token, COLOR_NAME_LIST
                     )
                     reference_objects.append(reference_object)
@@ -226,9 +253,17 @@ def NLPmod(sentence, vision_output):
         for child in token.children:
             queue.append(child)
 
+
+    # re-order relations such that primary is at the beginning
+    # second relation, assume only two relations here
+    relations.insert(0, relations.pop(relations_modify.index(1)))
+    reference_objects.insert(0, reference_objects.pop(relations_modify.index(1)))
+    relations_modify.insert(0, relations_modify.pop(relations_modify.index(1)))
+
     print("--------")
     print("Target object: ", target_object)
     print("Relations: ", relations)
+    print("relations modifies:", relations_modify)
     print("Reference object(s) ", reference_objects)
     print("--------")
 
@@ -245,7 +280,7 @@ def NLPmod(sentence, vision_output):
             exit()
         return object_index
 
-    # First, get the target object ID
+    # First, get the target object ID There might be more than one fitting the description!
     target_ID = Parse_objects(target_object, vision_output)
     print("Target ID:", target_ID)
     # Then, get the reference object ID. There might be more than one fitting the description!
@@ -260,72 +295,111 @@ def NLPmod(sentence, vision_output):
         reference_ID.append(ID)
     print("Reference IDs: ", reference_ID)
 
-    # remove ambiguity
-    # TODO: secondary relations could modify between, or modify the target object (rather than desti object)
-    mult = len(reference_ID[0])
-    if mult > 1 and relations[0] != "between":
-        flag = [0, 0, 0, 0]         # TODO: hardcoded, at most 4 candidates
-        if relations[1] == "right":
-            for i in range(mult):
-                if (
-                    vision_output[reference_ID[0][i]]["position"][1]
-                    < vision_output[reference_ID[1][0]]["position"][1]
-                ):
-                    flag[i] = 1
-        if relations[1] == "left":
-            for i in range(mult):
-                if (
-                    vision_output[reference_ID[0][i]]["position"][1]
-                    > vision_output[reference_ID[1][0]]["position"][1]
-                ):
-                    flag[i] = 1
-        if relations[1] == "front":
-            for i in range(mult):
-                if (
-                    vision_output[reference_ID[0][i]]["position"][0]
-                    < vision_output[reference_ID[1][0]]["position"][0]
-                ):
-                    flag[i] = 1
-        if relations[1] == "behind":
-            for i in range(mult):
-                if (
-                    vision_output[reference_ID[0][i]]["position"][0]
-                    > vision_output[reference_ID[1][0]]["position"][0]
-                ):
-                    flag[i] = 1
-        if relations[1] == "between":
-            max_x = max(
-                vision_output[reference_ID[1][0]]["position"][0],
-                vision_output[reference_ID[1][1]]["position"][0],
-            )
-            min_x = min(
-                vision_output[reference_ID[1][0]]["position"][0],
-                vision_output[reference_ID[1][1]]["position"][0],
-            )
-            max_y = max(
-                vision_output[reference_ID[1][0]]["position"][1],
-                vision_output[reference_ID[1][1]]["position"][1],
-            )
-            min_y = min(
-                vision_output[reference_ID[1][0]]["position"][1],
-                vision_output[reference_ID[1][1]]["position"][1],
-            )
-            for i in range(mult):
-                if (
-                    vision_output[reference_ID[0][i]]["position"][0] > min_x
-                    and vision_output[reference_ID[0][i]]["position"][0]
-                    < max_x
-                    and vision_output[reference_ID[0][i]]["position"][1]
-                    > min_y
-                    and vision_output[reference_ID[0][i]]["position"][1]
-                    < max_y
-                ):
-                    flag[i] = 1
-        print("Flag", flag)
-        assert sum(flag) == 1  # make sure only one remains
-        true_id = np.argmax(flag)
-        reference_ID[0] = [reference_ID[0][true_id]]
-        print("New Reference IDs", reference_ID)
+    if len(relations) > 1:
+        disambuiguite_target = True if relations_modify[1] == 2 else False
+        if disambuiguite_target and len(target_ID) > 1:
+            flag = [0, 0, 0, 0]  # TODO: hardcoded, at most 4 candidates
+            if relations[1] == "right":
+                for i in range(len(target_ID)):
+                    if (
+                        vision_output[target_ID[i]]["position"][1]
+                        < vision_output[reference_ID[1][0]]["position"][1]
+                    ):
+                        flag[i] = 1
+            if relations[1] == "left":
+                for i in range(len(target_ID)):
+                    if (
+                        vision_output[target_ID[i]]["position"][1]
+                        > vision_output[reference_ID[1][0]]["position"][1]
+                    ):
+                        flag[i] = 1
+            if relations[1] == "front":
+                for i in range(len(target_ID)):
+                    if (
+                        vision_output[target_ID[i]]["position"][0]
+                        < vision_output[reference_ID[1][0]]["position"][0]
+                    ):
+                        flag[i] = 1
+            if relations[1] == "behind":
+                for i in range(len(target_ID)):
+                    if (
+                        vision_output[target_ID[i]]["position"][0]
+                        > vision_output[reference_ID[1][0]]["position"][0]
+                    ):
+                        flag[i] = 1
+            print("Flag_target", flag)
+            assert sum(flag) == 1  # make sure only one remains
+            true_id = np.argmax(flag)
+            target_ID = [target_ID[true_id]]
+            print("New Reference IDs", target_ID)
+
+
+        # remove ambiguity for reference obj
+        # TODO: secondary relations could modify between, or modify the target object (rather than desti object)
+        mult = len(reference_ID[0])
+        if mult > 1 and relations[0] != "between" and not disambuiguite_target:
+            flag = [0, 0, 0, 0]         # TODO: hardcoded, at most 4 candidates
+            if relations[1] == "right":
+                for i in range(mult):
+                    if (
+                        vision_output[reference_ID[0][i]]["position"][1]
+                        < vision_output[reference_ID[1][0]]["position"][1]
+                    ):
+                        flag[i] = 1
+            if relations[1] == "left":
+                for i in range(mult):
+                    if (
+                        vision_output[reference_ID[0][i]]["position"][1]
+                        > vision_output[reference_ID[1][0]]["position"][1]
+                    ):
+                        flag[i] = 1
+            if relations[1] == "front":
+                for i in range(mult):
+                    if (
+                        vision_output[reference_ID[0][i]]["position"][0]
+                        < vision_output[reference_ID[1][0]]["position"][0]
+                    ):
+                        flag[i] = 1
+            if relations[1] == "behind":
+                for i in range(mult):
+                    if (
+                        vision_output[reference_ID[0][i]]["position"][0]
+                        > vision_output[reference_ID[1][0]]["position"][0]
+                    ):
+                        flag[i] = 1
+            if relations[1] == "between":
+                max_x = max(
+                    vision_output[reference_ID[1][0]]["position"][0],
+                    vision_output[reference_ID[1][1]]["position"][0],
+                )
+                min_x = min(
+                    vision_output[reference_ID[1][0]]["position"][0],
+                    vision_output[reference_ID[1][1]]["position"][0],
+                )
+                max_y = max(
+                    vision_output[reference_ID[1][0]]["position"][1],
+                    vision_output[reference_ID[1][1]]["position"][1],
+                )
+                min_y = min(
+                    vision_output[reference_ID[1][0]]["position"][1],
+                    vision_output[reference_ID[1][1]]["position"][1],
+                )
+                for i in range(mult):
+                    if (
+                        vision_output[reference_ID[0][i]]["position"][0] > min_x
+                        and vision_output[reference_ID[0][i]]["position"][0]
+                        < max_x
+                        and vision_output[reference_ID[0][i]]["position"][1]
+                        > min_y
+                        and vision_output[reference_ID[0][i]]["position"][1]
+                        < max_y
+                    ):
+                        flag[i] = 1
+            print("Flag", flag)
+            assert sum(flag) == 1  # make sure only one remains
+            true_id = np.argmax(flag)
+            reference_ID[0] = [reference_ID[0][true_id]]
+            print("New target IDs", reference_ID)
 
     # finally, get coordinates
 
@@ -394,6 +468,7 @@ def NLPmod(sentence, vision_output):
 
 
 if __name__ == "__main__":
+
     # sentence = "Put the red box between the blue ball and yellow box"
     # obj1 = {
     #     "shape": "box",
@@ -427,7 +502,7 @@ if __name__ == "__main__":
 
     # sentence = "Pick up the red block that is to the right of the blue ball, and put it behind the yellow box"
     #
-    # sentence = "Pick up the red sphere that is left to the green box, and place it in front of the blue cylinder."
+    sentence = "Pick up the red sphere that is left to the green box, and place it in front of the blue cylinder."
     # sentence = "Pick up the red sphere that is to the left of the green box, and place it in front of the blue cylinder."
 
     # sentence = "Put the red box on the right on top of the yellow box"
@@ -445,28 +520,28 @@ if __name__ == "__main__":
 
     obj1 = {
         "shape": "sphere",
-        "color": "green",
-        "position": np.array([1.0, 0.5, 0, 0]),
+        "color": "red",
+        "position": np.array([-0.06, 0.4, 0, 0]),
     }
     obj2 = {
-        "shape": "box",
+        "shape": "sphere",
         "color": "red",
-        "position": np.array([0.0, 0.0, 0, 0]),
+        "position": np.array([0.14, 0.06, 0, 0]),
     }
     obj3 = {
-        "shape": "sphere",
-        "color": "blue",
-        "position": np.array([0.0, 1, 0, 0]),
+        "shape": "box",
+        "color": "green",
+        "position": np.array([0.10, 0.18, 0, 0]),
     }
     obj4 = {
         "shape": "box",
         "color": "yellow",
-        "position": np.array([1.2, 0.5, 0, 0]),
+        "position": np.array([0.22, 0.45, 0, 0]),
     }
     obj5 = {
-        "shape": "box",
-        "color": "yellow",
-        "position": np.array([0.8, 0.4, 0, 0]),
+        "shape": "cylinder",
+        "color": "blue",
+        "position": np.array([0.22, -0.06, 0, 0]),
     }
     Vision_output = [obj1, obj2, obj3, obj4, obj5]
     pick_idx, dest_xy, stack_idx = NLPmod(sentence=sentence, vision_output=Vision_output)
