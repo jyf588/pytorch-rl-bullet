@@ -60,7 +60,7 @@ import collections
 import numpy as np
 from pdb import set_trace as bp
 
-SHAPE_NAME_LIST = ["square", "box", "block", "cylinder", "ball"]
+SHAPE_NAME_LIST = ["square", "box", "block", "cylinder", "ball", "sphere"]
 SHAPE_NAME_MAP = {"box": "box", "block": "box", "square": "box",
                   "cylinder": "cylinder",
                   "sphere": "sphere", "ball": "sphere"}
@@ -168,8 +168,9 @@ def NLPmod(sentence, vision_output):
     while queue:
         token = queue.popleft()
 
-        if token.pos_ == "VERB":
-            # print('Found the verb! i = ', i)
+        # if token.pos_ == "VERB":
+        if token == root_word:      # asuume it is a verb
+            print('Found the verb!', token)
             target_object["shape"] = search_dep_tree_of_token(
                 token, SHAPE_NAME_LIST
             )
@@ -422,13 +423,16 @@ if __name__ == "__main__":
 
     # sentence = "Put the red box on the right of the yellow box that is on top of the green ball"
 
-    # sentence = "For the red box in front of the blue ball, put it behind the yellow box"
+    sentence = "For the red box in front of the blue ball, put it behind the yellow box"
 
-    sentence = "For the red block to the right of the blue ball, put it behind the yellow box"
+    # sentence = "Pick up the red block that is to the right of the blue ball, and put it behind the yellow box"
+    #
+    # sentence = "Pick up the red sphere that is left to the green box, and place it in front of the blue cylinder."
+    # sentence = "Pick up the red sphere that is to the left of the green box, and place it in front of the blue cylinder."
 
-    sentence = "Put the red box on the right on top of the yellow box"
-
-    sentence = "Pick the red box on the right, and put it on top of the yellow box"
+    # sentence = "Put the red box on the right on top of the yellow box"
+    #
+    # sentence = "Pick the red box on the right, and put it on top of the yellow box"
 
     # # sentence = "Put the red box right to the blue ball that is behind the yellow box"   # same as above
     # # sentence = "Put the red box that is right to the blue ball behind the yellow box"       # wrong(?) behavior

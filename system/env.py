@@ -45,10 +45,10 @@ class DemoEnvironment:
         scene: List[Dict],
         task: str,
         outputs_dir: str,
-        command: Optional[str] = None,
+        command: Optional[List[str]] = None,
         place_dst_xy: Optional[List[float]] = None,
         vision_models_dict: Dict = None,
-        start_q=[0.0] * 7,
+        start_q=np.array([0.0]*7),
     ):
         """
         Args:
@@ -82,6 +82,8 @@ class DemoEnvironment:
 
         self.start_q = start_q
 
+        self.command_pointer = 0        # which to execute
+
         self.timestep = 0
         self.planning_complete = False
         self.initial_obs = None
@@ -107,7 +109,7 @@ class DemoEnvironment:
             self.policy_opt.n_retract_steps,
         ]
 
-        if self.opt.two_commands:
+        if self.command and len(self.command) > 1:
             self.stage_list = self.stage_list[0:4] + self.stage_list
             self.duration_list = self.duration_list[0:4] + self.duration_list
         else:
@@ -233,8 +235,8 @@ class DemoEnvironment:
             step_succeeded = self.execute_plan(
                 stage=self.stage,
                 stage_ts=self.stage_ts,
-                restore_fingers=self.policy_opt.restore_fingers
-                and self.opt.two_commands,
+                restore_fingers=self.policy_opt.restore_fingers and self.command_pointer > 0,
+                # restore_fingers=self.policy_opt.restore_fingers,
             )
         elif self.stage == "grasp":
             self.grasp(stage_ts=self.stage_ts)
@@ -242,10 +244,8 @@ class DemoEnvironment:
             step_succeeded = self.execute_plan(stage=self.stage, stage_ts=self.stage_ts)
         elif self.stage == "place":
             self.place(stage_ts=self.stage_ts)
-            if self.opt.two_commands and self.stage_ts == self.n_place - 1:
+            if self.command and self.command_pointer < len(self.command) and self.stage_ts == self.n_place - 1:
                 self.planning_complete = False
-                self.opt.scene_stack_src_idx = 2  # TODO
-                self.opt.scene_stack_dst_idx = 3
         elif self.stage == "retract":
             step_succeeded = self.execute_plan(
                 stage=self.stage,
@@ -395,6 +395,8 @@ class DemoEnvironment:
                     dst_idx = self.opt.scene_stack_dst_idx
             elif self.opt.obs_mode == "vision":
                 # Compute the mapping from GT indexes to predicted indexes.
+                # only needed when without language testing,
+                # where we need to specify that we want to grasp first object in json for example.
                 gt2pred_idxs = match_objects(
                     src_odicts=self.scene, dst_odicts=observation
                 )
@@ -411,19 +413,22 @@ class DemoEnvironment:
             elif self.task == "stack":
                 dst_x, dst_y, _ = observation[dst_idx]["position"]
         else:
-            if self.task == "place":
-                raise NotImplementedError
-            elif self.task == "stack":
-                # Zero-pad the scene's position with fourth dimension because that's
-                # what the language module expects.
-                language_input = copy.deepcopy(observation)
-                for idx, odict in enumerate(language_input):
-                    language_input[idx]["position"] = odict["position"] + [0.0]
+            # if self.task == "place":
+            #     raise NotImplementedError
+            # elif self.task == "stack":
+            # Zero-pad the scene's position with fourth dimension because that's
+            # what the language module expects.
+            language_input = copy.deepcopy(observation)
+            for idx, odict in enumerate(language_input):
+                language_input[idx]["position"] = odict["position"] + [0.0]
 
-                # Feed through the language module.
-                src_idx, (dst_x, dst_y), dst_idx = NLPmod(
-                    sentence=self.command, vision_output=language_input
-                )
+            # Feed through the language module.
+            src_idx, (dst_x, dst_y), dst_idx = NLPmod(
+                sentence=self.command[self.command_pointer], vision_output=language_input
+            )
+            self.task = "stack" if dst_idx else "place"
+            self.place_dst_xy = [dst_x, dst_y]      # used outside for head animation
+            self.command_pointer += 1
 
         # # We currently only support placing spheres, not stacking them.
         # if self.task == "stack":
@@ -539,12 +544,12 @@ class DemoEnvironment:
                 odicts = self.last_pred_obs
             else:
                 raise ValueError(f"Invalid observation mode: {self.opt.obs_mode}.")
-            if self.task == "place":
-                expected_src_base_z_post_placing = 0.0
-            elif self.task == "stack":
-                expected_src_base_z_post_placing = self.initial_obs[self.dst_idx][
-                    "height"
-                ]
+            # if self.task == "place":
+            #     expected_src_base_z_post_placing = 0.0
+            # elif self.task == "stack":
+            #     expected_src_base_z_post_placing = self.initial_obs[self.dst_idx][
+            #         "height"
+            #     ]
         else:
             raise ValueError(f"Invalid stage: {stage}.")
         trajectory = openrave.compute_trajectory(
@@ -553,7 +558,7 @@ class DemoEnvironment:
             q_start=q_start,
             q_end=q_end,
             stage=stage,
-            src_base_z_post_placing=expected_src_base_z_post_placing,
+            src_base_z_post_placing=0.0,        # deprecated
             container_dir=self.opt.container_dir,
         )
 

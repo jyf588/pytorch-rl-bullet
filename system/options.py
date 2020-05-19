@@ -3,6 +3,7 @@ import copy
 import argparse
 import ns_vqa_dart.bullet.util as util
 
+
 homedir = util.get_user_homedir()
 
 
@@ -83,6 +84,17 @@ TEST_OPTIONS.enable_retract = False  # Retract is excluded from Table 1 evaluati
 TEST_GT_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_GT_OPTIONS.obs_mode = "gt"
 
+DEMO_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
+DEMO_OPTIONS.enable_reaching = True
+DEMO_OPTIONS.enable_retract = True
+DEMO_OPTIONS.render_unity = True
+DEMO_OPTIONS.visualize_unity = True
+DEMO_OPTIONS.render_bullet = True
+DEMO_OPTIONS = copy.deepcopy(DEMO_OPTIONS)
+DEMO_OPTIONS.obs_mode = "gt"  # TODO
+# DEMO_OPTIONS.start_sid = 1
+# DEMO_OPTIONS.end_sid = 2
+
 TEST_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_VISION_OPTIONS.obs_mode = "vision"
 TEST_VISION_OPTIONS.render_unity = True
@@ -107,6 +119,7 @@ SYSTEM_OPTIONS = {
     "test_vision": TEST_VISION_OPTIONS,
     "test_gt": TEST_GT_OPTIONS,
     "debug_vision": DEBUG_VISION_OPTIONS,
+    "demo": DEMO_OPTIONS,
 }
 
 
@@ -127,7 +140,7 @@ POLICY_OPTIONS = argparse.Namespace(
     use_height=False,  # assume sph policy does not use height or one bit.
     use_place_stack_bit=False,
     use_slow_policy=False,
-    n_reach_steps=305,
+    n_reach_steps=405,
     n_transport_steps=505,
     n_retract_steps=305,
     grasp_control_steps=30,

@@ -87,8 +87,11 @@ def save_scenes(dst_dir: str, task: str, scenes: List[Dict]):
     print(f"Saved {task} scenes to: {task_dir}")
 
 
-def load_scenes(load_dir: str, task: str) -> List[Dict]:
-    task_dir = os.path.join(load_dir, task)
+def load_scenes(load_dir: str, task) -> List[Dict]:
+    if task is None:
+        task_dir = load_dir
+    else:
+        task_dir = os.path.join(load_dir, task)
     scenes = []
     for f in sorted(os.listdir(task_dir)):
         path = os.path.join(task_dir, f)

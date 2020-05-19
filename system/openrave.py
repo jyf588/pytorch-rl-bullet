@@ -84,15 +84,22 @@ def compute_trajectory(
 
         # OpenRAVE expects the z position to represent the bottom of the
         # objects.
-        if stage == "retract" and idx == 0:
-            assert src_base_z_post_placing is not None
-            position[2] = src_base_z_post_placing
+        if position[2] > 0.15:      # CoM position > 0.15
+            position[2] = 0.15      # on some other obj
         else:
-            position[2] = default_base_z
+            position[2] = default_base_z    # 0.0, on floor
+        # if stage == "retract" and idx == 0:
+        #     assert src_base_z_post_placing is not None
+        #     position[2] = src_base_z_post_placing
+        #     print("pos", position)
+        # else:
+        #     position[2] = default_base_z
 
         # Store the object position.
         object_positions.append(position)
 
+    # print(stage)
+    # print(object_positions)
     # Zero-pad each position with a fourth dimension because OpenRAVE expects
     # it.
     object_positions = np.array([p + [0.0] for p in object_positions])
