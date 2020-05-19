@@ -3,8 +3,8 @@ import copy
 import argparse
 import ns_vqa_dart.bullet.util as util
 
-
 CONTAINER_DIR = "/home/mguo/container_data_v2"
+# CONTAINER_DIR = "/home/yifengj/container_data"
 
 # UNITY_NAME = "Linux8000_0512"
 UNITY_NAME = "Linux8001_0515"
@@ -41,7 +41,7 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     render_obs=False,
     animate_head=True,
     save_states=True,  # To check reproducibility.
-    policy_id="0404",  # [0404, 0411, 0510]
+    policy_id="0411",  # [0404, 0411, 0510]
     save_first_pov_image=False,
     scenes_root_dir=os.path.join(util.get_user_homedir(), "data/dash"),
     root_outputs_dir=os.path.join(util.get_user_homedir(), "outputs/system"),
@@ -67,6 +67,15 @@ TEST_OPTIONS.enable_retract = False  # Retract is excluded from Table 1 evaluati
 TEST_GT_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_GT_OPTIONS.obs_mode = "gt"
 
+DEMO_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
+DEMO_OPTIONS.enable_reaching = True
+DEMO_OPTIONS.enable_retract = True
+DEMO_OPTIONS.render_unity = True
+DEMO_OPTIONS.visualize_unity = True
+DEMO_OPTIONS.render_bullet = True
+DEMO_OPTIONS = copy.deepcopy(DEMO_OPTIONS)
+DEMO_OPTIONS.obs_mode = "gt"        # TODO
+
 TEST_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_VISION_OPTIONS.obs_mode = "vision"
 TEST_VISION_OPTIONS.render_unity = True
@@ -88,6 +97,7 @@ SYSTEM_OPTIONS = {
     "test_vision": TEST_VISION_OPTIONS,
     "test_gt": TEST_GT_OPTIONS,
     "debug_vision": DEBUG_VISION_OPTIONS,
+    "demo": DEMO_OPTIONS,
 }
 
 
@@ -105,8 +115,8 @@ POLICY_OPTIONS = argparse.Namespace(
     init_noise=True,
     restore_fingers=True,
     use_arm_blending=True,
-    use_height=True,        # assume sph policy does not use height or one bit.
-    use_place_stack_bit=True,
+    use_height=False,        # assume sph policy does not use height or one bit.
+    use_place_stack_bit=False,
     use_slow_policy=False,
     n_reach_steps=305,
     n_transport_steps=505,
@@ -135,9 +145,14 @@ def get_policy_options_and_paths(policy_id: str):
         grasp_dir = f"./trained_models_%s/ppo/" % "0404_0_n"
         place_pi = f"0404_0_n_place_0404_0"
         place_dir = f"./trained_models_%s/ppo/" % place_pi
-    #     grasp_pi="0510_0_n_25_45",
-    #     grasp_dir="./trained_models_0510_0_n/ppo/",         # TODO
-    #     place_dir="./trained_models_0510_0_n_place_0510_0/ppo/",
+    elif policy_id == "0510":
+        policy_options.use_height = True
+        policy_options.use_place_stack_bit = True
+        grasp_pi = f"0510_0_n_25_45"
+        grasp_dir = f"./trained_models_%s/ppo/" % "0510_0_n"
+        place_dir = f"./trained_models_0510_0_n_place_0510_0/ppo/"
+    else:
+        assert False and "no policy id"
 
     shape2policy_paths = {
         "universal": {
