@@ -60,7 +60,7 @@ import collections
 import numpy as np
 from pdb import set_trace as bp
 
-SHAPE_NAME_LIST = ["square", "box", "block", "cylinder", "ball"]
+SHAPE_NAME_LIST = ["square", "box", "block", "cylinder", "ball", "sphere"]
 SHAPE_NAME_MAP = {"box": "box", "block": "box", "square": "box",
                   "cylinder": "cylinder",
                   "sphere": "sphere", "ball": "sphere"}
@@ -423,9 +423,12 @@ if __name__ == "__main__":
 
     # sentence = "Put the red box on the right of the yellow box that is on top of the green ball"
 
-    # sentence = "For the red box in front of the blue ball, put it behind the yellow box"
+    sentence = "For the red box in front of the blue ball, put it behind the yellow box"
 
-    sentence = "Pick up the red block that is to the right of the blue ball, and put it behind the yellow box"
+    # sentence = "Pick up the red block that is to the right of the blue ball, and put it behind the yellow box"
+    #
+    # sentence = "Pick up the red sphere that is left to the green box, and place it in front of the blue cylinder."
+    # sentence = "Pick up the red sphere that is to the left of the green box, and place it in front of the blue cylinder."
 
     # sentence = "Put the red box on the right on top of the yellow box"
     #

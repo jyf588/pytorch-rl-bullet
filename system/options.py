@@ -75,6 +75,8 @@ DEMO_OPTIONS.visualize_unity = True
 DEMO_OPTIONS.render_bullet = True
 DEMO_OPTIONS = copy.deepcopy(DEMO_OPTIONS)
 DEMO_OPTIONS.obs_mode = "gt"        # TODO
+# DEMO_OPTIONS.start_sid = 1
+# DEMO_OPTIONS.end_sid = 2
 
 TEST_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_VISION_OPTIONS.obs_mode = "vision"
@@ -118,7 +120,7 @@ POLICY_OPTIONS = argparse.Namespace(
     use_height=False,        # assume sph policy does not use height or one bit.
     use_place_stack_bit=False,
     use_slow_policy=False,
-    n_reach_steps=305,
+    n_reach_steps=405,
     n_transport_steps=505,
     n_retract_steps=305,
     grasp_control_steps=30,

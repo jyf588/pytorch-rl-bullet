@@ -53,7 +53,8 @@ DEMO_COMMANDS = {
         "Then, put the red box on top of the blue cylinder."
     ],
     1: [
-        "Put the blue box to the left of the green cylinder",
+        "Pick up the red sphere that is to the left of the green box, and place it in front of the blue cylinder.",
+        "Then, stack the yellow box on top of the blue cylinder."
     ],
     2: [
         "Put the blue box to the left of the green cylinder",
