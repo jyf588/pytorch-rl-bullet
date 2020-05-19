@@ -28,7 +28,10 @@ import ns_vqa_dart.bullet.util as util
 import bullet2unity.interface as interface
 from exp.options import EXPERIMENT_OPTIONS
 from system.vision_module import VisionModule
-from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
+try:
+    from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
+except ImportError as e:
+    print(e)
 from system.options import (
     SYSTEM_OPTIONS,
     BULLET_OPTIONS,
@@ -36,7 +39,6 @@ from system.options import (
 )
 
 global args
-
 
 STAGE2ANIMATION_Z_OFFSET = {
     "plan": 0.3,
@@ -49,7 +51,7 @@ TASK2ANIMATION_Z_OFFSET = {"place": 0.1, "stack": 0.2}
 
 async def send_to_client(websocket, path):
     """Sends and receives data to and from Unity.
-    
+
     Args:
         websocket: The websocket protocol instance.
         path: The URI path.
@@ -416,7 +418,7 @@ def compute_b_ani_tar(opt, env):
 
 
 def compute_render_state(
-    env, place_dest_object, bullet_cam_targets, render_obs, render_place
+        env, place_dest_object, bullet_cam_targets, render_obs, render_place
 ):
     state = env.get_state()
 

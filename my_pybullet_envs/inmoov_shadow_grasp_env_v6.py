@@ -253,21 +253,21 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         dist = np.minimum(np.linalg.norm(np.array(palm_com_pos) - np.array(top_pos)), 0.5)
         reward += -dist * 2.0
 
-        rot_metric = None
-        if self.warm_start:
-            # not used when grasp from floor
-            _, btm_quat = p.getBasePositionAndOrientation(bottom_id)
-
-            btm_vels = p.getBaseVelocity(bottom_id)
-            btm_linv = np.array(btm_vels[0])
-            btm_angv = np.array(btm_vels[1])
-            reward += np.maximum(-np.linalg.norm(btm_linv) * 4.0 - np.linalg.norm(btm_angv), -5.0)
-
-            z_axis, _ = p.multiplyTransforms(
-                [0, 0, 0], btm_quat, [0, 0, 1], [0, 0, 0, 1]
-            )  # R_cl * unitz[0,0,1]
-            rot_metric = np.array(z_axis).dot(np.array([0, 0, 1]))
-            reward += np.maximum(rot_metric * 20 - 15, 0.0) * 2
+        # rot_metric = None
+        # if self.warm_start:
+        #     # not used when grasp from floor
+        #     _, btm_quat = p.getBasePositionAndOrientation(bottom_id)
+        #
+        #     btm_vels = p.getBaseVelocity(bottom_id)
+        #     btm_linv = np.array(btm_vels[0])
+        #     btm_angv = np.array(btm_vels[1])
+        #     reward += np.maximum(-np.linalg.norm(btm_linv) * 4.0 - np.linalg.norm(btm_angv), -5.0)
+        #
+        #     z_axis, _ = p.multiplyTransforms(
+        #         [0, 0, 0], btm_quat, [0, 0, 1], [0, 0, 0, 1]
+        #     )  # R_cl * unitz[0,0,1]
+        #     rot_metric = np.array(z_axis).dot(np.array([0, 0, 1]))
+        #     reward += np.maximum(rot_metric * 20 - 15, 0.0) * 2
 
         cps = p.getContactPoints(self.top_obj['id'], self.robot.arm_id, -1, self.robot.ee_id)    # palm
         if len(cps) > 0:
@@ -366,8 +366,18 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
             shape = self.top_obj['shape']
             dim = utils.to_bullet_dimension(shape, self.top_obj['half_width'], self.top_obj['height'])
 
+            # try to keep fin q close to init_fin_q (keep finger pose)
+            # add at most offset 0.05 in init_tar_fin_q direction so that grasp is tight
+            fin_q_act, _ = self.robot.get_q_dq(self.robot.fin_actdofs)
+            tar_fin_q = np.clip(self.robot.tar_fin_q, fin_q_act - 0.2, fin_q_act + 0.2)     # TODO
+            tar_fin_q = np.clip(
+                tar_fin_q,
+                self.robot.ll[self.robot.fin_actdofs],
+                self.robot.ul[self.robot.fin_actdofs],
+            )
+
             state = {'obj_pos_in_palm': o_p_hf, 'obj_quat_in_palm': o_q_hf,
-                     'all_fin_q': fin_q, 'fin_tar_q': self.robot.tar_fin_q,
+                     'all_fin_q': fin_q, 'fin_tar_q': tar_fin_q,
                      'obj_dim': dim, 'obj_shape': shape}
             # print(state)
             # print(self.robot.get_joints_last_tau(self.robot.all_findofs))

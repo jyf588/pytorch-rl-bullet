@@ -109,7 +109,7 @@ else:
 
         if ADD_PLACE_STACK_BIT:
             GRASP_PI = "0510_0_n_25_45"
-            GRASP_DIR = "./trained_models_%s/ppo/" % "0510_0_n"
+            GRASP_DIR = "./trained_models_%s/ppo/" % "0510_0_n"     # 0514_1 / 3
 
             PLACE_PI = "0510_0_n_place_0510_0"
             PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
@@ -140,15 +140,17 @@ PLACING_CONTROL_SKIP = 6
 GRASPING_CONTROL_SKIP = 6
 
 
-def planning(trajectory, restore_fingers=False):
+def planning(trajectory, retract_stage=False):
     # TODO: total traj length 300+5 now
 
     max_force = env_core.robot.maxForce
 
-    last_tar_arm_q = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
-
     init_tar_fin_q = env_core.robot.tar_fin_q
     init_fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
+
+    init_arm_dq = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[1]
+    init_arm_q = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
+    last_tar_arm_q = init_arm_q
 
     env_core.robot.tar_arm_q = trajectory[-1]  # TODO: important!
 
@@ -163,6 +165,13 @@ def planning(trajectory, restore_fingers=False):
         else:
             tar_arm_q = trajectory[idx]
 
+        if retract_stage:
+            proj_arm_q = init_arm_q + (idx+1) * init_arm_dq * utils.TS
+            blending = np.clip(
+                idx / (len(trajectory) * 0.8), 0.0, 1.0
+            )
+            tar_arm_q = tar_arm_q * blending + proj_arm_q * (1 - blending)
+
         tar_arm_vel = (tar_arm_q - last_tar_arm_q) / utils.TS
 
         p.setJointMotorControlArray(
@@ -174,12 +183,12 @@ def planning(trajectory, restore_fingers=False):
             forces=[max_force * 5] * len(env_core.robot.arm_dofs),
         )
 
-        if restore_fingers and idx >= len(trajectory) * 0.1:  # TODO: hardcoded
+        if retract_stage and idx >= len(trajectory) * 0.1:  # TODO: hardcoded
             blending = np.clip(
-                (idx - len(trajectory) * 0.1) / (len(trajectory) * 0.6), 0.0, 1.0
+                (idx - len(trajectory) * 0.1) / (len(trajectory) * 0.8), 0.0, 1.0
             )
-            cur_fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
-            tar_fin_q = env_core.robot.init_fin_q * blending + cur_fin_q * (
+            # cur_fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
+            tar_fin_q = env_core.robot.init_fin_q * blending + init_fin_q * (
                 1 - blending
             )
         else:
@@ -561,6 +570,17 @@ for trial in range(NUM_TRIALS):
     )
     env_core.change_init_fin_q(INIT_FIN_Q)
 
+    # Qreach = [-0.23763184568016021, 0.3488536398002119, -0.7548165106788512,
+    #     -1.9150681944827617, -0.7430404958659877, 0.1319044308197112, -1.02087799385173826]
+    # Qreach = [-0.23763184568016021, 0.3488536398002119, -0.4548165106788512,
+    #     -2.1150681944827617, -0.7430404958659877, 0.1319044308197112, -1.22087799385173826]
+    # Qreach = [-0.23763184568016021, 0.5088536398002119, -0.4548165106788512,
+    #     -2.1150681944827617, -0.7430404958659877, 0.1319044308197112, -1.22087799385173826]
+    # Qreach = [-0.23763184568016021, 0.5088536398002119, -0.5548165106788512,
+    #     -2.1150681944827617, -0.7430404958659877, 0.1319044308197112, -1.22087799385173826]
+    # env_core.robot.reset_with_certain_arm_q(Qreach)
+    # input("press enter")
+
     objs, top_id, btm_id = load_obj_and_construct_state(all_dicts)
     OBJECTS = construct_obj_array_for_openrave(all_dicts)
 
@@ -744,13 +764,19 @@ for trial in range(NUM_TRIALS):
     if WITH_RETRACT:
         print(f"Starting release trajectory")
         Qretract_init = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
+        # Qretract_end = [-0.23763184568016021, 0.5088536398002119, -0.5548165106788512,
+        # -2.1150681944827617, -0.7430404958659877, 0.1319044308197112, -1.22087799385173826]
+        Qretract_end = [-0.238, 0.349, -0.755,
+                        -1.915, -0.743, 0.132,
+                        -1.021]
+
         retract_save_path = homedir + "/container_data/PB_RETRACT.npz"
         retract_read_path = homedir + "/container_data/OR_RETRACT.npz"
 
         OBJECTS[0, :] = np.array([p_tx, p_ty, p_tz, 0.0])  # note: p_tz is 0 for placing
 
         Traj_reach = openrave.get_traj_from_openrave_container(
-            OBJECTS, Qretract_init, None, retract_save_path, retract_read_path
+            OBJECTS, Qretract_init,  Qretract_end, retract_save_path, retract_read_path
         )
 
         if Traj_reach is None or len(Traj_reach) == 0:
@@ -758,7 +784,25 @@ for trial in range(NUM_TRIALS):
             print("*******", success_count * 1.0 / (trial + 1))
             continue  # retracting failed
         else:
-            planning(Traj_reach, restore_fingers=True)
+
+            # def powspace(start, stop, power, num):
+            #     start = np.power(start, 1 / float(power))
+            #     stop = np.power(stop, 1 / float(power))
+            #     return np.power(np.linspace(start, stop, num=num), power)
+
+            from scipy import interpolate       # TODO: can also do this on openrave side
+            n = 400  # interpolated trajectory resolution
+            end = 300
+            t = np.arange(0, end, 1)
+            T = np.linspace(0, end - 1, n - 1)
+            # T = powspace(0, end-1, 1.3, n - 1)
+            Traj_I = np.zeros((n - 1, 7))  # TODO
+            for i in range(7):
+                f = interpolate.interp1d(t, Traj_reach[:end, i], kind="quadratic")
+                Traj_I[:, i] = f(T)
+            Traj_reach = np.concatenate((Traj_I, Traj_reach[end:]), axis=0)
+
+            planning(Traj_reach, retract_stage=True)
 
     t_pos, t_quat = p.getBasePositionAndOrientation(top_id)
     if (

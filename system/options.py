@@ -56,7 +56,7 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     use_control_skip=True,
     render_frequency=100,
     render_obs=False,
-    animate_head=False,
+    animate_head=True,
     save_states=True,  # To check reproducibility.
     policy_id="0510",  # [0404, 0411, 0510]
     save_first_pov_image=False,
@@ -64,6 +64,7 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     root_outputs_dir=os.path.join(util.get_user_homedir(), "outputs/system"),
     container_dir=None,
     unity_captures_dir=None,
+    two_commands=False,
 )
 
 VISION_STATES_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
@@ -88,7 +89,6 @@ TEST_VISION_OPTIONS.obs_mode = "vision"
 TEST_VISION_OPTIONS.render_unity = True
 TEST_VISION_OPTIONS.render_obs = True
 TEST_VISION_OPTIONS.save_first_pov_image = True
-
 
 DEBUG_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 DEBUG_VISION_OPTIONS.obs_mode = "vision"
@@ -120,17 +120,23 @@ BULLET_OPTIONS = argparse.Namespace(
     floor_mu=1.0,
 )
 
-
 POLICY_OPTIONS = argparse.Namespace(
     seed=101,
     init_noise=True,
     restore_fingers=True,
-    use_height=False,
-    use_place_stack_bit=False,
-    n_plan_steps=305,
-    grasp_control_steps=35,
-    place_control_steps=75,
-    control_skip=6,
+    use_arm_blending=True,
+    use_height=True,  # assume sph policy does not use height or one bit.
+    use_place_stack_bit=True,
+    use_slow_policy=False,
+    n_reach_steps=305,
+    n_transport_steps=505,
+    n_retract_steps=305,
+    grasp_control_steps=30,
+    place_control_steps=55,
+    grasp_control_skip=12,
+    place_control_skip=6,
+    place_clip_init_tar=False,
+    place_clip_init_tar_value=0.2,
     grasp_env_name="InmoovHandGraspBulletEnv-v6",
     place_env_name="InmoovHandPlaceBulletEnv-v9",
     vision_delay=2,

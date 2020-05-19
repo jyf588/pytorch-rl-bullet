@@ -80,7 +80,11 @@ def wrap_obs(obs: np.ndarray, is_cuda: bool) -> torch.Tensor:
     return obs
 
 
-def unwrap_action(action: torch.Tensor, is_cuda: bool) -> np.ndarray:
+def unwrap_action(action: torch.Tensor, is_cuda: bool, clip=False) -> np.ndarray:
     action = action.squeeze()
     action = action.cpu() if is_cuda else action
-    return action.numpy()
+    if clip:
+        action = np.clip(action.numpy(), -1.0, 1.0)
+    else:
+        action = action.numpy()
+    return action

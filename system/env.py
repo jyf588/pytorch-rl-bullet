@@ -10,6 +10,7 @@ import numpy as np
 import pybullet as p
 from typing import *
 from scipy.optimize import linear_sum_assignment
+import pybullet_utils.bullet_client as bc
 
 import exp.loader
 import system.policy
@@ -23,7 +24,11 @@ from NLP_module import NLPmod
 import ns_vqa_dart.bullet.seg
 import my_pybullet_envs.utils as utils
 from ns_vqa_dart.bullet import dash_object, util
-from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
+
+try:
+    from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
+except ImportError as e:
+    print(e)
 
 
 class DemoEnvironment:
@@ -43,6 +48,7 @@ class DemoEnvironment:
         command: Optional[str] = None,
         place_dst_xy: Optional[List[float]] = None,
         vision_models_dict: Dict = None,
+        start_q=[0.0] * 7,
     ):
         """
         Args:
@@ -59,7 +65,7 @@ class DemoEnvironment:
         np.random.seed(opt.seed)
 
         print("**********CREATING DEMO ENVIRONMENT**********")
-        self.opt = opt
+        self.opt = copy.deepcopy(opt)  # TODO
         self.bullet_opt = bullet_opt
         self.policy_opt = policy_opt
         self.shape2policy_dict = shape2policy_dict
@@ -74,6 +80,8 @@ class DemoEnvironment:
         self.place_dst_xy = place_dst_xy
         self.vision_models_dict = vision_models_dict
 
+        self.start_q = start_q
+
         self.timestep = 0
         self.planning_complete = False
         self.initial_obs = None
@@ -81,11 +89,40 @@ class DemoEnvironment:
         self.w = None
         self.src_idx, self.dst_idx = None, None
 
-        (
-            self.stage2ts_bounds,
-            self.stage2steps,
-            self.n_total_steps,
-        ) = self.compute_stages()
+        # self.stage2ts_bounds, self.n_total_steps = self.compute_stages()
+        # self.stage, self.stage_ts = self.get_current_stage()
+
+        # compute stages
+        n_grasp = self.policy_opt.grasp_control_steps
+        self.n_place = self.policy_opt.place_control_steps
+        if not self.opt.use_control_skip:
+            n_grasp *= self.policy_opt.grasp_control_skip
+            self.n_place *= self.policy_opt.place_control_skip
+        self.stage_list = ["reach", "grasp", "transport", "place", "retract"]
+        self.duration_list = [
+            self.policy_opt.n_reach_steps,
+            n_grasp,
+            self.policy_opt.n_transport_steps,
+            self.n_place,
+            self.policy_opt.n_retract_steps,
+        ]
+
+        if self.opt.two_commands:
+            self.stage_list = self.stage_list[0:4] + self.stage_list
+            self.duration_list = self.duration_list[0:4] + self.duration_list
+        else:
+            start = 0
+            end = len(self.stage_list)
+            if not self.opt.enable_reaching:
+                start += 1
+            if not self.opt.enable_retract:
+                end -= 1
+            self.stage_list = self.stage_list[start:end]
+            self.duration_list = self.duration_list[start:end]
+
+        self.duration_list = np.cumsum(self.duration_list)
+        self.n_total_steps = self.duration_list[-1]
+
         self.stage, self.stage_ts = self.get_current_stage()
 
     def cleanup(self):
@@ -116,47 +153,44 @@ class DemoEnvironment:
         is_success = z_check and xy_check
         return is_success
 
-    def compute_stages(self):
-        if self.opt.enable_reaching:
-            reach_start = 0
-            reach_end = reach_start + self.policy_opt.n_plan_steps
-            grasp_start = reach_end
-        else:
-            grasp_start = 0
-
-        n_grasp = self.policy_opt.grasp_control_steps
-        n_place = self.policy_opt.place_control_steps
-
-        if not self.opt.use_control_skip:
-            n_grasp *= self.opt.control_skip
-            n_place *= self.opt.control_skip
-
-        grasp_end = grasp_start + n_grasp
-        transport_start = grasp_end
-        transport_end = transport_start + self.policy_opt.n_plan_steps
-        place_start = transport_end
-        place_end = place_start + n_place
-
-        stage2ts_bounds = {
-            "grasp": (grasp_start, grasp_end),
-            "transport": (transport_start, transport_end),
-            "place": (place_start, place_end),
-        }
-
-        if self.opt.enable_reaching:
-            stage2ts_bounds["reach"] = (reach_start, reach_end)
-        if self.opt.enable_retract:
-            retract_start = place_end
-            retract_end = retract_start + self.policy_opt.n_plan_steps
-            stage2ts_bounds["retract"] = (retract_start, retract_end)
-
-        stage2steps = {}
-        n_total_steps = 0
-        for stage, (start_ts, end_ts) in stage2ts_bounds.items():
-            n_stage_steps = end_ts - start_ts
-            n_total_steps += n_stage_steps
-            stage2steps[stage] = n_stage_steps
-        return stage2ts_bounds, stage2steps, n_total_steps
+    # def compute_stages(self):
+    #     if self.opt.enable_reaching:
+    #         reach_start = 0
+    #         reach_end = reach_start + self.policy_opt.n_reach_steps
+    #         grasp_start = reach_end
+    #     else:
+    #         grasp_start = 0
+    #
+    #     n_grasp = self.policy_opt.grasp_control_steps
+    #     n_place = self.policy_opt.place_control_steps
+    #
+    #     if not self.opt.use_control_skip:
+    #         n_grasp *= self.policy_opt.grasp_control_skip
+    #         n_place *= self.policy_opt.place_control_skip
+    #
+    #     grasp_end = grasp_start + n_grasp
+    #     transport_start = grasp_end
+    #     transport_end = transport_start + self.policy_opt.n_transport_steps
+    #     place_start = transport_end
+    #     place_end = place_start + n_place
+    #
+    #     stage2ts_bounds = {
+    #         "grasp": (grasp_start, grasp_end),
+    #         "transport": (transport_start, transport_end),
+    #         "place": (place_start, place_end),
+    #     }
+    #
+    #     if self.opt.enable_reaching:
+    #         stage2ts_bounds["reach"] = (reach_start, reach_end)
+    #     if self.opt.enable_retract:
+    #         retract_start = place_end
+    #         retract_end = retract_start + self.policy_opt.n_retract_steps
+    #         stage2ts_bounds["retract"] = (retract_start, retract_end)
+    #
+    #     n_total_steps = 0
+    #     for start_ts, end_ts in stage2ts_bounds.values():
+    #         n_total_steps += end_ts - start_ts
+    #     return stage2ts_bounds, n_total_steps
 
     def get_current_stage(self) -> Tuple[str, int]:
         """Retrieves the current stage of the demo.
@@ -168,17 +202,13 @@ class DemoEnvironment:
         if not self.planning_complete:
             return "plan", 0
 
-        current_stage = None
-        for stage, ts_bounds in self.stage2ts_bounds.items():
-            start, end = ts_bounds
-            if start <= self.timestep < end:
-                stage_ts = self.timestep - start
-                current_stage = stage
-                break
-
-        if current_stage is None:
+        assert self.timestep >= 0
+        stage_idx = np.searchsorted(self.duration_list, self.timestep, side="right")
+        if stage_idx == len(self.stage_list):
             raise ValueError(f"No stage found for current timestep: {self.timestep}")
-        return current_stage, stage_ts
+        else:
+            start_ts = 0 if stage_idx == 0 else self.duration_list[stage_idx - 1]
+            return self.stage_list[stage_idx], self.timestep - start_ts
 
     def stage_progress(self):
         completion_frac = self.stage_ts / self.stage2steps[self.stage]
@@ -200,13 +230,22 @@ class DemoEnvironment:
         if self.stage == "plan":
             self.plan()
         elif self.stage == "reach":
-            step_succeeded = self.execute_plan(stage=self.stage, stage_ts=self.stage_ts)
+            step_succeeded = self.execute_plan(
+                stage=self.stage,
+                stage_ts=self.stage_ts,
+                restore_fingers=self.policy_opt.restore_fingers
+                and self.opt.two_commands,
+            )
         elif self.stage == "grasp":
             self.grasp(stage_ts=self.stage_ts)
         elif self.stage == "transport":
             step_succeeded = self.execute_plan(stage=self.stage, stage_ts=self.stage_ts)
         elif self.stage == "place":
             self.place(stage_ts=self.stage_ts)
+            if self.opt.two_commands and self.stage_ts == self.n_place - 1:
+                self.planning_complete = False
+                self.opt.scene_stack_src_idx = 2  # TODO
+                self.opt.scene_stack_dst_idx = 3
         elif self.stage == "retract":
             step_succeeded = self.execute_plan(
                 stage=self.stage,
@@ -305,22 +344,23 @@ class DemoEnvironment:
 
         # Create the bullet world now that we've finished our imaginary
         # sessions.
-        self.w = BulletWorld(
-            opt=self.bullet_opt,
-            policy_opt=self.policy_opt,
-            p=p,
-            scene=self.scene,
-            visualize=self.opt.render_bullet,
-            use_control_skip=self.opt.use_control_skip,
-        )
+        if self.w is None:
+            self.w = BulletWorld(
+                opt=self.bullet_opt,
+                policy_opt=self.policy_opt,
+                p=p,
+                scene=self.scene,
+                visualize=self.opt.render_bullet,
+                use_control_skip=self.opt.use_control_skip,
+            )
 
-        # If reaching is disabled, set the robot arm directly to the dstination
-        # of reaching.
-        if self.opt.enable_reaching:
-            q_zero = [0.0] * len(self.q_reach_dst)
-            self.w.robot_env.robot.reset_with_certain_arm_q(q_zero)
-        else:
-            self.w.robot_env.robot.reset_with_certain_arm_q(self.q_reach_dst)
+            # If reaching is disabled, set the robot arm directly to the dstination
+            # of reaching.
+            if self.opt.enable_reaching:
+                # q_zero = [0.0] * len(self.q_reach_dst)
+                self.w.robot_env.robot.reset_with_certain_arm_q(self.start_q)
+            else:
+                self.w.robot_env.robot.reset_with_certain_arm_q(self.q_reach_dst)
 
         # Flag planning as complete.
         self.planning_complete = True
@@ -385,11 +425,11 @@ class DemoEnvironment:
                     sentence=self.command, vision_output=language_input
                 )
 
-        # We currently only support placing spheres, not stacking them.
-        if self.task == "stack":
-            for oidx in [src_idx, dst_idx]:
-                if observation[oidx]["shape"] == "sphere":
-                    raise NotImplementedError
+        # # We currently only support placing spheres, not stacking them.
+        # if self.task == "stack":
+        #     for oidx in [src_idx, dst_idx]:
+        #         if observation[oidx]["shape"] == "sphere":
+        #             raise NotImplementedError
 
         is_sphere = observation[src_idx]["shape"] == "sphere"
 
@@ -425,25 +465,29 @@ class DemoEnvironment:
             q_transport_dst: The arm joint angles that transport should end at.
         """
         # Compute the destination arm pose for reaching.
+        self.sim = bc.BulletClient(connection_mode=p.DIRECT)  # this is always session 1
         src_xyz = [src_xy[0], src_xy[1], 0.0]
-        table_id = utils.create_table(self.bullet_opt.floor_mu)
+        table_id = utils.create_table(self.bullet_opt.floor_mu, self.sim)
         robot = InmoovShadowNew(
-            init_noise=False, timestep=utils.TS, np_random=np.random,
+            init_noise=False, timestep=utils.TS, np_random=np.random, sim=self.sim
         )
-        q_reach_dst = utils.get_n_optimal_init_arm_qs(
-            robot,
-            utils.PALM_POS_OF_INIT,
-            p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
-            src_xyz,
-            table_id,
-            wrist_gain=3.0,
-        )[0]
-        p.resetSimulation()
+        try:
+            q_reach_dst = utils.get_n_optimal_init_arm_qs(
+                robot,
+                utils.PALM_POS_OF_INIT,
+                p.getQuaternionFromEuler(utils.PALM_EULER_OF_INIT),
+                src_xyz,
+                table_id,
+                wrist_gain=3.0,
+            )[0]
+        except IndexError:
+            q_reach_dst = None
+        self.sim.resetSimulation()
 
         # Compute the destination arm pose for transport.
-        table_id = utils.create_table(self.bullet_opt.floor_mu)
+        table_id = utils.create_table(self.bullet_opt.floor_mu, self.sim)
         robot = InmoovShadowNew(
-            init_noise=False, timestep=utils.TS, np_random=np.random,
+            init_noise=False, timestep=utils.TS, np_random=np.random, sim=self.sim
         )
         if self.is_sphere:
             _, desired_oquat = p.multiplyTransforms(
@@ -454,29 +498,38 @@ class DemoEnvironment:
             )
         else:
             desired_oquat = [0.0, 0.0, 0.0, 1.0]
-        q_transport_dst = utils.get_n_optimal_init_arm_qs(
-            robot,
-            self.p_pos_of_ave,
-            self.p_quat_of_ave,
-            dst_xyz,
-            table_id,
-            desired_obj_quat=desired_oquat,
-        )[0]
-        p.resetSimulation()
+        try:
+            q_transport_dst = utils.get_n_optimal_init_arm_qs(
+                robot,
+                self.p_pos_of_ave,
+                self.p_quat_of_ave,
+                dst_xyz,
+                table_id,
+                desired_obj_quat=desired_oquat,
+            )[0]
+        except IndexError:
+            q_transport_dst = None
+        self.sim.resetSimulation()
+        self.sim.disconnect()
         return q_reach_dst, q_transport_dst
 
     def compute_trajectory(self, stage: str) -> np.ndarray:
-        q_start, q_end = None, None
         expected_src_base_z_post_placing = None
         odicts = self.initial_obs
 
         if stage == "reach":
+            q_start = self.w.get_robot_q()[0]
             q_end = self.q_reach_dst
         elif stage == "transport":
             q_start = self.w.get_robot_q()[0]
             q_end = self.q_transport_dst
         elif stage == "retract":
             q_start = self.w.get_robot_q()[0]
+            # q_end = [-0.238, 0.349, -0.755,
+            #          -1.915, -0.743, 0.132,
+            #          -1.021]
+            q_end = [-0.238, 0.509, -0.255, -2.115, -0.743, 0.132, -0.209]
+            # q_end = [0.0] * 7
 
             # Instead of using the initial observation, we use the latest
             # observation.
@@ -503,18 +556,47 @@ class DemoEnvironment:
             src_base_z_post_placing=expected_src_base_z_post_placing,
             container_dir=self.opt.container_dir,
         )
+
+        # if stage == "transport" and trajectory is not None and len(trajectory) > 0:
+        #     from scipy import interpolate
+        #     n = 600  # interpolated trajectory resolution
+        #     end = 400
+        #     t = np.arange(0, end, 1)
+        #     T = np.linspace(0, end - 1, n - 1)
+        #     Traj_I = np.zeros((n - 1, 7))  # TODO
+        #     for i in range(7):
+        #         f = interpolate.interp1d(t, trajectory[:end, i], kind="quadratic")
+        #         Traj_I[:, i] = f(T)
+        #     trajectory = np.concatenate((Traj_I, trajectory[end:]), axis=0)
+
         return trajectory
 
     def grasp(self, stage_ts: int):
-        obs = system.policy.wrap_obs(
-            self.get_grasp_observation(), is_cuda=self.opt.is_cuda
-        )
-        with torch.no_grad():
-            _, action, _, self.hidden_states = self.grasp_policy.act(
-                obs, self.hidden_states, self.masks, deterministic=self.bullet_opt.det
+        if stage_ts == 0:
+            self.w.robot_env.change_control_skip_scaling(
+                c_skip=self.policy_opt.grasp_control_skip
             )
+
+        if (
+            stage_ts % self.policy_opt.grasp_control_skip == 0
+            or self.opt.use_control_skip
+        ):
+            self.grasp_obs = system.policy.wrap_obs(
+                self.get_grasp_observation(), is_cuda=self.opt.is_cuda
+            )
+            with torch.no_grad():
+                _, self.grasp_action, _, self.hidden_states = self.grasp_policy.act(
+                    self.grasp_obs,
+                    self.hidden_states,
+                    self.masks,
+                    deterministic=self.bullet_opt.det,
+                )
         self.w.step_robot(
-            action=system.policy.unwrap_action(action=action, is_cuda=self.opt.is_cuda),
+            action=system.policy.unwrap_action(
+                action=self.grasp_action,
+                is_cuda=self.opt.is_cuda,
+                clip=self.policy_opt.use_slow_policy,
+            ),
             timestep=self.timestep,
         )
         self.masks.fill_(1.0)
@@ -522,20 +604,39 @@ class DemoEnvironment:
     def place(self, stage_ts: int):
         if stage_ts == 0:
             self.w.robot_env.change_control_skip_scaling(
-                c_skip=self.policy_opt.control_skip
+                c_skip=self.policy_opt.place_control_skip
             )
 
-        # Get the current observation.
-        obs = system.policy.wrap_obs(
-            self.get_place_observation(), is_cuda=self.opt.is_cuda
-        )
-        with torch.no_grad():
-            _, action, _, self.hidden_states = self.place_policy.act(
-                obs, self.hidden_states, self.masks, deterministic=self.bullet_opt.det
+        if self.opt.use_control_skip:
+            skip = self.policy_opt.vision_delay
+        else:
+            skip = self.policy_opt.vision_delay * self.policy_opt.place_control_skip
+        # Update the observation only every `vision_delay` steps.
+        if stage_ts % skip == 0:
+            self.obs = self.get_observation()  # this is vision obs
+
+        if (
+            stage_ts % self.policy_opt.place_control_skip == 0
+            or self.opt.use_control_skip
+        ):
+            # Get the current observation.
+            self.place_obs = system.policy.wrap_obs(
+                self.get_place_observation(), is_cuda=self.opt.is_cuda
             )
+            with torch.no_grad():
+                _, self.place_action, _, self.hidden_states = self.place_policy.act(
+                    self.place_obs,
+                    self.hidden_states,
+                    self.masks,
+                    deterministic=self.bullet_opt.det,
+                )
 
         self.w.step_robot(
-            action=system.policy.unwrap_action(action=action, is_cuda=self.opt.is_cuda),
+            action=system.policy.unwrap_action(
+                action=self.place_action,
+                is_cuda=self.opt.is_cuda,
+                clip=self.policy_opt.use_slow_policy,
+            ),
             timestep=self.timestep,
         )
 
@@ -555,12 +656,35 @@ class DemoEnvironment:
             self.init_tar_fin_q = self.w.robot_env.robot.tar_fin_q
             self.last_tar_arm_q, self.init_fin_q = self.w.get_robot_q()
 
+            self.init_arm_q = self.last_tar_arm_q
+            self.init_arm_dq, _ = self.w.get_robot_dq()
+
+            if self.policy_opt.place_clip_init_tar:
+                value = self.policy_opt.place_clip_init_tar_value
+                self.w.robot_env.robot.tar_fin_q = np.clip(
+                    self.init_tar_fin_q,
+                    self.init_fin_q - value,
+                    self.init_fin_q + value,
+                )
+
+            if restore_fingers:
+                self.w.robot_env.robot.tar_fin_q = self.w.robot_env.robot.init_fin_q
+
         if stage_ts > len(self.trajectory) - 1:
             tar_arm_q = self.trajectory[-1]
         else:
             tar_arm_q = self.trajectory[stage_ts]
 
+        if self.policy_opt.use_arm_blending and stage != "reach":
+            blend_end = 0.6
+            proj_arm_q = (
+                self.init_arm_q + (stage_ts + 1) * self.init_arm_dq * self.bullet_opt.ts
+            )
+            blending = np.clip(stage_ts / (len(self.trajectory) * blend_end), 0.0, 1.0)
+            tar_arm_q = tar_arm_q * blending + proj_arm_q * (1 - blending)
+
         tar_arm_vel = (tar_arm_q - self.last_tar_arm_q) / self.bullet_opt.ts
+
         max_force = self.w.robot_env.robot.maxForce
 
         p.setJointMotorControlArray(
@@ -574,21 +698,22 @@ class DemoEnvironment:
 
         if restore_fingers and stage_ts >= len(self.trajectory) * 0.1:
             blending = np.clip(
-                (stage_ts - len(self.trajectory) * 0.1) / (len(self.trajectory) * 0.6),
+                (stage_ts - len(self.trajectory) * 0.1) / (len(self.trajectory) * 0.8),
                 0.0,
                 1.0,
             )
-            cur_fin_q = self.w.robot_env.robot.get_q_dq(
-                self.w.robot_env.robot.fin_actdofs
-            )[0]
-            tar_fin_q = self.w.robot_env.robot.init_fin_q * blending + cur_fin_q * (
-                1 - blending
+            # cur_fin_q = self.w.robot_env.robot.get_q_dq(
+            #     self.w.robot_env.robot.fin_actdofs
+            # )[0]
+            tar_fin_q = (
+                self.w.robot_env.robot.init_fin_q * blending
+                + self.init_fin_q * (1 - blending)
             )
         else:
             # try to keep fin q close to init_fin_q (keep finger pose)
             # add at most offset 0.05 in init_tar_fin_q direction so that grasp is tight
             tar_fin_q = np.clip(
-                self.init_tar_fin_q, self.init_fin_q - 0.05, self.init_fin_q + 0.05,
+                self.init_tar_fin_q, self.init_fin_q - 0.1, self.init_fin_q + 0.1,
             )
 
         # clip to joint limit
@@ -622,28 +747,29 @@ class DemoEnvironment:
 
         odict = self.initial_obs[self.src_idx]
         half_height = odict["height"] / 2
-        is_box = odict["shape"] == "box"
+        shape = utils.NAME_TO_SHAPE_IND_MAP[odict["shape"]]
 
-        if self.policy_opt.use_height:
+        if self.policy_opt.use_height and not self.is_sphere:
             obs = self.w.robot_env.get_robot_contact_txtytz_halfh_shape_obs_no_dup(
-                x, y, 0.0, half_height, is_box
+                x, y, 0.0, half_height, shape
             )
         else:
-            obs = self.w.robot_env.get_robot_contact_txty_shape_obs_no_dup(x, y, is_box)
+            obs = self.w.robot_env.get_robot_contact_txty_shape_obs_no_dup(x, y, shape)
         return obs
 
     def get_place_observation(self):
-        # Update the observation only every `vision_delay` steps.
-        if self.timestep % self.policy_opt.vision_delay == 0:
-            self.obs = self.get_observation()
-
         # Compute the observation vector from object poses and placing position.
         tx, ty, tz = self.policy_dst_xyz  # this should be dst xy rather than src xy
 
         tdict = self.obs[self.src_idx]
         t_pos = tdict["position"]
-        t_up = tdict["up_vector"]
-        is_box = tdict["shape"] == "box"  # should not matter if use init_obs or obs
+        if tdict["shape"] == "sphere":
+            t_up = [0.0, 0.0, 1.0]  # sph does not have up vec
+        else:
+            t_up = tdict["up_vector"]
+        shape = utils.NAME_TO_SHAPE_IND_MAP[
+            tdict["shape"]
+        ]  # should not matter if use init_obs or obs
 
         if self.task == "stack":
             bdict = self.obs[self.dst_idx]
@@ -653,13 +779,13 @@ class DemoEnvironment:
             b_pos = [0.0, 0.0, 0.0]
             b_up = [0.0, 0.0, 1.0]
 
-        if self.policy_opt.use_height:
+        if self.policy_opt.use_height and not self.is_sphere:
             p_obs = self.w.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(
                 tx=tx,
                 ty=ty,
                 tz=tz,
                 half_h=tdict["height"] / 2,
-                shape=is_box,
+                shape=shape,
                 t_pos=t_pos,
                 t_up=t_up,
                 b_pos=b_pos,
@@ -669,12 +795,13 @@ class DemoEnvironment:
             p_obs = self.w.robot_env.get_robot_contact_txty_shape_2obj6dUp_obs_nodup_from_up(
                 tx=tx,
                 ty=ty,
-                shape=is_box,
+                shape=shape,
                 t_pos=t_pos,
                 t_up=t_up,
                 b_pos=b_pos,
                 b_up=b_up,
             )
+
         if self.policy_opt.use_place_stack_bit and not self.is_sphere:
             if self.task == "place":
                 p_obs.extend([1.0])
@@ -682,6 +809,7 @@ class DemoEnvironment:
                 p_obs.extend([-1.0])
             else:
                 assert False
+
         return p_obs
 
     def get_observation(self):

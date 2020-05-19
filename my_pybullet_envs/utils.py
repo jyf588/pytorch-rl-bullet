@@ -238,14 +238,14 @@ def create_sym_prim_shape_helper_new(odict):
     return sid
 
 
-def create_table(mu):
-    table_id = p.loadURDF(
+def create_table(mu, sim=p):
+    table_id = sim.loadURDF(
         os.path.join(currentdir, "assets/tabletop.urdf"),
         TABLE_OFFSET,
         useFixedBase=1,
     )
-    p.changeVisualShape(table_id, -1, rgbaColor=COLOR2RGBA["grey"])
-    p.changeDynamics(table_id, -1, lateralFriction=mu)
+    sim.changeVisualShape(table_id, -1, rgbaColor=COLOR2RGBA["grey"])
+    sim.changeDynamics(table_id, -1, lateralFriction=mu)
     return table_id
 
 

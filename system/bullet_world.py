@@ -129,7 +129,6 @@ class BulletWorld:
             withVel=False,
             diffTar=True,
             robot_mu=self.opt.hand_mu,
-            control_skip=self.policy_opt.control_skip,
         )
         init_fin_q = np.array(
             [0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.1]
@@ -311,6 +310,24 @@ class BulletWorld:
         fin_q = self.robot_env.robot.get_q_dq(self.robot_env.robot.fin_actdofs)[0]
         return arm_q, fin_q
 
+    def get_robot_dq(self):
+        """Retrieves joint vels.
+
+        Returns:
+            arm_dq: Arm joint vels in the following joint order:
+                r_shoulder_out_joint
+                r_shoulder_lift_joint
+                r_upper_arm_roll_joint
+                r_elbow_flex_joint
+                r_elbow_roll_joint
+                rh_WRJ2
+                rh_WRJ1
+            fin_dq: The finger pose.
+        """
+        arm_dq = self.robot_env.robot.get_q_dq(self.robot_env.robot.arm_dofs)[1]
+        fin_dq = self.robot_env.robot.get_q_dq(self.robot_env.robot.fin_actdofs)[1]
+        return arm_dq, fin_dq
+
     def step(self, timestep: int):
         self.bc.stepSimulation()
         time.sleep(self.opt.ts)
@@ -326,7 +343,7 @@ class BulletWorld:
         # Here we have the option to step `control_skip` instead, if the flag
         # is enabled.
         if self.use_control_skip:
-            for _ in range(self.policy_opt.control_skip):
+            for _ in range(self.robot_env.control_skip):
                 self.robot_env.step_sim(action=action)
         else:
             self.robot_env.step_sim(action=action)
