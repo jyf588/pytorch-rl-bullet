@@ -115,7 +115,7 @@ if __name__ == "__main__":
         "--scenes_dir",
         type=str,
         default="/home/mguo/data/dash",
-        help="The directory of json files.",
+        help="The directory to save scenes to.",
     )
     args = parser.parse_args()
     main(args)

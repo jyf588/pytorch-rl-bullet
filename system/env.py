@@ -24,10 +24,12 @@ from NLP_module import NLPmod
 import ns_vqa_dart.bullet.seg
 import my_pybullet_envs.utils as utils
 from ns_vqa_dart.bullet import dash_object, util
+
 try:
     from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
 except ImportError as e:
     print(e)
+
 
 class DemoEnvironment:
     def __init__(
@@ -63,7 +65,7 @@ class DemoEnvironment:
         np.random.seed(opt.seed)
 
         print("**********CREATING DEMO ENVIRONMENT**********")
-        self.opt = copy.deepcopy(opt)       # TODO
+        self.opt = copy.deepcopy(opt)  # TODO
         self.bullet_opt = bullet_opt
         self.policy_opt = policy_opt
         self.shape2policy_dict = shape2policy_dict
@@ -99,11 +101,13 @@ class DemoEnvironment:
             n_grasp *= self.policy_opt.grasp_control_skip
             self.n_place *= self.policy_opt.place_control_skip
         self.stage_list = ["reach", "grasp", "transport", "place", "retract"]
-        self.duration_list = [self.policy_opt.n_reach_steps,
-                              n_grasp,
-                              self.policy_opt.n_transport_steps,
-                              self.n_place,
-                              self.policy_opt.n_retract_steps]
+        self.duration_list = [
+            self.policy_opt.n_reach_steps,
+            n_grasp,
+            self.policy_opt.n_transport_steps,
+            self.n_place,
+            self.policy_opt.n_retract_steps,
+        ]
 
         if self.command and len(self.command) > 1:
             self.stage_list = self.stage_list[0:4] + self.stage_list
@@ -205,7 +209,7 @@ class DemoEnvironment:
         if stage_idx == len(self.stage_list):
             raise ValueError(f"No stage found for current timestep: {self.timestep}")
         else:
-            start_ts = 0 if stage_idx == 0 else self.duration_list[stage_idx-1]
+            start_ts = 0 if stage_idx == 0 else self.duration_list[stage_idx - 1]
             return self.stage_list[stage_idx], self.timestep - start_ts
 
     def stage_progress(self):
@@ -529,8 +533,7 @@ class DemoEnvironment:
             # q_end = [-0.238, 0.349, -0.755,
             #          -1.915, -0.743, 0.132,
             #          -1.021]
-            q_end = [-0.238, 0.509, -0.255,
-                     -2.115, -0.743, 0.132, -0.209]
+            q_end = [-0.238, 0.509, -0.255, -2.115, -0.743, 0.132, -0.209]
             # q_end = [0.0] * 7
 
             # Instead of using the initial observation, we use the latest
@@ -579,13 +582,19 @@ class DemoEnvironment:
                 c_skip=self.policy_opt.grasp_control_skip
             )
 
-        if stage_ts % self.policy_opt.grasp_control_skip == 0 or self.opt.use_control_skip:
+        if (
+            stage_ts % self.policy_opt.grasp_control_skip == 0
+            or self.opt.use_control_skip
+        ):
             self.grasp_obs = system.policy.wrap_obs(
                 self.get_grasp_observation(), is_cuda=self.opt.is_cuda
             )
             with torch.no_grad():
                 _, self.grasp_action, _, self.hidden_states = self.grasp_policy.act(
-                    self.grasp_obs, self.hidden_states, self.masks, deterministic=self.bullet_opt.det
+                    self.grasp_obs,
+                    self.hidden_states,
+                    self.masks,
+                    deterministic=self.bullet_opt.det,
                 )
         self.w.step_robot(
             action=system.policy.unwrap_action(
@@ -609,23 +618,30 @@ class DemoEnvironment:
             skip = self.policy_opt.vision_delay * self.policy_opt.place_control_skip
         # Update the observation only every `vision_delay` steps.
         if stage_ts % skip == 0:
-            self.obs = self.get_observation()       # this is vision obs
+            self.obs = self.get_observation()  # this is vision obs
 
-        if stage_ts % self.policy_opt.place_control_skip == 0 or self.opt.use_control_skip:
+        if (
+            stage_ts % self.policy_opt.place_control_skip == 0
+            or self.opt.use_control_skip
+        ):
             # Get the current observation.
             self.place_obs = system.policy.wrap_obs(
                 self.get_place_observation(), is_cuda=self.opt.is_cuda
             )
             with torch.no_grad():
                 _, self.place_action, _, self.hidden_states = self.place_policy.act(
-                    self.place_obs, self.hidden_states, self.masks, deterministic=self.bullet_opt.det
+                    self.place_obs,
+                    self.hidden_states,
+                    self.masks,
+                    deterministic=self.bullet_opt.det,
                 )
 
         self.w.step_robot(
             action=system.policy.unwrap_action(
                 action=self.place_action,
                 is_cuda=self.opt.is_cuda,
-                clip=self.policy_opt.use_slow_policy),
+                clip=self.policy_opt.use_slow_policy,
+            ),
             timestep=self.timestep,
         )
 
@@ -650,8 +666,11 @@ class DemoEnvironment:
 
             if self.policy_opt.place_clip_init_tar:
                 value = self.policy_opt.place_clip_init_tar_value
-                self.w.robot_env.robot.tar_fin_q = \
-                    np.clip(self.init_tar_fin_q, self.init_fin_q - value, self.init_fin_q + value)
+                self.w.robot_env.robot.tar_fin_q = np.clip(
+                    self.init_tar_fin_q,
+                    self.init_fin_q - value,
+                    self.init_fin_q + value,
+                )
 
             if restore_fingers:
                 self.w.robot_env.robot.tar_fin_q = self.w.robot_env.robot.init_fin_q
@@ -663,10 +682,10 @@ class DemoEnvironment:
 
         if self.policy_opt.use_arm_blending and stage != "reach":
             blend_end = 0.6
-            proj_arm_q = self.init_arm_q + (stage_ts+1) * self.init_arm_dq * self.bullet_opt.ts
-            blending = np.clip(
-                stage_ts / (len(self.trajectory) * blend_end), 0.0, 1.0
+            proj_arm_q = (
+                self.init_arm_q + (stage_ts + 1) * self.init_arm_dq * self.bullet_opt.ts
             )
+            blending = np.clip(stage_ts / (len(self.trajectory) * blend_end), 0.0, 1.0)
             tar_arm_q = tar_arm_q * blending + proj_arm_q * (1 - blending)
 
         tar_arm_vel = (tar_arm_q - self.last_tar_arm_q) / self.bullet_opt.ts
@@ -691,8 +710,9 @@ class DemoEnvironment:
             # cur_fin_q = self.w.robot_env.robot.get_q_dq(
             #     self.w.robot_env.robot.fin_actdofs
             # )[0]
-            tar_fin_q = self.w.robot_env.robot.init_fin_q * blending + self.init_fin_q * (
-                1 - blending
+            tar_fin_q = (
+                self.w.robot_env.robot.init_fin_q * blending
+                + self.init_fin_q * (1 - blending)
             )
         else:
             # try to keep fin q close to init_fin_q (keep finger pose)
@@ -749,10 +769,12 @@ class DemoEnvironment:
         tdict = self.obs[self.src_idx]
         t_pos = tdict["position"]
         if tdict["shape"] == "sphere":
-            t_up = [0.0, 0.0, 1.0]      # sph does not have up vec
+            t_up = [0.0, 0.0, 1.0]  # sph does not have up vec
         else:
             t_up = tdict["up_vector"]
-        shape = utils.NAME_TO_SHAPE_IND_MAP[tdict["shape"]]  # should not matter if use init_obs or obs
+        shape = utils.NAME_TO_SHAPE_IND_MAP[
+            tdict["shape"]
+        ]  # should not matter if use init_obs or obs
 
         if self.task == "stack":
             bdict = self.obs[self.dst_idx]
@@ -813,7 +835,6 @@ class DemoEnvironment:
             self.obs_to_render = obs
         elif self.opt.obs_mode == "vision":
             obs = self.get_vision_observation()
-            self.obs_to_render = obs
 
             if self.vision_opt.use_gt_obs:
                 obs = list(self.get_state()["objects"].values())
@@ -852,16 +873,19 @@ class DemoEnvironment:
         pred, inputs_img = vision_module.predict(rgb=rgb, masks=masks)
 
         pred_odicts = []
-        for y in pred:
-            # Convert vectorized predictions to dictionary form. The
-            # predicted pose is also transformed using camera information.
-            odict = dash_object.y_vec_to_dict(
-                y=list(y),
-                coordinate_frame=self.vision_opt.coordinate_frame,
-                cam_position=cam_position,
-                cam_orientation=cam_orientation,
-            )
-            pred_odicts.append(odict)
+        if pred is not None:
+            for y in pred:
+                # Convert vectorized predictions to dictionary form. The
+                # predicted pose is also transformed using camera information.
+                odict = dash_object.y_vec_to_dict(
+                    y=list(y),
+                    coordinate_frame=self.vision_opt.coordinate_frame,
+                    cam_position=cam_position,
+                    cam_orientation=cam_orientation,
+                )
+                pred_odicts.append(odict)
+
+        self.obs_to_render = copy.deepcopy(pred_odicts)
 
         # We track predicted objects throughout time by matching the attributes
         # predicted at the current timestep with the object attributes from the
@@ -889,14 +913,16 @@ class DemoEnvironment:
                     "timestep": self.timestep,
                     "stage": self.stage,
                     "stage_ts": self.stage_ts,
-                    "gt": {"oid2odict": self.get_state()["objects"]},
-                    "pred": {"odicts": pred_obs},
+                    "state": self.get_state(),
+                    "gt_masks": oid2mask,
+                    "rgb": rgb,
+                    "masks": masks,
+                    "pred": pred,
+                    "pred_obs": pred_obs,
+                    "pred_odicts": pred_odicts,
                     "s2d_idxs": s2d_idxs,
                     "src_idx": self.src_idx,
                     "dst_idx": self.dst_idx,
-                    "rgb": rgb,
-                    "masks": masks,
-                    "gt_masks": oid2mask,
                     "vision_inputs": inputs_img,
                 },
             )

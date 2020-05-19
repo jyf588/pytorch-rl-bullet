@@ -10,22 +10,25 @@ speed_up_factor = 27 / render_frequency
 
 
 def main(args: argparse.Namespace):
-    src_dir = os.path.join(args.run_dir, "Captures/temp", args.pov, "rgb")
+    run_dir = os.path.join(args.run_root_dir, args.run_name)
 
-    # First pov images are not ordered, so we need to re-order them.
-    reorder = args.pov == "first"
+    for pov in ["first", "third"]:
+        print(f"Generating video for pov: {pov}...")
+        src_dir = os.path.join(run_dir, "Captures/temp", pov, "rgb")
+        # First pov images are not ordered, so we need to re-order them.
+        reorder = pov == "first"
 
-    # Create a reordered directory of images that ffmpeg can run on.
-    if reorder:
-        create_orderered_dir(src_dir, args.reordered_src_dir)
-        src_dir = args.reordered_src_dir
+        # Create a reordered directory of images that ffmpeg can run on.
+        if reorder:
+            create_orderered_dir(src_dir, args.reordered_src_dir)
+            src_dir = args.reordered_src_dir
 
-    dst_path = os.path.join(args.run_dir, f"{args.pov}.mp4")
-    generate_video(src_dir=src_dir, dst_path=dst_path, fps=args.fps)
+        dst_path = os.path.join(run_dir, f"{pov}.mp4")
+        generate_video(src_dir=src_dir, dst_path=dst_path, fps=args.fps)
 
-    # Delete the temporary reordered directory.
-    if reorder:
-        shutil.rmtree(args.reordered_src_dir)
+        # Delete the temporary reordered directory.
+        if reorder:
+            shutil.rmtree(args.reordered_src_dir)
 
     # if TRIM:
     #     trim_command = f"ffmpeg -ss 00:00:00 -t 00:01:44 -i {args.dst_path}.mp4 -vcodec copy -acodec copy {args.dst_path}_trimmed.mp4"
@@ -55,17 +58,22 @@ def create_orderered_dir(orig_dir, reordered_dir):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--run_dir",
+        "run_name",
         type=str,
-        default="/home/mguo/outputs/system/t1/0404/2020_05_15_12_51_33",
         help="The directory containing the png images to convert into video format.",
     )
     parser.add_argument(
-        "--pov",
+        "--run_root_dir",
         type=str,
-        default="first",
-        help="The point of view to generate video for.",
+        default="/home/mguo/outputs/system/t1/0404",
+        help="The directory containing the png images to convert into video format.",
     )
+    # parser.add_argument(
+    #     "--pov",
+    #     type=str,
+    #     default="first",
+    #     help="The point of view to generate video for.",
+    # )
     parser.add_argument(
         "--reordered_src_dir",
         type=str,

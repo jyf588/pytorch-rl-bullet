@@ -18,7 +18,7 @@ class UnitySaver:
 
         util.delete_and_create_dir(cam_dir)
 
-    def save(self, msg_id: str, data: Dict):
+    def save(self, example_id: str, data: Dict):
         """Saves unity data. The generated output files format is the 
         following:
 
@@ -45,9 +45,9 @@ class UnitySaver:
         Note that only `camera_position` and `camera_orientation` are currently
         being saved.
         """
-        path = os.path.join(self.cam_dir, f"{msg_id}.json")
+        path = os.path.join(self.cam_dir, f"{example_id}.json")
         data_to_save = {}
-        for tag_id, tag_data in data.items():
+        for tag_id in data.keys():
             data_to_save[tag_id] = {}
             for k in self.save_keys:
                 data_to_save[tag_id][k] = data[tag_id][k]

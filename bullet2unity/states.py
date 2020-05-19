@@ -17,17 +17,21 @@ from ns_vqa_dart.bullet.seg import UNITY_OIDS
 
 
 PLAN_TARGET_POSITION = [-0.06, 0.3, 0.0]
+CAM_TARGET_Z = 0.23
 
 
 def compute_bullet_camera_targets(
-    stage, send_image, save_image, odicts=None, oidx=None
+    version, send_image, save_image, stage, tx=None, ty=None, odicts=None, oidx=None,
 ):
     if stage == "plan":
         cam_target = PLAN_TARGET_POSITION
     elif stage == "place":
-        assert odicts is not None
-        assert oidx is not None
-        cam_target = get_object_camera_target(bullet_odicts=odicts, oidx=oidx)
+        if version == "v2":
+            cam_target = (tx, ty, CAM_TARGET_Z)
+        elif version == "v1":
+            assert odicts is not None
+            assert oidx is not None
+            cam_target = get_object_camera_target(bullet_odicts=odicts, oidx=oidx)
     else:
         raise ValueError(f"Invalid stage: {stage}")
 
@@ -157,7 +161,7 @@ def bullet2unity_state(
     unity_robot_state = bullet2unity_robot(bullet_state=bullet_robot_state)
 
     # Convert object state from bullet to unity.
-    unity_object_states = bullet2unity_objects(bullet_state=bullet_state["objects"],)
+    unity_object_states = bullet2unity_objects(bullet_state=bullet_state["objects"])
 
     # Compute the target position in Unity coordinates.
     if bullet_animation_target:

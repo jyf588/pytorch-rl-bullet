@@ -71,7 +71,10 @@
         },
         "stack_btm": {
             "n": 1,
-            "radius": 0.045
+            "radius": [
+                0.045,
+                0.05
+            ]
         },
         "place_manip": {
             "n": 2

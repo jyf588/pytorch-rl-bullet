@@ -3,17 +3,34 @@ import copy
 import argparse
 import ns_vqa_dart.bullet.util as util
 
-CONTAINER_DIR = "/home/mguo/container_data_v2"
-# CONTAINER_DIR = "/home/yifengj/container_data"
+
+homedir = util.get_user_homedir()
+
+
+PORT = 8000
+
+# CONTAINER_DIR = "/home/mguo/container_data_8000"
+# CONTAINER_DIR = "/home/mguo/container_data_8001"
+# CONTAINER_DIR = "/home/mguo/container_data_8002"
+# CONTAINER_DIR = f"/home/mguo/container_data_{PORT}"
+# CONTAINER_DIR = "/home/mguo/container_data_8010"
+# CONTAINER_DIR = "/home/mguo/container_data_8011"
 
 # UNITY_NAME = "Linux8000_0512"
-UNITY_NAME = "Linux8001_0515"
+# UNITY_NAME = "Linux8001_0515"
 # UNITY_NAME = "Linux8002_0515"
+# UNITY_NAME = f"Linux{PORT}_0515"
+# UNITY_CAPTURES_DIR = os.path.join(homedir, f"unity/builds/{UNITY_NAME}/Captures")
 
 # UNITY_CAPTURES_DIR = None
-UNITY_CAPTURES_DIR = os.path.join(
-    util.get_user_homedir(), f"unity/builds/{UNITY_NAME}/Captures"
-)
+
+
+def set_unity_container_cfgs(opt, port):
+    unity_name = f"Linux{port}_0515"
+    unity_captures_dir = os.path.join(homedir, f"unity/builds/{unity_name}/Captures")
+    opt.container_dir = f"/home/mguo/container_data_{port}"
+    opt.unity_captures_dir = unity_captures_dir
+    return opt
 
 
 BASE_SYSTEM_OPTIONS = argparse.Namespace(
@@ -36,8 +53,9 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     render_unity=False,
     render_bullet=False,
     visualize_unity=False,
-    use_control_skip=False,
-    render_frequency=6,
+    cam_version="v2",
+    use_control_skip=True,
+    render_frequency=100,
     render_obs=False,
     animate_head=True,
     save_states=True,  # To check reproducibility.
@@ -45,9 +63,9 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     save_first_pov_image=False,
     scenes_root_dir=os.path.join(util.get_user_homedir(), "data/dash"),
     root_outputs_dir=os.path.join(util.get_user_homedir(), "outputs/system"),
-    container_dir=CONTAINER_DIR,
-    unity_captures_dir=UNITY_CAPTURES_DIR,
-    two_commands=False
+    container_dir=None,
+    unity_captures_dir=None,
+    two_commands=False,
 )
 
 VISION_STATES_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
@@ -89,8 +107,11 @@ DEBUG_VISION_OPTIONS.obs_mode = "vision"
 DEBUG_VISION_OPTIONS.render_unity = True
 DEBUG_VISION_OPTIONS.render_obs = True
 DEBUG_VISION_OPTIONS.save_first_pov_image = True
-DEBUG_VISION_OPTIONS.enable_reaching = False
+DEBUG_VISION_OPTIONS.enable_reaching = True
 DEBUG_VISION_OPTIONS.enable_retract = False
+DEBUG_VISION_OPTIONS.start_sid = 31
+DEBUG_VISION_OPTIONS.end_sid = 32
+DEBUG_VISION_OPTIONS.task_subset = ["stack"]
 
 
 SYSTEM_OPTIONS = {
@@ -137,24 +158,23 @@ POLICY_OPTIONS = argparse.Namespace(
 
 def get_policy_options_and_paths(policy_id: str):
     policy_options = copy.deepcopy(POLICY_OPTIONS)
-    if policy_id == "0411":
-        grasp_pi = f"0411_0_n_25_45"
-        grasp_dir = f"./trained_models_0411_0_n/ppo/"
-        place_dir = f"./trained_models_0411_0_n_place_0411_0/ppo/"
-    elif policy_id == "0404":
+    if policy_id == "0404":
         policy_options.use_height = True
         grasp_pi = f"0404_0_n_20_40"
         grasp_dir = f"./trained_models_%s/ppo/" % "0404_0_n"
         place_pi = f"0404_0_n_place_0404_0"
         place_dir = f"./trained_models_%s/ppo/" % place_pi
+    elif policy_id == "0411":
+        grasp_pi = f"0411_0_n_25_45"
+        grasp_dir = f"./trained_models_0411_0_n/ppo/"
+        place_dir = f"./trained_models_0411_0_n_place_0411_0/ppo/"
     elif policy_id == "0510":
         policy_options.use_height = True
         policy_options.use_place_stack_bit = True
         grasp_pi = f"0510_0_n_25_45"
         grasp_dir = f"./trained_models_%s/ppo/" % "0510_0_n"
-        place_dir = f"./trained_models_0510_0_n_place_0510_0/ppo/"
-    else:
-        assert False and "no policy id"
+        place_pi = f"0510_0_n_place_0510_0"
+        place_dir = f"./trained_models_%s/ppo/" % place_pi
 
     shape2policy_paths = {
         "universal": {
@@ -172,32 +192,42 @@ def get_policy_options_and_paths(policy_id: str):
 
 
 VISION_V1_MODELS = {
-    "plan": "2020_04_19_07_14_00",
-    "place": "2020_04_22_04_35",
-    "stack": "2020_04_19_22_12_00",
+    "plan": "planning_v003_20K/2020_04_19_07_14_00",
+    "place": "placing_v003_2K_20K/2020_04_22_04_35",
+    "stack": "stacking_v003_2K_20K/2020_04_19_22_12_00",
 }
 
-VISION_V2_MODELS = {
-    "plan": "2020_05_15_23_43_08",
-    "place": "2020_05_15_02_18_08",
-    "stack": "2020_05_16_02_36_30",
+VISION_V2_MODELS = {  # Reproduce v1 with re-rendered unity images.
+    "plan": "planning_v003_20K/2020_05_15_23_43_08",
+    "place": "placing_v003_2K_20K/2020_05_15_02_18_08",
+    "stack": "stacking_v003_2K_20K/2020_05_16_02_36_30",
 }
+
+VISION_V3_MODELS = {  # With v2 camera.
+    "plan": "plan_20K_0518/2020_05_18_03_19_01",
+    "place": "place_2K_20K_0518/2020_05_18_02_39_29",
+    "stack": "stack_2K_20K_0518/2020_05_18_02_50_47",
+}
+
 
 plan_model = VISION_V2_MODELS["plan"]
-place_model = VISION_V2_MODELS["place"]
-stack_model = VISION_V2_MODELS["stack"]
+place_model = VISION_V3_MODELS["place"]
+stack_model = VISION_V3_MODELS["stack"]
+
+# MASK_RCNN_MODEL = "2020_04_27_20_12_14/model_final.pth"
+MASK_RCNN_MODEL = "2020_05_16_22_49_31/model_0293999.pth"  # Rerendered Unity images.
 
 VISION_OPTIONS = argparse.Namespace(
     seed=None,
     renderer="unity",
-    use_segmentation_module=False,
-    separate_vision_modules=False,
+    use_segmentation_module=True,
+    separate_vision_modules=True,
     use_gt_obs=False,
-    attr_checkpoint_path="/home/mguo/outputs/combined/2020_05_16_22_47_25/checkpoint_best.pt",
-    # seg_checkpoint_path="/home/mguo/outputs/detectron/2020_04_27_20_12_14/model_final.pth",
-    # planning_checkpoint_path=f"/home/mguo/outputs/planning_v003_20K/{plan_model}/checkpoint_best.pt",
-    # placing_checkpoint_path=f"/home/mguo/outputs/placing_v003_2K_20K/{place_model}/checkpoint_best.pt",
-    # stacking_checkpoint_path=f"/home/mguo/outputs/stacking_v003_2K_20K/{stack_model}/checkpoint_best.pt",
+    # attr_checkpoint_path="/home/mguo/outputs/combined/2020_05_16_22_47_25/checkpoint_best.pt",
+    seg_checkpoint_path=f"/home/mguo/outputs/detectron/{MASK_RCNN_MODEL}",
+    planning_checkpoint_path=f"/home/mguo/outputs/{plan_model}/checkpoint_best.pt",
+    placing_checkpoint_path=f"/home/mguo/outputs/{place_model}/checkpoint_best.pt",
+    stacking_checkpoint_path=f"/home/mguo/outputs/{stack_model}/checkpoint_best.pt",
     coordinate_frame="unity_camera",
     save_predictions=True,
 )
