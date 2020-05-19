@@ -6,8 +6,7 @@ import ns_vqa_dart.bullet.util as util
 homedir = util.get_user_homedir()
 
 
-PORT = 8000
-
+# PORT = 8000
 # CONTAINER_DIR = "/home/mguo/container_data_8000"
 # CONTAINER_DIR = "/home/mguo/container_data_8001"
 # CONTAINER_DIR = "/home/mguo/container_data_8002"
@@ -58,7 +57,7 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     render_obs=False,
     animate_head=True,
     save_states=True,  # To check reproducibility.
-    policy_id="0510",  # [0404, 0411, 0510]
+    policy_id="0411",  # [0404, 0411, 0510]
     save_first_pov_image=False,
     scenes_root_dir=os.path.join(util.get_user_homedir(), "data/dash"),
     root_outputs_dir=os.path.join(util.get_user_homedir(), "outputs/system"),
@@ -125,8 +124,8 @@ POLICY_OPTIONS = argparse.Namespace(
     init_noise=True,
     restore_fingers=True,
     use_arm_blending=True,
-    use_height=True,  # assume sph policy does not use height or one bit.
-    use_place_stack_bit=True,
+    use_height=False,  # assume sph policy does not use height or one bit.
+    use_place_stack_bit=False,
     use_slow_policy=False,
     n_reach_steps=305,
     n_transport_steps=505,
@@ -201,8 +200,8 @@ plan_model = VISION_V2_MODELS["plan"]
 place_model = VISION_V3_MODELS["place"]
 stack_model = VISION_V3_MODELS["stack"]
 
-# MASK_RCNN_MODEL = "2020_04_27_20_12_14/model_final.pth"
-MASK_RCNN_MODEL = "2020_05_16_22_49_31/model_0293999.pth"  # Rerendered Unity images.
+MASK_RCNN_MODEL = "2020_04_27_20_12_14/model_final.pth"
+# MASK_RCNN_MODEL = "2020_05_16_22_49_31/model_0293999.pth"  # Rerendered Unity images.
 
 VISION_OPTIONS = argparse.Namespace(
     seed=None,

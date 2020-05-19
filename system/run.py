@@ -28,6 +28,7 @@ import ns_vqa_dart.bullet.util as util
 import bullet2unity.interface as interface
 from exp.options import EXPERIMENT_OPTIONS
 from system.vision_module import VisionModule
+
 try:
     from ns_vqa_dart.scene_parse.detectron2.dash import DASHSegModule
 except ImportError as e:
@@ -327,11 +328,11 @@ def get_unity_options(mode, opt, env):
         render_place = env.task == "place"
         if opt.obs_mode == "vision":
             if env.stage in ["plan", "place"]:
-                render_cur_step = False
-                if env.stage == "plan":
-                    render_cur_step = True
-                elif env.stage == "place" and env.stage_progress() < 0.2:
-                    render_cur_step = True
+                render_cur_step = True
+                # if env.stage == "plan":
+                #     render_cur_step = True
+                # elif env.stage == "place" and env.stage_progress() < 0.2:
+                #     render_cur_step = True
 
                 unity_options = [(False, False, True, True)]
                 if render_cur_step:
@@ -418,7 +419,7 @@ def compute_b_ani_tar(opt, env):
 
 
 def compute_render_state(
-        env, place_dest_object, bullet_cam_targets, render_obs, render_place
+    env, place_dest_object, bullet_cam_targets, render_obs, render_place
 ):
     state = env.get_state()
 
