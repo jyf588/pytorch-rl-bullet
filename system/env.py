@@ -675,6 +675,13 @@ class DemoEnvironment:
                 b_pos=b_pos,
                 b_up=b_up,
             )
+        if self.policy_opt.use_place_stack_bit and not self.is_sphere:
+            if self.task == "place":
+                p_obs.extend([1.0])
+            elif self.task == "stack":
+                p_obs.extend([-1.0])
+            else:
+                assert False
         return p_obs
 
     def get_observation(self):
@@ -733,16 +740,17 @@ class DemoEnvironment:
         pred, inputs_img = vision_module.predict(rgb=rgb, masks=masks)
 
         pred_odicts = []
-        for y in pred:
-            # Convert vectorized predictions to dictionary form. The
-            # predicted pose is also transformed using camera information.
-            odict = dash_object.y_vec_to_dict(
-                y=list(y),
-                coordinate_frame=self.vision_opt.coordinate_frame,
-                cam_position=cam_position,
-                cam_orientation=cam_orientation,
-            )
-            pred_odicts.append(odict)
+        if pred is not None:
+            for y in pred:
+                # Convert vectorized predictions to dictionary form. The
+                # predicted pose is also transformed using camera information.
+                odict = dash_object.y_vec_to_dict(
+                    y=list(y),
+                    coordinate_frame=self.vision_opt.coordinate_frame,
+                    cam_position=cam_position,
+                    cam_orientation=cam_orientation,
+                )
+                pred_odicts.append(odict)
 
         self.obs_to_render = copy.deepcopy(pred_odicts)
 
