@@ -687,7 +687,7 @@ class DemoEnvironment:
             tar_arm_q = self.trajectory[stage_ts]
 
         if self.policy_opt.use_arm_blending and stage != "reach":
-            blend_end = 0.6
+            blend_end = 0.3
             proj_arm_q = (
                 self.init_arm_q + (stage_ts + 1) * self.init_arm_dq * self.bullet_opt.ts
             )
