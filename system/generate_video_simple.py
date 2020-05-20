@@ -36,7 +36,8 @@ if __name__ == "__main__":
         "--src_dir",
         type=str,
         # default="/home/yifengj/Downloads/LinuxBuildLocalhost0512/Captures/temp/third/rgb",
-        default="/home/mguo/unity/Builds0519/Linux8001/Captures/temp/third/rgb",
+        # default="/home/mguo/outputs/system/demo/0411/2020_05_19_14_14_35/Captures/temp/third/rgb",
+        default="/home/mguo/unity/Builds0519b/Linux8000/Captures/temp/third/rgb",
         help="The directory containing the png images to convert into video format.",
     )
     parser.add_argument(

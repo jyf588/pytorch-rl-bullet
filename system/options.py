@@ -27,7 +27,7 @@ homedir = util.get_user_homedir()
 def set_unity_container_cfgs(opt, port):
     unity_name = f"Linux{port}"
     unity_captures_dir = os.path.join(
-        homedir, f"unity/Builds0519/{unity_name}/Captures"
+        homedir, f"unity/Builds0519b/{unity_name}/Captures"
     )
     opt.container_dir = f"/home/mguo/container_data_{port}"
     opt.unity_captures_dir = unity_captures_dir
@@ -58,12 +58,15 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     use_control_skip=True,
     render_frequency=30,
     render_obs=False,
-    animate_head=True,
-    head_speed=100,
+    animate_head=False,
+    reach_head_speed=0,
+    move_head_speed=0,
+    retract_head_speed=0,
+    head_speed=0,
     save_states=True,  # To check reproducibility.
     policy_id="0411",  # [0404, 0411, 0510]
     save_first_pov_image=False,
-    save_third_pov_image=True,
+    save_third_pov_image=False,
     scenes_root_dir=os.path.join(util.get_user_homedir(), "data/dash"),
     root_outputs_dir=os.path.join(util.get_user_homedir(), "outputs/system"),
     container_dir=None,
@@ -92,17 +95,24 @@ DEMO_OPTIONS = copy.deepcopy(BASE_SYSTEM_OPTIONS)
 DEMO_OPTIONS.enable_reaching = True
 DEMO_OPTIONS.enable_retract = True
 DEMO_OPTIONS.render_unity = True
-DEMO_OPTIONS.visualize_unity = False
-DEMO_OPTIONS.render_bullet = False
-DEMO_OPTIONS = copy.deepcopy(DEMO_OPTIONS)
-DEMO_OPTIONS.obs_mode = "gt"  # TODO
-DEMO_OPTIONS.save_third_pov_image = True
-# DEMO_OPTIONS.obs_mode = "vision"
-# DEMO_OPTIONS.render_obs = True
-DEMO_OPTIONS.render_frequency = 15
+DEMO_OPTIONS.render_frequency = 6
 DEMO_OPTIONS.use_control_skip = False
-# DEMO_OPTIONS.start_sid = 1
-# DEMO_OPTIONS.end_sid = 2
+DEMO_OPTIONS.save_third_pov_image = True
+DEMO_OPTIONS.animate_head = True
+DEMO_OPTIONS.reach_head_speed = 50
+DEMO_OPTIONS.move_head_speed = 90
+DEMO_OPTIONS.retract_head_speed = 90
+
+GT_DEMO_OPTIONS = copy.deepcopy(DEMO_OPTIONS)
+GT_DEMO_OPTIONS.obs_mode = "gt"  # TODO
+
+VISION_DEMO_OPTIONS = copy.deepcopy(DEMO_OPTIONS)
+VISION_DEMO_OPTIONS.obs_mode = "vision"
+VISION_DEMO_OPTIONS.save_first_pov_image = True
+# Debugging demo vision.
+VISION_DEMO_OPTIONS.render_obs = True
+VISION_DEMO_OPTIONS.render_frequency = 100
+VISION_DEMO_OPTIONS.use_control_skip = True
 
 TEST_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_VISION_OPTIONS.obs_mode = "vision"
@@ -128,7 +138,8 @@ SYSTEM_OPTIONS = {
     "test_vision": TEST_VISION_OPTIONS,
     "test_gt": TEST_GT_OPTIONS,
     "debug_vision": DEBUG_VISION_OPTIONS,
-    "demo": DEMO_OPTIONS,
+    "gt_demo": GT_DEMO_OPTIONS,
+    "vision_demo": VISION_DEMO_OPTIONS,
 }
 
 
@@ -230,7 +241,7 @@ VISION_MODELS_DIR = os.path.join(homedir, "outputs/0518_results")
 VISION_OPTIONS = argparse.Namespace(
     seed=None,
     renderer="unity",
-    use_segmentation_module=False,
+    use_segmentation_module=True,
     separate_vision_modules=True,
     use_gt_obs=False,
     seg_checkpoint_path=os.path.join(VISION_MODELS_DIR, "mask_rcnn.pth"),

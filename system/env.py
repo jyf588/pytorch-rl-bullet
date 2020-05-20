@@ -313,7 +313,21 @@ class DemoEnvironment:
     def plan(self):
         # First, get the current observation which we will store as the initial
         # observation for planning reach/transport and for grasping.
-        self.initial_obs = self.get_observation()
+        if self.command_pointer == 0:
+            self.initial_obs = self.get_observation()
+        # This is a continuous command, so we simply modify the observation assuming
+        # task success.
+        elif self.command_pointer > 0:
+            if self.task == "place":
+                dst_x, dst_y = self.place_dst_xy
+                dst_z = openrave.OR_CEILING[self.task]
+            elif self.task == "stack":
+                dst_x, dst_y, _ = self.initial_obs[self.dst_idx]["position"]
+                dst_z = openrave.OR_CEILING[self.task]
+            self.initial_obs[self.src_idx]["position"] = [dst_x, dst_y, dst_z]
+            self.obs_to_render = self.initial_obs
+        else:
+            raise ValueError(f"Invalid command pointer: {self.command_pointer}")
         self.obs = copy.deepcopy(self.initial_obs)
 
         # Determine the source / target pbject(s) and destination position.
@@ -432,7 +446,7 @@ class DemoEnvironment:
                 sentence=self.command[self.command_pointer],
                 vision_output=language_input,
             )
-            self.task = "stack" if dst_idx else "place"
+            self.task = "place" if dst_idx is None else "stack"
             self.place_dst_xy = [dst_x, dst_y]  # used outside for head animation
             self.command_pointer += 1
 

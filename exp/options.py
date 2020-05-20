@@ -94,13 +94,8 @@ EXPERIMENT_OPTIONS = {
             "save_states": False,
         },
     },
-    "demo": {
-        "language": {
-            "seed": 5,
-            "n_scenes": 10,
-            "save_states": False,
-        }
-    }
+    "demo": {"language": {"seed": 5, "n_scenes": 10, "save_states": False,}},
+    "demo_z0": {"language": {"seed": 5, "n_scenes": 10, "save_states": False,}},
 }
 
 

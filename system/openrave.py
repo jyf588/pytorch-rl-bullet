@@ -11,6 +11,10 @@ import matplotlib.pyplot as plt
 # CONTAINER_DIR = os.path.join(homedir, "container_data")
 STAGE2NAME = {"reach": "REACH", "transport": "MOVE", "retract": "RETRACT"}
 MAX_OBJECTS = 6
+OR_CEILING = {
+    "stack": 0.15,
+    "place": 0.0,
+}
 
 
 def check_clean_container(container_dir: str):
@@ -84,10 +88,10 @@ def compute_trajectory(
 
         # OpenRAVE expects the z position to represent the bottom of the
         # objects.
-        if position[2] > 0.15:      # CoM position > 0.15
-            position[2] = 0.15      # on some other obj
+        if position[2] >= OR_CEILING["stack"]:  # CoM position > 0.15
+            position[2] = OR_CEILING["stack"]  # on some other obj
         else:
-            position[2] = default_base_z    # 0.0, on floor
+            position[2] = default_base_z  # 0.0, on floor
         # if stage == "retract" and idx == 0:
         #     assert src_base_z_post_placing is not None
         #     position[2] = src_base_z_post_placing
@@ -186,4 +190,5 @@ def get_traj_from_openrave_container(
         raise ValueError("%s isn't a file!" % load_path)
     # print("Trajectory obtained from OpenRave!")
     # input("press enter")
+    print(f"OR trajectory for {load_path}: {traj_s.shape}")
     return traj_s

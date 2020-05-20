@@ -40,14 +40,6 @@ from system.options import (
 
 global args
 
-STAGE2ANIMATION_Z_OFFSET = {
-    "plan": 0.3,
-    "reach": 0.1,
-    "grasp": 0.1,
-    "retract": 0.3,
-}
-TASK2ANIMATION_Z_OFFSET = {"place": 0.1, "stack": 0.2}
-
 DEMO_COMMANDS = {
     0: [
         "Put the green cylinder on top of the blue box.",
@@ -190,7 +182,7 @@ async def send_to_client(websocket, path):
                         for (rend_obs, rend_place, send_image, should_step) in u_opt:
                             # Compute camera targets.
                             if update_camera_target:
-                                bullet_cam_targets = compute_bullet_camera_targets(
+                                bullet_cam_targets = bullet2unity.states.compute_bullet_camera_targets_for_system(
                                     opt,
                                     env,
                                     send_image,
@@ -198,7 +190,7 @@ async def send_to_client(websocket, path):
                                 )
                                 update_camera_target = False
 
-                            render_state = compute_render_state(
+                            render_state = bullet2unity.states.compute_render_state(
                                 env,
                                 place_dest_object,
                                 bullet_cam_targets,
@@ -207,14 +199,17 @@ async def send_to_client(websocket, path):
                             )
 
                             # Compute the animation target.
-                            b_ani_tar = compute_b_ani_tar(opt, env)
+                            (
+                                b_ani_tar,
+                                head_speed,
+                            ) = bullet2unity.states.compute_b_ani_tar(opt, env)
 
                             # Encode, send, receive, and decode.
                             message = interface.encode(
                                 state_id=frame_id,
                                 bullet_state=render_state,
                                 bullet_animation_target=b_ani_tar,
-                                head_speed=opt.head_speed,
+                                head_speed=head_speed,
                                 save_third_pov_image=opt.save_third_pov_image,
                                 bullet_cam_targets=bullet_cam_targets,
                             )
@@ -236,7 +231,7 @@ async def send_to_client(websocket, path):
                 if is_done or not openrave_success:
                     env.cleanup()
                     print(
-                        f"Exp: {args.exp} \tScene ID: {scene_id} \tStage: {stage} \tTimestep: {env.timestep}\n"
+                        f"Exp: {args.exp} \tScene ID: {scene_id} \tStage: {stage} \tTimestep: {env.timestep}\tOR success: {openrave_success}\n"
                         f"Frame rate: {n_frames / (time.time() - frames_start):.2f}\t\n"
                     )
                     break
@@ -282,11 +277,11 @@ def get_unity_options(mode, opt, env):
     render_place = False  # deprecated
     if opt.obs_mode == "vision":
         if env.stage in ["plan", "place"]:
-            render_cur_step = False
-            if env.stage == "plan":
-                render_cur_step = True
-            elif env.stage == "place" and env.stage_progress() < 0.2:
-                render_cur_step = True
+            render_cur_step = opt.render_obs
+            # if env.stage == "plan":
+            #     render_cur_step = True
+            # elif env.stage == "place" and env.stage_progress() < 0.2:
+            #     render_cur_step = True
 
             unity_options = [(False, False, True, True)]
             if render_cur_step:
@@ -299,126 +294,6 @@ def get_unity_options(mode, opt, env):
         raise ValueError(f"Invalid obs mode: {opt.obs_mode}")
 
     return unity_options
-
-
-def compute_bullet_camera_targets(opt, env, send_image, save_image):
-    assert opt.obs_mode == "vision"
-    if opt.cam_version == "v1":
-        odicts, oidx = None, None
-        if env.stage == "place":
-            if env.task == "place":
-                # GT version: We use the current object states.
-                odicts = list(env.get_state()["objects"].values())
-                oidx = opt.scene_place_src_idx
-
-                # TODO: predicted version.
-                # cam_target = env.place_dst_xy + [env.initial_obs[env.src_idx]["height"]]
-            elif env.task == "stack":
-                # We use the predictions from the initial observation.
-                odicts = env.initial_obs
-                oidx = env.dst_idx
-            else:
-                raise ValueError(f"Invalid task: {env.task}")
-        bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
-            version=opt.cam_version,
-            stage=env.stage,
-            send_image=send_image,
-            save_image=save_image,
-            odicts=odicts,
-            oidx=oidx,
-        )
-    elif opt.cam_version == "v2":
-        if env.stage == "plan":
-            tx, ty = None, None
-        elif env.stage == "place":
-            if env.task == "place":
-                tx, ty = env.place_dst_xy
-            elif env.task == "stack":
-                tx, ty, _ = env.initial_obs[env.dst_idx]["position"]
-        bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
-            version=opt.cam_version,
-            stage=env.stage,
-            send_image=send_image,
-            save_image=save_image,
-            tx=tx,
-            ty=ty,
-        )
-    return bullet_camera_targets
-
-
-def compute_b_ani_tar(opt, env):
-    if not opt.animate_head:
-        return None
-    task = env.task
-    if env.stage in ["plan", "retract"]:
-        b_ani_tar = None
-    else:
-        if env.stage in ["reach", "grasp"]:
-            b_ani_tar = env.initial_obs[env.src_idx]["position"]
-        elif env.stage in ["transport", "place", "release"]:
-            if task == "place":
-                b_ani_tar = env.place_dst_xy + [env.initial_obs[env.src_idx]["height"]]
-            elif task == "stack":
-                b_ani_tar = env.initial_obs[env.dst_idx]["position"]
-            else:
-                raise ValueError(f"Unsupported task: {task}")
-        else:
-            raise ValueError(f"Unsupported stage: {env.stage}.")
-        b_ani_tar = copy.deepcopy(b_ani_tar)
-        if env.stage in STAGE2ANIMATION_Z_OFFSET:
-            z_offset = STAGE2ANIMATION_Z_OFFSET[env.stage]
-        elif task in TASK2ANIMATION_Z_OFFSET:
-            z_offset = TASK2ANIMATION_Z_OFFSET[task]
-        b_ani_tar[2] += z_offset
-    return b_ani_tar
-
-
-def compute_render_state(
-    env, place_dest_object, bullet_cam_targets, render_obs, render_place
-):
-    assert not render_place  # deprecated
-    assert not place_dest_object  # deprecated
-    state = env.get_state()
-
-    # If we are rendering observations, add them to the
-    # render state.
-    render_state = copy.deepcopy(state)
-    if render_obs:
-        render_state = add_hallucinations_to_state(
-            state=render_state, h_odicts=env.obs_to_render, color=None,
-        )
-        camera_target_odict = {
-            "shape": "sphere",
-            "color": "red",
-            "position": bullet_cam_targets[0]["position"],
-            "radius": 0.02,
-            "height": 0.02,
-            "orientation": [0, 0, 0, 1],
-        }
-        render_state = add_hallucinations_to_state(
-            state=render_state, h_odicts=[camera_target_odict], color=None,
-        )
-    # if render_place:
-    #     render_state = add_hallucinations_to_state(
-    #         state=render_state, h_odicts=[place_dest_object], color="clear",
-    #     )
-    return render_state
-
-
-def add_hallucinations_to_state(state: Dict, h_odicts: Dict, color: str):
-    state = copy.deepcopy(state)
-    h_odicts = copy.deepcopy(h_odicts)
-    n_existing_objects = len(state["objects"])
-    for oi, odict in enumerate(h_odicts):
-        # Set the color to be the clear version of the object color.
-        if color is None:
-            ocolor = odict["color"]
-            hallu_color = f"clear_{ocolor}"
-        else:
-            hallu_color = color
-        odict["color"] = hallu_color
-        state["objects"][f"h_{n_existing_objects + oi}"] = odict
-    return state
 
 
 if __name__ == "__main__":
