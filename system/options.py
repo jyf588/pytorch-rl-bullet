@@ -59,6 +59,9 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     render_frequency=30,
     render_obs=False,
     animate_head=False,
+    start_head_ani=False,
+    start_head_steps=0,
+    start_head_speed=0,
     reach_head_speed=0,
     move_head_speed=0,
     retract_head_speed=0,
@@ -99,6 +102,9 @@ DEMO_OPTIONS.render_frequency = 6
 DEMO_OPTIONS.use_control_skip = False
 DEMO_OPTIONS.save_third_pov_image = True
 DEMO_OPTIONS.animate_head = True
+DEMO_OPTIONS.start_head_ani = True
+DEMO_OPTIONS.start_head_steps = 2 * 40 * 6  # fps / ( x // control skip) = seconds
+DEMO_OPTIONS.start_head_speed = 25
 DEMO_OPTIONS.reach_head_speed = 50
 DEMO_OPTIONS.move_head_speed = 90
 DEMO_OPTIONS.retract_head_speed = 90
@@ -108,11 +114,13 @@ GT_DEMO_OPTIONS.obs_mode = "gt"  # TODO
 
 VISION_DEMO_OPTIONS = copy.deepcopy(DEMO_OPTIONS)
 VISION_DEMO_OPTIONS.obs_mode = "vision"
+VISION_DEMO_OPTIONS.start_sid = 1
+VISION_DEMO_OPTIONS.end_sid = 2
 VISION_DEMO_OPTIONS.save_first_pov_image = True
 # Debugging demo vision.
-VISION_DEMO_OPTIONS.render_obs = True
-VISION_DEMO_OPTIONS.render_frequency = 100
-VISION_DEMO_OPTIONS.use_control_skip = True
+# VISION_DEMO_OPTIONS.render_obs = True
+# VISION_DEMO_OPTIONS.render_frequency = 100
+# VISION_DEMO_OPTIONS.use_control_skip = True
 
 TEST_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
 TEST_VISION_OPTIONS.obs_mode = "vision"

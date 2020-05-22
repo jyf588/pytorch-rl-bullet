@@ -61,26 +61,34 @@ import numpy as np
 from pdb import set_trace as bp
 
 SHAPE_NAME_LIST = ["square", "box", "block", "cylinder", "ball", "sphere"]
-SHAPE_NAME_MAP = {"box": "box", "block": "box", "square": "box",
-                  "cylinder": "cylinder",
-                  "sphere": "sphere", "ball": "sphere"}
+SHAPE_NAME_MAP = {
+    "box": "box",
+    "block": "box",
+    "square": "box",
+    "cylinder": "cylinder",
+    "sphere": "sphere",
+    "ball": "sphere",
+}
 COLOR_NAME_LIST = ["red", "green", "blue", "yellow", "grey"]
 RELATION_NAME_LIST = ["right", "left", "behind", "front", "top", "on", "between"]
-RELATION_NAME_MAP = {"right": "right",
-                     "left": "left",
-                     "behind": "behind", "back": "behind",
-                     "front": "front",
-                     "top": "top", "on": "top", "above": "top",
-                     "between": "between"}
+RELATION_NAME_MAP = {
+    "right": "right",
+    "left": "left",
+    "behind": "behind",
+    "back": "behind",
+    "front": "front",
+    "top": "top",
+    "on": "top",
+    "above": "top",
+    "between": "between",
+}
 # DISAMBIGUATE relation: leftmost, rightmost
 
 
 def PlotTree(doc):
     def to_nltk_tree(node):
         if node.n_lefts + node.n_rights > 0:
-            return Tree(
-                node.orth_, [to_nltk_tree(child) for child in node.children]
-            )
+            return Tree(node.orth_, [to_nltk_tree(child) for child in node.children])
         else:
             return node.orth_
 
@@ -156,7 +164,7 @@ def NLPmod(sentence, vision_output):
     target_token = None
     reference_objects = []
     relations = []
-    relations_modify = []     # what do each relation in relations[] modifies
+    relations_modify = []  # what do each relation in relations[] modifies
     # 1 modifies verb (primary)
     # 2 modifies target obj
     # 3 modifies reference obj
@@ -176,16 +184,14 @@ def NLPmod(sentence, vision_output):
         token = queue.popleft()
 
         # if token.pos_ == "VERB":
-        if token == root_word:      # asuume it is a verb
-            print('Found the verb!', token)
+        if token == root_word:  # asuume it is a verb
+            print("Found the verb!", token)
             target_object["shape"], target_token = search_dep_tree_of_token(
                 token, SHAPE_NAME_LIST
             )
             # print(target_token.text)
             target_object["shape"] = SHAPE_NAME_MAP[target_object["shape"]]
-            target_object["color"], _ = search_dep_tree_of_token(
-                token, COLOR_NAME_LIST
-            )
+            target_object["color"], _ = search_dep_tree_of_token(token, COLOR_NAME_LIST)
 
         if token.text in RELATION_NAME_LIST:
 
@@ -235,16 +241,16 @@ def NLPmod(sentence, vision_output):
                     reference_object1["color"] = colors[0]
                     reference_object2["color"] = colors[1]
 
-                    reference_objects.append(
-                        [reference_object1, reference_object2]
-                    )
+                    reference_objects.append([reference_object1, reference_object2])
                 else:
                     reference_object = {}
 
                     reference_object["shape"], _ = search_dep_tree_of_token(
                         token, SHAPE_NAME_LIST
                     )
-                    reference_object["shape"] = SHAPE_NAME_MAP[reference_object["shape"]]
+                    reference_object["shape"] = SHAPE_NAME_MAP[
+                        reference_object["shape"]
+                    ]
                     reference_object["color"], _ = search_dep_tree_of_token(
                         token, COLOR_NAME_LIST
                     )
@@ -252,7 +258,6 @@ def NLPmod(sentence, vision_output):
 
         for child in token.children:
             queue.append(child)
-
 
     # re-order relations such that primary is at the beginning
     # second relation, assume only two relations here
@@ -333,12 +338,11 @@ def NLPmod(sentence, vision_output):
             target_ID = [target_ID[true_id]]
             print("New Reference IDs", target_ID)
 
-
         # remove ambiguity for reference obj
         # TODO: secondary relations could modify between, or modify the target object (rather than desti object)
         mult = len(reference_ID[0])
         if mult > 1 and relations[0] != "between" and not disambuiguite_target:
-            flag = [0, 0, 0, 0]         # TODO: hardcoded, at most 4 candidates
+            flag = [0, 0, 0, 0]  # TODO: hardcoded, at most 4 candidates
             if relations[1] == "right":
                 for i in range(mult):
                     if (
@@ -387,12 +391,9 @@ def NLPmod(sentence, vision_output):
                 for i in range(mult):
                     if (
                         vision_output[reference_ID[0][i]]["position"][0] > min_x
-                        and vision_output[reference_ID[0][i]]["position"][0]
-                        < max_x
-                        and vision_output[reference_ID[0][i]]["position"][1]
-                        > min_y
-                        and vision_output[reference_ID[0][i]]["position"][1]
-                        < max_y
+                        and vision_output[reference_ID[0][i]]["position"][0] < max_x
+                        and vision_output[reference_ID[0][i]]["position"][1] > min_y
+                        and vision_output[reference_ID[0][i]]["position"][1] < max_y
                     ):
                         flag[i] = 1
             print("Flag", flag)
@@ -420,7 +421,7 @@ def NLPmod(sentence, vision_output):
         if relations[0] == "right":
             target_xyz = np.asarray(
                 Vision_output[reference_ID[0][0]]["position"]
-            ) + np.array([0, -offset, 0, 0])
+            ) + np.array([0, -0.15, 0, 0])
         if relations[0] == "left":
             target_xyz = np.asarray(
                 Vision_output[reference_ID[0][0]]["position"]
@@ -428,7 +429,7 @@ def NLPmod(sentence, vision_output):
         if relations[0] == "front":
             target_xyz = np.asarray(
                 Vision_output[reference_ID[0][0]]["position"]
-            ) + np.array([-offset, 0, 0, 0])
+            ) + np.array([-0.15, 0, 0, 0])
         if relations[0] == "behind":
             target_xyz = np.asarray(
                 Vision_output[reference_ID[0][0]]["position"]
@@ -444,9 +445,7 @@ def NLPmod(sentence, vision_output):
             )
         return target_xyz
 
-    target_xyz = obtain_target_loc_coordinates(
-        reference_ID, vision_output, relations
-    )
+    target_xyz = obtain_target_loc_coordinates(reference_ID, vision_output, relations)
     print("--------")
 
     # print(target_xyz)
@@ -544,6 +543,6 @@ if __name__ == "__main__":
         "position": np.array([0.22, -0.06, 0, 0]),
     }
     Vision_output = [obj1, obj2, obj3, obj4, obj5]
-    pick_idx, dest_xy, stack_idx = NLPmod(sentence=sentence, vision_output=Vision_output)
-
-
+    pick_idx, dest_xy, stack_idx = NLPmod(
+        sentence=sentence, vision_output=Vision_output
+    )

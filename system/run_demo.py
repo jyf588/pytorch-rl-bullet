@@ -42,7 +42,7 @@ global args
 
 DEMO_COMMANDS = {
     0: [
-        "Put the green cylinder on top of the blue box.",
+        "Put the green cylinder on top of the yellow box.",
         "Then, put the red box on top of the blue cylinder.",
     ],
     1: [
@@ -50,7 +50,9 @@ DEMO_COMMANDS = {
         "Then, stack the yellow box on top of the blue cylinder.",
     ],
     2: ["Put the red block in between the blue cylinder and yellow ball."],
-    3: ["Put the blue box to the left of the green cylinder"],
+    3: [
+        "Pick up the yellow cylinder, and place it to the right of the green box that is in front of the red ball."
+    ],
 }
 
 START_ARM_Q = {
@@ -152,9 +154,19 @@ async def send_to_client(websocket, path):
             n_frames = 0
             frames_start = time.time()
             update_camera_target = False
+            is_done = None
             while 1:
                 frame_id = f"{scene_id}_{env.timestep:06}"
                 stage = env.stage
+
+                # The state is the state of the world BEFORE applying the action at the
+                # current timestep. We currently save states primarily to check for
+                # reproducibility of runs.
+                if opt.save_states:
+                    state_path = os.path.join(states_dir, f"{frame_id}.json")
+                    util.save_json(
+                        state_path, data=env.get_state(), check_override=False
+                    )
 
                 if (
                     opt.obs_mode == "vision"
@@ -163,21 +175,17 @@ async def send_to_client(websocket, path):
                 ):
                     update_camera_target = True
 
-                is_render_step = False
                 if opt.render_unity:
-                    # Modify the rendering frequency if we are using vision + policy,
-                    # and it's during the planning or placing stage.
-                    render_frequency = opt.render_frequency
-                    if args.mode != "unity_dataset":
-                        if opt.obs_mode == "vision":
-                            if env.stage in "plan":
-                                render_frequency = 1
-                            elif env.stage == "place":
-                                render_frequency = policy_opt.vision_delay
+                    is_render_step = env.timestep % opt.render_frequency == 0
+                    if opt.obs_mode == "vision":
+                        if env.stage == "plan":
+                            is_render_step = True
+                        elif env.stage == "place":
+                            min_freq = min(opt.render_frequency, env.get_place_skip())
+                            is_render_step = env.stage_ts % min_freq == 0
 
                     # Render unity and step.
-                    if env.timestep % render_frequency == 0:
-                        is_render_step = True
+                    if is_render_step:
                         u_opt = get_unity_options(args.mode, opt, env)
                         for (rend_obs, rend_place, send_image, should_step) in u_opt:
                             # Compute camera targets.
@@ -228,7 +236,7 @@ async def send_to_client(websocket, path):
                     is_done, openrave_success = env.step()
 
                 # Break out if we're done with the sequence, or it failed.
-                if is_done or not openrave_success:
+                if is_done is not None and (is_done or not openrave_success):
                     env.cleanup()
                     print(
                         f"Exp: {args.exp} \tScene ID: {scene_id} \tStage: {stage} \tTimestep: {env.timestep}\tOR success: {openrave_success}\n"
@@ -270,10 +278,13 @@ def load_vision_models():
 
 
 def get_unity_options(mode, opt, env):
+    """
+    Returns:
+        rend_obs, rend_place, send_image, should_step
+    """
     # if mode == "unity_dataset":
     #     unity_options = [(False, False, True, True)]
     assert mode != "unity_dataset"
-
     render_place = False  # deprecated
     if opt.obs_mode == "vision":
         if env.stage in ["plan", "place"]:

@@ -5,8 +5,10 @@ import os
 import pprint
 import sys
 import time
+import math
 import numpy as np
 from typing import *
+import pybullet as p
 
 import bullet2unity.interface as interface
 import bullet2unity.states
@@ -14,7 +16,6 @@ from system.dataset_loader import DatasetLoader
 from system.unity_saver import UnitySaver
 import my_pybullet_envs.utils as utils
 from ns_vqa_dart.bullet import util
-from system.run import add_cam_target_visual
 
 global args
 
@@ -27,112 +28,46 @@ def main():
 async def send_to_client(websocket, path):
     global args
 
-    np.random.seed(args.seed)
-
-    # Ensure that the unity dir exists but the captures dir does not.
-    captures_dir = os.path.join(args.unity_dir, "Captures")
-    assert os.path.exists(args.unity_dir)
-    util.delete_and_create_dir(captures_dir)
-
-    # Initialize a dataset loader.
-    loader = DatasetLoader(
-        stage=args.stage,
-        states_dir=args.states_dir,
-        start_trial_incl=args.start_trial_incl,
-        end_trial_incl=args.end_trial_incl,
-    )
-    saver = UnitySaver(
-        cam_dir=args.cam_dir, save_keys=["camera_position", "camera_orientation"],
-    )
-    # cam_target_position = [0.075, 0.2, 0.155]
-    # cam_target_position = [-0.06, 0.3, 0.0]
+    paths = [
+        os.path.join(args.states_dir, f) for f in sorted(os.listdir(args.states_dir))
+    ]
 
     start = time.time()
-    n_iter = 0
-    last_trial = None
-    while 1:
-        example_id, bullet_state = loader.get_next_state()
-
-        # No more states, so we are done.
-        if bullet_state is None:
-            break
-
-        if args.cam_version == "v1":
-            # We update every frame if trial info is not provided.
-            if args.missing_trial_info:
-                update_cam_target = True
-            else:
-                # This is the first frame of the trial if the trial of the current
-                # state is different from the last trial.
-                trial = bullet_state["trial"]
-                update_cam_target = trial != last_trial
-
-            if update_cam_target:
-                # GT index of target object is always 0.
-                target_oidx = 0
-                odicts = bullet_state["objects"]
-                # We don't need the image sent but we need unity save the first person
-                # images it generates.
-                bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
-                    version=args.cam_version,
-                    send_image=False,
-                    save_image=True,
-                    stage=args.stage,
-                    odicts=odicts,
-                    oidx=target_oidx,
-                )
-        elif args.cam_version == "v2":
-            if args.stage == "place":
-                tx_act = bullet_state["tx_act"]
-                ty_act = bullet_state["ty_act"]
-
-                tx = utils.perturb_scalar(np.random, tx_act, 0.02)
-                ty = utils.perturb_scalar(np.random, ty_act, 0.02)
-            else:
-                tx, ty = None, None
-
-            # We don't need the image sent but we need unity save the first person
-            # images it generates.
-            bullet_camera_targets = bullet2unity.states.compute_bullet_camera_targets(
-                version=args.cam_version,
-                send_image=False,
-                save_image=True,
-                stage=args.stage,
-                tx=tx,
-                ty=ty,
-            )
+    idx = 0
+    bullet_camera_targets = {}
+    while idx < len(paths):
+        path = paths[idx]
+        bullet_state = util.load_json(path)
+        example_id = f"{idx:06}"
 
         bullet_state["objects"] = assign_ids_to_objects(bullet_state["objects"])
 
-        if args.visualize_cam_debug:
-            bullet_state = add_cam_target_visual(
-                bullet_state, bullet_camera_targets[0]["position"]
-            )
-
+        # X -> Z
+        # Y -> X
+        # Z -> Y
+        # [Z, X, y]
+        # a = (time.time() % (2 * math.pi)) - math.pi
+        # bullet_state["objects"][2]["orientation"] = p.getQuaternionFromEuler([0, 0, a])
+        # bullet_state["objects"][2]["position"] = [0.0, 0.0, 0.0]
         # Encode, send, receive, and decode.
         message = interface.encode(
             state_id=example_id,
             bullet_state=bullet_state,
             bullet_animation_target=None,
             bullet_cam_targets=bullet_camera_targets,
+            head_speed=0,
+            save_third_pov_image=False,
         )
         await websocket.send(message)
         reply = await websocket.recv()
         data = interface.decode(
             example_id, reply, bullet_cam_targets=bullet_camera_targets
         )
-        saver.save(example_id, data)
 
-        n_iter += 1
-        avg_iter_time = (time.time() - start) / n_iter
-        print(f"Average iteration time: {avg_iter_time:.2f}")
+        idx += 10
+        avg_iter_time = (time.time() - start) / idx
+        print(f"Idx: {idx}\tAverage iteration time: {avg_iter_time:.2f}")
 
-        # Store the current trial as the "last trial".
-        if args.cam_version == "v1":
-            if args.missing_trial_info:
-                pass
-            else:
-                last_trial = trial
     print(f"Time elapsed: {time.time() - start}")
     sys.exit(0)
 
@@ -175,50 +110,10 @@ if __name__ == "__main__":
         "--port", type=int, default=8000, help="The port of the server."
     )
     parser.add_argument(
-        "--seed", required=True, type=int, help="The random seed.",
-    )
-    parser.add_argument(
-        "--unity_dir",
-        required=True,
-        type=str,
-        help="The directory of the unity executable.",
-    )
-    parser.add_argument(
         "--states_dir",
         required=True,
         type=str,
         help="The directory of states to read from and send to client.",
-    )
-    parser.add_argument(
-        "--cam_dir",
-        required=True,
-        type=str,
-        help="The output directory to save client data to.",
-    )
-    parser.add_argument(
-        "--stage", required=True, type=str, help="The stage of the dataset.",
-    )
-    parser.add_argument(
-        "--start_trial_incl", type=int, help="The state ID to start generation at.",
-    )
-    parser.add_argument(
-        "--end_trial_incl", type=int, help="The state ID to end generation at.",
-    )
-    parser.add_argument(
-        "--cam_version",
-        required=True,
-        type=str,
-        help="The version of camera target algorithm to use.",
-    )
-    parser.add_argument(
-        "--visualize_cam_debug",
-        action="store_true",
-        help="Whether to visualize cam target for debugging.",
-    )
-    parser.add_argument(
-        "--missing_trial_info",
-        action="store_true",
-        help="Whether it's missing trial info in the states, so we recompute / update cam target every frame.",
     )
     args = parser.parse_args()
     main()

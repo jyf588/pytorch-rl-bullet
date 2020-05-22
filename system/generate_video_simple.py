@@ -17,8 +17,9 @@ def main(args: argparse.Namespace):
 
     render_frequency = 6
     speed_up_factor = 40.0 / 25
+    # speed_up_factor = 40.0 / 25 * 3
 
-    command = f'ffmpeg -i {args.src_dir}/%06d.png -frames:v 25000 -filter:v "setpts=PTS/{speed_up_factor},fps={fps}" -vb 20M -vcodec libx264 -preset veryslow -y {args.dst_path}'
+    command = f'ffmpeg -i {args.src_dir}/%06d.png -frames:v 25000 -filter:v "setpts=PTS/{speed_up_factor},fps={fps}" -vb 20M -vcodec libx264 -pix_fmt yuv420p -preset veryslow -y {args.dst_path}'
     # command = f'ffmpeg -i {args.src_dir}/%06d.png -frames:v 50000 -vf "fps={fps}" -vb 20M -vcodec libx264 -preset veryslow -y {args.dst_path}'
 
     # command = f'ffmpeg -i {args.src_dir}/%06d.png -frames:v 50000 -filter:v -vb 20M -vcodec libx264 -preset veryslow -y {args.dst_path}'

@@ -25,6 +25,7 @@ STAGE2ANIMATION_Z_OFFSET = {
     "retract": 0.3,
 }
 TASK2ANIMATION_Z_OFFSET = {"place": 0.1, "stack": 0.2}
+START_HEAD_ANIMATION_TARGET = [0.25, 0.44, 0.3]
 
 
 def compute_bullet_camera_targets_for_system(opt, env, send_image, save_image):
@@ -145,12 +146,13 @@ def get_object_camera_target(bullet_odicts: List[Dict], oidx: int):
 
 
 def compute_b_ani_tar(opt, env):
-    if not opt.animate_head:
-        return None, 0
     task = env.task
     if env.stage in ["plan", "retract"]:
         b_ani_tar = None
         head_speed = opt.retract_head_speed
+    elif env.stage == "head":
+        b_ani_tar = START_HEAD_ANIMATION_TARGET
+        head_speed = opt.start_head_speed
     else:
         if env.stage in ["reach", "grasp"]:
             b_ani_tar = env.initial_obs[env.src_idx]["position"]

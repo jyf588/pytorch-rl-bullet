@@ -122,6 +122,11 @@ class DemoEnvironment:
             self.stage_list = self.stage_list[start:end]
             self.duration_list = self.duration_list[start:end]
 
+        # Prepend a head moving stage if requested.
+        if self.opt.start_head_ani:
+            self.stage_list = ["head"] + self.stage_list
+            self.duration_list = [self.opt.start_head_steps] + self.duration_list
+
         self.duration_list = np.cumsum(self.duration_list)
         self.n_total_steps = self.duration_list[-1]
 
@@ -231,6 +236,8 @@ class DemoEnvironment:
         step_succeeded = True
         if self.stage == "plan":
             self.plan()
+        elif self.stage == "head":
+            self.start_head()
         elif self.stage == "reach":
             step_succeeded = self.execute_plan(
                 stage=self.stage,
@@ -596,6 +603,9 @@ class DemoEnvironment:
 
         return trajectory
 
+    def start_head(self):
+        self.w.step()
+
     def grasp(self, stage_ts: int):
         if stage_ts == 0:
             self.w.robot_env.change_control_skip_scaling(
@@ -632,10 +642,7 @@ class DemoEnvironment:
                 c_skip=self.policy_opt.place_control_skip
             )
 
-        if self.opt.use_control_skip:
-            skip = self.policy_opt.vision_delay
-        else:
-            skip = self.policy_opt.vision_delay * self.policy_opt.place_control_skip
+        skip = self.get_place_skip()
         # Update the observation only every `vision_delay` steps.
         if stage_ts % skip == 0:
             self.obs = self.get_observation()  # this is vision obs
@@ -664,6 +671,13 @@ class DemoEnvironment:
             ),
             timestep=self.timestep,
         )
+
+    def get_place_skip(self):
+        if self.opt.use_control_skip:
+            skip = self.policy_opt.vision_delay
+        else:
+            skip = self.policy_opt.vision_delay * self.policy_opt.place_control_skip
+        return skip
 
     def execute_plan(
         self, stage: str, stage_ts: int, restore_fingers: Optional[bool] = False,
@@ -701,7 +715,7 @@ class DemoEnvironment:
             tar_arm_q = self.trajectory[stage_ts]
 
         if self.policy_opt.use_arm_blending and stage != "reach":
-            blend_end = 0.3
+            blend_end = 0.6
             proj_arm_q = (
                 self.init_arm_q + (stage_ts + 1) * self.init_arm_dq * self.bullet_opt.ts
             )
@@ -764,7 +778,7 @@ class DemoEnvironment:
         )
 
         self.last_tar_arm_q = tar_arm_q
-        self.w.step(timestep=self.timestep)
+        self.w.step()
         return True
 
     def get_grasp_observation(self) -> torch.Tensor:

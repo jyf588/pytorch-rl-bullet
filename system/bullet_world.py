@@ -328,7 +328,7 @@ class BulletWorld:
         fin_dq = self.robot_env.robot.get_q_dq(self.robot_env.robot.fin_actdofs)[1]
         return arm_dq, fin_dq
 
-    def step(self, timestep: int):
+    def step(self):
         self.bc.stepSimulation()
         time.sleep(self.opt.ts)
 
