@@ -19,7 +19,7 @@ import system.options
 import system.openrave
 import bullet2unity.states
 import scene.util as scene_util
-from states_env import StatesEnv
+# from states_env import StatesEnv
 import scene.generate as scene_gen
 from system.env import DemoEnvironment
 import my_pybullet_envs.utils as utils
@@ -53,6 +53,13 @@ DEMO_COMMANDS = {
     3: [
         "Pick up the yellow cylinder, and place it to the right of the green box that is in front of the red ball."
     ],
+    # 3: ["Put the red cylinder on the green cylinder."],
+    # 3: ["Put the red box on the green cylinder."],
+    4: ["Put the red box on the green cylinder."],
+    5: ["Put the blue ball on top of the red box."],
+    # 2: ["Put the red cylinder in between the blue cylinder and yellow ball."],
+    6: ["Pick up the red cylinder, and place it between the blue cylinder and yellow ball."],
+    7: ["Put the red cylinder on the green cylinder."],
 }
 
 START_ARM_Q = {
@@ -60,6 +67,10 @@ START_ARM_Q = {
     1: np.array([0.0] * 7),
     2: np.array([0.0] * 7),
     3: np.array([0.0] * 7),
+    4: np.array([0.0] * 7),
+    5: np.array([-0.238, 0.509, -0.255, -2.115, -0.743, 0.132, -0.209]),
+    6: np.array([0.0] * 7),
+    7: np.array([0.0] * 7),
 }
 
 
