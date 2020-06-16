@@ -8,6 +8,7 @@ import sys
 from tqdm import tqdm
 from typing import *
 from my_pybullet_envs import utils
+from state_saver import StateSaver
 
 import numpy as np
 import torch
@@ -37,6 +38,8 @@ homedir = os.path.expanduser("~")
 # frame skip
 # vision delay
 
+# state_saver = StateSaver(out_dir="/home/yifengj/try")
+
 """Parse arguments"""
 sys.path.append("a2c_ppo_acktr")
 parser = argparse.ArgumentParser(description="RL")
@@ -65,7 +68,7 @@ ADD_SURROUNDING_OBJS = True
 LONG_MOVE = bool(args.long_move)
 SURROUNDING_OBJS_MAX_NUM = 4
 
-ADD_WHITE_NOISE = True
+ADD_WHITE_NOISE = False
 RENDER = bool(args.render)
 
 CLOSE_THRES = 0.25
@@ -73,7 +76,7 @@ CLOSE_THRES = 0.25
 NUM_TRIALS = 300
 
 GRASP_END_STEP = 35
-PLACE_END_STEP = 70
+PLACE_END_STEP = 55
 
 INIT_NOISE = True
 DET_CONTACT = 0  # 0 false, 1 true
@@ -85,6 +88,8 @@ OBJ_MASS = 3.5
 
 IS_CUDA = True
 DEVICE = "cuda" if IS_CUDA else "cpu"
+
+ITER = None
 
 if USE_GV5:
     GRASP_PI = "0313_2_n_25_45"
@@ -109,9 +114,8 @@ else:
 
         if ADD_PLACE_STACK_BIT:
             GRASP_PI = "0510_0_n_25_45"
-            GRASP_DIR = "./trained_models_%s/ppo/" % "0510_0_n"     # 0514_1 / 3
-
-            PLACE_PI = "0510_0_n_place_0510_0"
+            GRASP_DIR = "./trained_models_%s/ppo/" % "0510_0_n"
+            PLACE_PI = "0510_0_n_place_0510_0"          # 68/83
             PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
     else:
         GRASP_PI = "0411_0_n_25_45"
@@ -168,7 +172,7 @@ def planning(trajectory, retract_stage=False):
         if retract_stage:
             proj_arm_q = init_arm_q + (idx+1) * init_arm_dq * utils.TS
             blending = np.clip(
-                idx / (len(trajectory) * 0.8), 0.0, 1.0
+                idx / (len(trajectory) * 0.6), 0.0, 1.0
             )
             tar_arm_q = tar_arm_q * blending + proj_arm_q * (1 - blending)
 
@@ -240,6 +244,7 @@ def planning(trajectory, retract_stage=False):
 
         for _ in range(1):
             p.stepSimulation()
+            # state_saver.save_state()
         if DUMMY_SLEEP:
             time.sleep(utils.TS * 0.6)
 
@@ -297,6 +302,8 @@ def sample_obj_dict(is_thicker=False, whole_table_top=False):
         "mu": OBJ_MU,
     }
 
+    # color_dict = {0:"red", 1:"yellow", 2:"blue", 3:"green"}
+    # obj_dict["color"] = color_dict[np.random.randint(3)]
     if obj_dict["shape"] == "box":
         obj_dict["radius"] *= 0.8
     obj_dict["position"][2] = obj_dict["height"] / 2.0
@@ -322,11 +329,13 @@ def load_obj_and_construct_state(obj_dicts_list):
     obj_dicts_list[0]["color"] = "red"
     topobj_id = utils.create_sym_prim_shape_helper_new(obj_dicts_list[0])
     state[topobj_id] = obj_dicts_list[0]
-    # # TODO:tmp
+    # # irregular objects
+    # obj_dicts_list[0]['position'][2] = 0.0
+    # obj_dicts_list[0]['shape'] = 'prism'
     # obj_pos = obj_dicts_list[0]['position']
-    # obj_pos[2] = 0.0
+    # # obj_pos[2] = 0.0
     # topobj_id = p.loadURDF("my_pybullet_envs/assets/cone.urdf", basePosition=obj_pos,
-    #                        baseOrientation=obj_dicts_list[0]['orientation'])
+    #                        baseOrientation=obj_dicts_list[0]['orientation'], useFixedBase=0)
     # p.changeDynamics(topobj_id, -1, lateralFriction=OBJ_MU)
     # state[topobj_id] = obj_dicts_list[0]
 
@@ -405,9 +414,9 @@ def get_stacking_obs(
     """
 
     top_pos, top_quat = p.getBasePositionAndOrientation(top_oid)
-    # # TODO: hack
+    # # # irregular objects
     # top_pos = list(top_pos)
-    # top_pos[2] += 0.07
+    # top_pos[2] += 0.05
     if btm_oid is None:
         btm_pos, btm_quat = [0.0, 0, 0], [0.0, 0, 0, 1]
     else:
@@ -450,7 +459,7 @@ openrave_success_count = 0
 """Pre-calculation & Loading"""
 g_actor_critic, _, _, _ = policy.load(GRASP_DIR, GRASP_PI_ENV_NAME, IS_CUDA)
 p_actor_critic, _, recurrent_hidden_states, masks = policy.load(
-    PLACE_DIR, PLACE_PI_ENV_NAME, IS_CUDA
+    PLACE_DIR, PLACE_PI_ENV_NAME, IS_CUDA, ITER
 )
 
 o_pos_pf_ave, o_quat_pf_ave, _ = utils.read_grasp_final_states_from_pickle(GRASP_PI)
@@ -584,6 +593,17 @@ for trial in range(NUM_TRIALS):
     objs, top_id, btm_id = load_obj_and_construct_state(all_dicts)
     OBJECTS = construct_obj_array_for_openrave(all_dicts)
 
+    # state_saver.track(
+    #     trial=trial,
+    #     task="stack",
+    #     tx_act=0.0,
+    #     ty_act=0.0,
+    #     tx=0.0,
+    #     ty=0.0,
+    #     odicts=objs,
+    #     robot_id=env_core.robot.arm_id,
+    # )
+
     """Prepare for grasping. Reach for the object."""
 
     print(f"Qreach: {Qreach}")
@@ -593,7 +613,7 @@ for trial in range(NUM_TRIALS):
         reach_save_path = homedir + "/container_data/PB_REACH.npz"
         reach_read_path = homedir + "/container_data/OR_REACH.npz"
         Traj_reach = openrave.get_traj_from_openrave_container(
-            OBJECTS, None, Qreach, reach_save_path, reach_read_path
+            OBJECTS, np.array([0.0] * 7), Qreach, reach_save_path, reach_read_path
         )
 
         if Traj_reach is None or len(Traj_reach) == 0:
@@ -611,12 +631,19 @@ for trial in range(NUM_TRIALS):
     g_obs = get_grasp_policy_obs_tensor(g_tx, g_ty, t_half_height, is_box)
 
     """Grasp"""
+    env_core.change_control_skip_scaling(           # demo uses 12
+        c_skip=GRASPING_CONTROL_SKIP
+    )
     control_steps = 0
     for i in range(GRASP_END_STEP):
         with torch.no_grad():
             value, action, _, recurrent_hidden_states = g_actor_critic.act(
                 g_obs, recurrent_hidden_states, masks, deterministic=args.det
             )
+
+        for i in range(GRASPING_CONTROL_SKIP):
+            env_core.step_sim(policy.unwrap_action(action, IS_CUDA))
+            # state_saver.save_state()
 
         env_core.step(policy.unwrap_action(action, IS_CUDA))
 
@@ -726,6 +753,9 @@ for trial in range(NUM_TRIALS):
     # input("ready to place")
 
     """Execute placing"""
+    env_core.change_control_skip_scaling(
+        c_skip=PLACING_CONTROL_SKIP
+    )
     print(f"Executing placing...")
     for i in tqdm(range(PLACE_END_STEP)):
         with torch.no_grad():
@@ -733,7 +763,10 @@ for trial in range(NUM_TRIALS):
                 p_obs, recurrent_hidden_states, masks, deterministic=args.det
             )
 
-        env_core.step(policy.unwrap_action(action, IS_CUDA))
+        for i in range(PLACING_CONTROL_SKIP):       # TODO: hardcoded 6
+            env_core.step_sim(policy.unwrap_action(action, IS_CUDA))
+            # state_saver.save_state()
+        # env_core.step(policy.unwrap_action(action, IS_CUDA))
 
         if (i + 1) % VISION_DELAY == 0:
             l_t_pos, l_t_up, l_b_pos, l_b_up, l_t_half_height = (
@@ -764,11 +797,10 @@ for trial in range(NUM_TRIALS):
     if WITH_RETRACT:
         print(f"Starting release trajectory")
         Qretract_init = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
-        # Qretract_end = [-0.23763184568016021, 0.5088536398002119, -0.5548165106788512,
-        # -2.1150681944827617, -0.7430404958659877, 0.1319044308197112, -1.22087799385173826]
-        Qretract_end = [-0.238, 0.349, -0.755,
-                        -1.915, -0.743, 0.132,
-                        -1.021]
+        # Qretract_end = [-0.238, 0.349, -0.755,
+        #                 -1.915, -0.743, 0.132,
+        #                 -1.021]
+        Qretract_end = [0.0] * 7
 
         retract_save_path = homedir + "/container_data/PB_RETRACT.npz"
         retract_read_path = homedir + "/container_data/OR_RETRACT.npz"
@@ -784,24 +816,6 @@ for trial in range(NUM_TRIALS):
             print("*******", success_count * 1.0 / (trial + 1))
             continue  # retracting failed
         else:
-
-            # def powspace(start, stop, power, num):
-            #     start = np.power(start, 1 / float(power))
-            #     stop = np.power(stop, 1 / float(power))
-            #     return np.power(np.linspace(start, stop, num=num), power)
-
-            from scipy import interpolate       # TODO: can also do this on openrave side
-            n = 400  # interpolated trajectory resolution
-            end = 300
-            t = np.arange(0, end, 1)
-            T = np.linspace(0, end - 1, n - 1)
-            # T = powspace(0, end-1, 1.3, n - 1)
-            Traj_I = np.zeros((n - 1, 7))  # TODO
-            for i in range(7):
-                f = interpolate.interp1d(t, Traj_reach[:end, i], kind="quadratic")
-                Traj_I[:, i] = f(T)
-            Traj_reach = np.concatenate((Traj_I, Traj_reach[end:]), axis=0)
-
             planning(Traj_reach, retract_stage=True)
 
     t_pos, t_quat = p.getBasePositionAndOrientation(top_id)
