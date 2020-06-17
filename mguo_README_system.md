@@ -10,6 +10,8 @@ conda activate dash
 export PYTHONPATH=.
 ```
 
+Also ensure that you are running everything from the `pytorch-rl-bullet` branch.
+
 ## System
 
 ### Setup
