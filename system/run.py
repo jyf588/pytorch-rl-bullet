@@ -369,7 +369,7 @@ if __name__ == "__main__":
         help="The hostname of the server.",
     )
     parser.add_argument(
-        "--port", required=True, type=int, help="The port of the server."
+        "--port", type=int, default=8000, help="The port of the server."
     )
     args = parser.parse_args()
 

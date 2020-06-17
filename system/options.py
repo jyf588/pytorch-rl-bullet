@@ -29,7 +29,7 @@ def set_unity_container_cfgs(opt, port):
     unity_captures_dir = os.path.join(
         homedir, f"unity/Builds0519b/{unity_name}/Captures"
     )
-    opt.container_dir = f"/home/mguo/container_data_{port}"
+    # opt.container_dir = os.path.join(homedir, f"container_data_{port}")
     opt.unity_captures_dir = unity_captures_dir
     return opt
 
@@ -70,9 +70,9 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     policy_id="0411",  # [0404, 0411, 0510]
     save_first_pov_image=False,
     save_third_pov_image=False,
-    scenes_root_dir=os.path.join(util.get_user_homedir(), "data/dash"),
-    root_outputs_dir=os.path.join(util.get_user_homedir(), "outputs/system"),
-    container_dir=None,
+    scenes_root_dir="system/data",  # os.path.join(util.get_user_homedir(), "data/dash"),
+    root_outputs_dir=os.path.join(homedir, "outputs/system"),
+    container_dir=os.path.join(homedir, "container_data"),
     unity_captures_dir=None,
     two_commands=False,
 )
