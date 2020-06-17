@@ -104,7 +104,6 @@ trained_models/
 trained_models*/
 final_states*
 log/
-baselines/
 .idea/
 .fuse_hidden*
 train_*.sh
