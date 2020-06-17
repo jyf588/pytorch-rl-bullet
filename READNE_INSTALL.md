@@ -2,31 +2,28 @@
 
 This section contains prerequisites to running the DASH system.
 
-First, clone the main repo and its submodules.
+First, clone the main repo and its submodules. (modified from https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gail and https://github.com/openai/baselines)
 ```
 git clone https://github.com/jyf588/pytorch-rl-bullet.git
+git checkout bullet_ppo
 git submodule update --init --recursive
 ```
 
 Next, create a conda environment (make sure Python >=3.6)
 ```
-conda create -n dash
+conda create -n dash python=3.6
 conda activate dash
 ```
 
 Install python packages.
 ```
-conda install pip
 pip install -r mguo_requirements.txt
 python -m spacy download en_core_web_sm
 ```
 
 OpenAI baselines:
 ```
-git clone https://github.com/openai/baselines.git
 cd baselines
-cp <path_to_pytorch_rl_bullet_repo>/baseline_patches/running_mean_std.py baselines/common/
-cp <path_to_pytorch_rl_bullet_repo>/baseline_patches/setup.py .
 pip install -e .
 ```
 
@@ -40,6 +37,7 @@ Check that PyTorch is properly installed:
 import torch, torchvision
 print(torch.__version__, torch.cuda.is_available())
 print(torch.version.cuda)
+torch.zeros(2).cuda()
 ```
 
 Make sure that your torch CUDA version printed out matches your CUDA version.
@@ -110,11 +108,21 @@ Start three separate docker containers, each in separate terminal sessions, with
 ```
 xhost +si:localuser:root
 
-# Start the first container
+# Start the first container (--name is not necessary)
 sudo docker run --gpus=all -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v <path_to_container_data_dir>:/data --name openravecont openrave-ha:v3 /bin/bash
 
-# Run this twice in separate terminal sessions, for each of the second and third containers
-sudo docker exec -it openravecont /bin/bash
+# Start the second container
+sudo docker run --gpus=all -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v <path_to_container_data_dir>:/data --name openravecont2 openrave-ha:v3 /bin/bash
+
+# Start the thrid container
+sudo docker run --gpus=all -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v <path_to_container_data_dir>:/data --name openravecont3 openrave-ha:v3 /bin/bash
+
+```
+
+Inside the running container, see if you can use Firefox and glxgears with GUI.
+```
+glxgears
+firefox
 ```
 
 Then, in each of the three containers, run the following commands:
@@ -125,18 +133,24 @@ cd /data/or_planning_scripts
 
 Finally, run the following commands in each of the three containers:
 ```
-python move_single.py 0
-python move_single.py 1
+python move_single.py 0 l
+python move_single.py 1 l
 python move_single.py 2 l
 ```
 These correspond to reach, move and retract, respectively.
 
 
 ### Troubleshooting
+If you installed cuda 9.1 before and saw errors about `nvidia-cuda-dev` when installing `nvidia-container-toolkit`:
+```
+sudo apt-get --purge remove nvidia-cuda-dev
+sudo apt autoremove
+```
+If this error:
 ```
 >>> docker: Error response from daemon: could not select device driver "" with capabilities: [[gpu]].
 ```
-Solution: https://devtalk.nvidia.com/default/topic/1061452/docker-and-nvidia-docker/could-not-select-device-driver-quot-quot-with-capabilities-gpu-/
+Check if this is done properly: https://github.com/NVIDIA/nvidia-docker#ubuntu-16041804-debian-jessiestretchbuster
 
 If you need to rebuild an image, run the following command (replace `v3` with the desired tag).
 ```
@@ -144,11 +158,6 @@ sudo docker build --no-cache -t openrave-ha:v3 .
 ```
 And make sure to restart the containers after rebuilding.
 
-Inside the running container, see if you can use Firefox and openrave with GUI.
-```
-glxgears
-firefox
-```
 
 To run openrave examples: (https://scaron.info/teaching/installing-openrave-on-ubuntu-14.04.html)
 ```
