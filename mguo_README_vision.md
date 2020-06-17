@@ -1,6 +1,4 @@
 # Vision Module
-TODO: Add vision models to Google Drive
-TODO: Add dataset to Google Drive
 
 ## Vision Datasets
 
@@ -75,20 +73,20 @@ move captures into the json folder, etc.
 ## Model Training
 
 You can train your own segmentation and vision models, or find pretrained ones
-that were used for the paper at the Google Drive link [here].
+that were used for the paper at the Google Drive link [here](https://drive.google.com/open?id=1Jcta_Ye5wG8l1traU4e414lHKOtjtssW).
 
 ### Segmentation Model
 
 Train a segmentation model on the segmentation dataset.
 
 ```
-time python ns_vqa_dart/scene_parse/detectron2/dash.py train
+python ns_vqa_dart/scene_parse/detectron2/dash.py train
 ```
 
 Check visualizations and metrics on the training set.
 
 ```
-time python ns_vqa_dart/scene_parse/detectron2/dash.py eval
+python ns_vqa_dart/scene_parse/detectron2/dash.py eval
 ```
 
 ### Attribute Network
