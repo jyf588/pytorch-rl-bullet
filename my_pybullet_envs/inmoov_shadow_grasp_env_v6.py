@@ -35,6 +35,8 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
                  warm_start_phase=False,
 
                  use_obj_heights=False,
+
+                 overwrite_size=False   # overwrite obj size from outside
                  ):
         self.renders = renders
         self.init_noise = init_noise
@@ -52,6 +54,10 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
         self.has_test_phase = has_test_phase
         self.test_start = 50
+
+        self.overwrite_size = overwrite_size
+        self.overwrite_height = 0.1
+        self.overwrite_radius = 0.05
 
         self.n_best_cand = int(n_best_cand)
 
@@ -177,8 +183,8 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         to['shape'] = utils.SHAPE_IND_MAP[shape_ind]
         to['mass'] = self.np_random.uniform(utils.MASS_MIN, utils.MASS_MAX)
         to['mu'] = self.np_random.uniform(utils.MU_MIN, utils.MU_MAX)
-        to['half_width'] = self.np_random.uniform(utils.HALF_W_MIN, utils.HALF_W_MAX)
-        to['height'] = self.np_random.uniform(utils.H_MIN, utils.H_MAX)
+        to['half_width'] = self.np_random.uniform(utils.HALF_W_MIN, utils.HALF_W_MAX) if not self.overwrite_size else self.overwrite_radius
+        to['height'] = self.np_random.uniform(utils.H_MIN, utils.H_MAX) if not self.overwrite_size else self.overwrite_height
         if to['shape'] == p.GEOM_BOX:
             to['half_width'] *= 0.8
         elif to['shape'] == p.GEOM_SPHERE:
@@ -198,6 +204,8 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         p.stepSimulation()  # TODO
 
         self.observation = self.getExtendedObservation()
+
+        self.success = True
 
         return np.array(self.observation)
 
@@ -291,10 +299,12 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         # object dropped during testing
         if top_pos[2] < (self.tz_act + 0.04) and self.timer > self.test_start * self.control_skip:
             reward += -15.
+            self.success = False
 
         #     print(self.robot.get_q_dq(range(29, 34))[0])
-
-        return self.getExtendedObservation(), reward, False, {}
+        return self.getExtendedObservation(), reward, False, {"height": self.top_obj['height'],
+                                                              "radius": self.top_obj['half_width'],
+                                                              "success": self.success}
 
     def getExtendedObservation(self):
         self.observation = self.robot.get_robot_observation(diff_tar=True)

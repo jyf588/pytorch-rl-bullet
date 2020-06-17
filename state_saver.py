@@ -106,8 +106,11 @@ class StateSaver:
         }
 
         # Save into a pickle file.
-        path = os.path.join(self.trial_dir, f"{self.sid:07}.p")
-        my_pybullet_envs.utils.save_pickle(path=path, data=state)
+        path = os.path.join(self.trial_dir, f"{self.sid:07}.json")
+        # my_pybullet_envs.utils.save_pickle(path=path, data=state)
+        import ns_vqa_dart.bullet.util as nutil
+        nutil.save_json(path=path, data=state, check_override=False)
+        # pprint.pprint(state)
         # print(f"Saved poses to: {path}")
         # print(f"trial: {self.trial}")
         self.sid += 1
