@@ -763,7 +763,7 @@ for trial in range(NUM_TRIALS):
                 p_obs, recurrent_hidden_states, masks, deterministic=args.det
             )
 
-        for i in range(PLACING_CONTROL_SKIP):       # TODO: hardcoded 6
+        for i in range(PLACING_CONTROL_SKIP):
             env_core.step_sim(policy.unwrap_action(action, IS_CUDA))
             # state_saver.save_state()
         # env_core.step(policy.unwrap_action(action, IS_CUDA))
