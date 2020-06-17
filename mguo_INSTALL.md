@@ -97,12 +97,12 @@ time sudo docker build -t openrave-ha:v3 .  # (ETA: 30 seconds)
 
 On the host machine, create a folder which we will grant container access to.
 ```
-mkdir <path_to_container_data>/container_data
+mkdir <path_to_container_data_dir>
 ```
 
 On the host machine, clone the repository containing OpenRAVE scripts we will run into the `container_data` folder we just created.
 ```
-cd <path_to_container_data>/container_data
+cd <path_to_container_data_dir>
 git clone git@github.com:jyf588/or_planning_scripts.git
 ```
 
@@ -111,7 +111,7 @@ Start three separate docker containers, each in separate terminal sessions, with
 xhost +si:localuser:root
 
 # Start the first container
-sudo docker run --gpus=all -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v <path_to_container_data>/container_data:/data --name openravecont openrave-ha:v3 /bin/bash
+sudo docker run --gpus=all -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v <path_to_container_data_dir>:/data --name openravecont openrave-ha:v3 /bin/bash
 
 # Run this twice in separate terminal sessions, for each of the second and third containers
 sudo docker exec -it openravecont /bin/bash
