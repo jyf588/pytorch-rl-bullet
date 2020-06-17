@@ -1,7 +1,7 @@
 # DASH
 
 TODO: Add Unity executable and scene dataset to github? Latest working one is Builds0519b/Linux8000
-TODO: figure out how to run unity executable from command line
+TODO: Figure out how to run unity executable from command line
 TODO: Figure out how to specify which demo to run
 TODO: Instructions on either manually defining or auto generating scene JSONs.
 TODO: Original Unity project files in case you want to change Unity code.
@@ -74,3 +74,9 @@ Here are explanations for the command line arguments for running the system:
 Occasionally if the system is interrupted in the middle of its execution, you may find
 unprocessed `.npz` files in the OpenRAVE directory that are leftover from the execution.
 Delete these files before restarting the system.
+
+## Internal Notes
+
+System datasets:
+- `system/data/demo` is a copy of `~/data/dash/demo_z0_v2`
+- `system/data/t1` is a copy of `~/data/dash/t1`
