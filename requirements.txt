@@ -1,3 +1,14 @@
-gym
+numpy
+scipy
+gym==0.14.0
 matplotlib
 pybullet
+spacy
+nltk
+cython
+opencv
+pyyaml
+packaging
+pycocotools
+tensorboardx
+h5py
