@@ -30,7 +30,7 @@ cp <path_to_pytorch_rl_bullet_repo>/baseline_patches/setup.py .
 pip install -e .
 ```
 
-Pytorch installation (>=1.4 required)
+Pytorch installation (>=1.4 required). We use CUDA 10.2 but feel free to change this.
 ```
 conda install pytorch torchvision cudatoolkit=10.2 -c pytorch
 ```
