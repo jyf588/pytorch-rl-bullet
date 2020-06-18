@@ -3,12 +3,15 @@ scipy
 gym==0.14.0
 matplotlib
 pybullet
-spacy
+spacy==2.2.3
 nltk
 cython
-opencv
+opencv-python
 pyyaml
 packaging
 pycocotools
 tensorboardx
 h5py
+ninja
+imageio
+websockets

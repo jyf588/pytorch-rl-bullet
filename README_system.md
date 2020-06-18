@@ -1,7 +1,7 @@
 # DASH
 
 Before running the following commands, follow the instructions located at 
-`mguo_INSTALL.md` to ensure that you have the necessary prerequisites installed and 
+`README_INSTALL.md` to ensure that you have the necessary prerequisites installed and 
 setup.
 
 Before running the below commands, run the following from the repo root:
@@ -16,7 +16,7 @@ Also ensure that you are running everything from the `pytorch-rl-bullet` branch.
 
 ### Setup
 
-Before running the system, make sure that OpenRAVE is running. See `mguo_INSTALL.md` for
+Before running the system, make sure that OpenRAVE is running. See `README_INSTALL.md` for
 instructions on doing so.
 
 #### Download the DASH Unity client application.
@@ -38,10 +38,13 @@ specified in `system/options.py`.
 
 ### Running the demo
 
-Start the python server, and start up the Unity client application in a separate command
-line:
+Start the python server:
 ```
 python system/run_demo.py <exp> <option_name>
+```
+And start up the Unity client application in a separate command
+line (cd to Unity application dir):
+```
 ./Linux8000.x86_64
 ```
 

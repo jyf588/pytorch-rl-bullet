@@ -65,6 +65,7 @@ def compute_trajectory(
             If we found the file but no solution was found, we return an empty
                 array.
     """
+    print("stage", stage, "container_dir", container_dir)
     name = STAGE2NAME[stage]
 
     # Clip the number of objects at the maximum allowed by OpenRAVE.

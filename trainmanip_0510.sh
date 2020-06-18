@@ -9,7 +9,7 @@
 
 grasp_env="InmoovHandGraspBulletEnv-v6"
 
-grasp_pi="0510_11_n"
+grasp_pi="0510_12_n"
 grasp_dir="trained_models_${grasp_pi}"
 samples="12000000"
 seed="10150"
@@ -18,7 +18,7 @@ r_thres="1800"
 n_trials="10000"
 
 place_env="InmoovHandPlaceBulletEnv-v9"
-place_dir="${grasp_dir}_place_0510_11"
+place_dir="${grasp_dir}_place_0510_12"
 samples_place="16000000"
 seed_place="8350"
 
