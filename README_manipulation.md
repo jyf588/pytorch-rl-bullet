@@ -3,6 +3,8 @@
 ```
 sh trainmanip_0510.sh
 ```
+For each new training, you will need to modify the grasp and place pi names to avoid overwriting previous experiments.
+
 (Make sure we understand what each command means in the shell script)
 
 ## Testing Grasping Policy only
@@ -18,7 +20,11 @@ python enjoy.py --env-name InmoovHandPlaceBulletEnv-v9 --load-dir <path to place
 ```
 
 ## Testing the whole manipulation module without language and vision
+If you modified training pi names (i.e. their storing dir), 
+open `main_sim_clean_test.py`, search for the strings containing "0510" and replace them with the grasp & place pi names in `trainmanip_0510.sh`
 ```
 sh testmanip_0510.sh
 ```
 (Make sure we understand what each command means in the shell script)
+
+The test stats will be printed in final_stats.txt, `total w/o OR` should be around 80% to 90% to mean policy being good enough; if they are not, change render from 0 to 1 in the previous test script to see if you can observe problems from bullet GUI:
