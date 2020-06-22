@@ -250,7 +250,10 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
         top_xy_ideal = np.array([self.tx_act, self.ty_act])
         xy_dist = np.linalg.norm(top_xy_ideal - np.array(top_pos[:2]))
-        reward += -np.minimum(xy_dist, 0.4) * 12.0
+        reward += -np.minimum(xy_dist, 0.4) * 6.0
+
+        vel_palm = np.linalg.norm(self.robot.get_link_v_w(self.robot.ee_id)[0])
+        reward += -vel_palm * 1.0
 
         for i in self.robot.fin_tips[:4]:
             tip_pos = p.getLinkState(self.robot.arm_id, i)[0]
