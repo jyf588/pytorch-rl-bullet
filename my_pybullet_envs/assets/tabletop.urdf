@@ -1,5 +1,10 @@
 <?xml version="1.0" ?>
 <robot name="tabletop">
+
+  <material name="black">
+    <color rgba="0.0 0.0 0.0 1.0"/>
+  </material>
+
   <link name="baseLink">
     <visual>
       <geometry>

@@ -1,4 +1,4 @@
-from .inmoov_shadow_hand_v2 import InmoovShadowNew
+from .inmoov_shadow_hand_v2_left import InmoovShadowNew
 
 import pybullet as p
 import time

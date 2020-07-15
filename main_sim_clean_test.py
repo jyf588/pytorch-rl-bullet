@@ -143,6 +143,14 @@ VISION_DELAY = 2
 PLACING_CONTROL_SKIP = 6
 GRASPING_CONTROL_SKIP = 6
 
+def switchDirections(target_list):
+    for i in range(len(target_list)):
+        # 5th joint ignored in urdf
+        if i not in (1, 3, 5, 6):
+            target_list[i] *= -1
+
+    return target_list
+
 
 def planning(trajectory, retract_stage=False):
     # TODO: total traj length 300+5 now
@@ -168,6 +176,8 @@ def planning(trajectory, retract_stage=False):
             tar_arm_q = trajectory[-1]
         else:
             tar_arm_q = trajectory[idx]
+
+        #tar_arm_q = switchDirections(tar_arm_q)
 
         if retract_stage:
             proj_arm_q = init_arm_q + (idx+1) * init_arm_dq * utils.TS
@@ -312,6 +322,7 @@ def sample_obj_dict(is_thicker=False, whole_table_top=False):
 
 
 def load_obj_and_construct_state(obj_dicts_list):
+
     state = {}
     # load surrounding first
     for idx in range(2, len(obj_dicts_list)):
@@ -527,6 +538,7 @@ for trial in range(NUM_TRIALS):
         robot = InmoovShadowNew(
             init_noise=False, timestep=utils.TS, np_random=np.random,
         )
+
         Qreach = utils.get_n_optimal_init_arm_qs(
             robot,
             utils.PALM_POS_OF_INIT,
@@ -589,6 +601,9 @@ for trial in range(NUM_TRIALS):
     #     -2.1150681944827617, -0.7430404958659877, 0.1319044308197112, -1.22087799385173826]
     # env_core.robot.reset_with_certain_arm_q(Qreach)
     # input("press enter")
+
+    #for i in range(len(all_dicts)):
+        #all_dicts[i]["position"][1] *= -1
 
     objs, top_id, btm_id = load_obj_and_construct_state(all_dicts)
     OBJECTS = construct_obj_array_for_openrave(all_dicts)

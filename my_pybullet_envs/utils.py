@@ -59,6 +59,7 @@ Y_MIN = -0.3
 Y_MAX = 0.7
 
 TABLE_OFFSET = [0.1, 0.2, 0.0]
+#TABLE_OFFSET = [0.1, 0.2, 0.0]
 # TODO: during training, make table a bit thicker/higher?
 
 BULLET_CONTACT_ITER = 200

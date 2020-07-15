@@ -1,4 +1,4 @@
-## Training Grasping and Stacking/Placing policies:
+cl## Training Grasping and Stacking/Placing policies:
 
 ```
 sh trainmanip_0510.sh

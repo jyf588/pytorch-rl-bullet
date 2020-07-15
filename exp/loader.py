@@ -88,13 +88,15 @@ class SetLoader:
             util.save_pickle(path=path, data=scene)
 
     def get_scene_ids(self) -> List:
-        scene_ids = sorted([name.split(".")[0] for name in os.listdir(self.scenes_dir)])
+        scene_ids = sorted([name.split(".")[0]
+                            for name in os.listdir(self.scenes_dir)])
         return scene_ids
 
     def load_id2scene(self) -> Dict:
         id2scene = {}
         for scene_id in self.get_scene_ids():
-            scene = util.load_pickle(path=self.get_scene_path(scene_id=scene_id))
+            scene = util.load_pickle(
+                path=self.get_scene_path(scene_id=scene_id))
             id2scene[scene_id] = scene
         return id2scene
 
@@ -116,7 +118,8 @@ class SetLoader:
 
     def get_frame_path(self, key: str, scene_id: int, frame_id: int):
         path = os.path.join(
-            self.get_key_dir(key=key), f"{scene_id:04}", f"{frame_id:04}.{KEY2EXT[key]}"
+            self.get_key_dir(
+                key=key), f"{scene_id:04}", f"{frame_id:04}.{KEY2EXT[key]}"
         )
         return path
 
@@ -135,7 +138,8 @@ class SetLoader:
         for k in ["cam", "masks", "img"]:
             paths = []
             for (scene_id, frame_id) in scene_frame_ids:
-                path = self.get_frame_path(key=k, scene_id=scene_id, frame_id=frame_id)
+                path = self.get_frame_path(
+                    key=k, scene_id=scene_id, frame_id=frame_id)
                 paths.append(path)
             k2paths[k] = paths
             if n_examples is None:
@@ -154,7 +158,8 @@ class SceneLoader:
         self.states_dir = os.path.join(set_loader.set_dir, "states", scene_id)
         self.cam_dir = os.path.join(set_loader.set_dir, "cam", scene_id)
         self.rgb_dir = os.path.join(set_loader.set_dir, "rgb", scene_id)
-        self.masks_root_dir = os.path.join(set_loader.set_dir, "masks", scene_id)
+        self.masks_root_dir = os.path.join(
+            set_loader.set_dir, "masks", scene_id)
         self.detectron_masks_dir = os.path.join(
             set_loader.set_dir, "detectron_masks", scene_id
         )
@@ -234,7 +239,8 @@ class SceneLoader:
         return path
 
     def get_mask_path(self, timestep: int, oid: int):
-        path = os.path.join(self.get_masks_dir(timestep=timestep), f"{oid:02}.npy")
+        path = os.path.join(self.get_masks_dir(
+            timestep=timestep), f"{oid:02}.npy")
         return path
 
     def get_mask_paths(self, timestep: int):
