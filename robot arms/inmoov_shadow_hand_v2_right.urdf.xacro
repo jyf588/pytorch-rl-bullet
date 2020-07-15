@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+
+<robot name="inmoov" xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find inmoov_description)/urdf/config.joints.urdf.xacro" />
+  <xacro:include filename="$(find inmoov_description)/urdf/config.inertial.urdf.xacro" />
+  <xacro:include filename="$(find inmoov_description)/urdf/materials.urdf.xacro" />
+  <!-- <xacro:include filename="$(find inmoov_description)/urdf/inmoov.gazebo" /> -->
+
+  <xacro:include filename="$(find inmoov_description)/urdf/asmBase.urdf.xacro" />
+  <xacro:include filename="$(find inmoov_description)/urdf/asmTorso.urdf.xacro" />
+  <xacro:include filename="$(find inmoov_description)/urdf/asmHead.urdf.xacro" />
+  <xacro:include filename="$(find inmoov_description)/urdf/asmEye.urdf.xacro" />
+  <xacro:include filename="$(find inmoov_description)/urdf/asmFace.urdf.xacro" />
+  <xacro:include filename="$(find inmoov_description)/urdf/asmArm.urdf.xacro" />
+
+  <xacro:include filename="$(find sr_description)/materials.urdf.xacro"/>
+  <xacro:include filename="$(find sr_description)/hand/xacro/full_hand.urdf.xacro"/>
+  <!-- <xacro:include filename="$(find sr_description)/other/xacro/gazebo/gazebo.urdf.xacro"/> -->
+
+  <xacro:property name="M_PI" value="3.1415926535897931" />
+  <!-- usage: e.g. ${M_PI/4} -->
+
+  <link name="world"/>
+
+  <xacro:arm side="r" flip="1" covers="no" />
+
+  <joint name="r_shoulder_out_joint_old" type="fixed">
+   <origin rpy="0 0 0" xyz="0 0.14 0.3"/>
+   <parent link="world"/>
+   <child link="r_shoulder_base_link"/>
+  </joint>
+
+  <link name="r_hand_link" />
+
+  <joint name="r_wrist_roll_joint" type="fixed">
+   <origin rpy="${M_PI} 0 0" xyz="-0.015 0.01  -0.3"/>
+   <parent link="r_forearm_link"/>
+   <child link="r_hand_link"/>
+  </joint>
+
+  <xacro:shadowhand muscletrans="false" muscle="false" hand_type="hand_e" bio="false" bt_sp="false"
+                    ubi="false" eli="false" reflect="1.0" prefix="rh_" lf="true" parent="r_hand_link"/>
+
+</robot>
