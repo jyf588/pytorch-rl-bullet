@@ -101,7 +101,7 @@ class InmoovShadowNew:
         self.np_random = np_random
 
         self.arm_id = self.sim.loadURDF(os.path.join(currentdir,
-                                             "assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand_v2_2_left_mod.urdf"),
+                                             "assets/inmoov_ros/inmoov_description/robots/left_experimental.urdf"),
                                  list(self.base_init_pos), self.sim.getQuaternionFromEuler(list(self.base_init_euler)),
                                  flags=self.sim.URDF_USE_SELF_COLLISION | self.sim.URDF_USE_INERTIA_FROM_FILE
                                        | self.sim.URDF_USE_SELF_COLLISION_EXCLUDE_ALL_PARENTS,
@@ -277,13 +277,18 @@ class InmoovShadowNew:
         diff_arm = np.array(self.tar_arm_q) - self.get_q_dq(self.arm_dofs)[0]
         return np.linalg.norm(diff_arm)
 
-    def get_robot_observation(self, withVel=False, diff_tar=False):
+    def get_robot_observation(self, withVel=False, diff_tar=False, flipped=False):
         obs = []
 
         links = [self.ee_id] + self.fin_tips
         for link in links:
-            pos, orn = self.get_link_pos_quat(link)
-            linVel, angVel = self.get_link_v_w(link)
+            pos, orn, linVel, angVel = None, None, None, None
+            if flipped:
+                pos, orn = self.get_link_pos_quat_flipped(link)
+                linVel, angVel = self.get_link_v_w_flipped(link)
+            else:
+                pos, orn = self.get_link_pos_quat(link)
+                linVel, angVel = self.get_link_v_w(link)               
             obs.extend(pos)
             obs.extend(orn)
             if withVel:
@@ -306,13 +311,6 @@ class InmoovShadowNew:
 
         return obs
 
-    def switchDirections(self, target_list):
-        for i in range(len(target_list)):
-            # 5th joint ignored in urdf
-            if i not in (1, 3, 5, 6):
-                target_list[i] *= -1
-
-        return target_list
 
     def apply_action(self, a):
         # TODO: a is already scaled, how much to scale? decide in Env.
@@ -326,7 +324,6 @@ class InmoovShadowNew:
             self.tar_arm_q = np.clip(self.tar_arm_q, self.ll[self.arm_dofs], self.ul[self.arm_dofs])
         self.tar_fin_q += self.act[len(self.arm_dofs):]
         self.tar_fin_q = np.clip(self.tar_fin_q, self.ll[self.fin_actdofs], self.ul[self.fin_actdofs])
-        self.tar_arm_q = self.switchDirections(self.tar_arm_q)
         self.sim.setJointMotorControlArray(
             bodyIndex=self.arm_id,
             jointIndices=self.arm_dofs,
@@ -363,6 +360,19 @@ class InmoovShadowNew:
         joints_taus = np.hstack(joints_taus.flatten())
         return joints_taus
 
+    def switch_translation(self, val):
+        return (val[0], -val[1], val[2])
+
+    def switch_rotation(self, val, l_id):
+        if len(val) == 3:
+            return (-val[0], val[1], -val[2])
+        elif len(val) == 4:
+            if l_id >= 0 and l_id < 5:
+                return (-val[0], val[1], -val[2], val[3])
+            elif l_id >= 5 and l_id < 35:
+                return (-val[0], -val[1], -val[2], -val[3])
+        
+
     def get_link_pos_quat(self, l_id):
         newPos = self.sim.getLinkState(self.arm_id, l_id)[4]
         newOrn = self.sim.getLinkState(self.arm_id, l_id)[5]
@@ -371,6 +381,16 @@ class InmoovShadowNew:
     def get_link_v_w(self, l_id):
         newLinVel = self.sim.getLinkState(self.arm_id, l_id, computeForwardKinematics=1, computeLinkVelocity=1)[6]
         newAngVel = self.sim.getLinkState(self.arm_id, l_id, computeForwardKinematics=1, computeLinkVelocity=1)[7]
+        return newLinVel, newAngVel
+
+    def get_link_pos_quat_flipped(self, l_id):
+        newPos = self.switch_translation(self.sim.getLinkState(self.arm_id, l_id)[4])
+        newOrn = self.switch_rotation(self.sim.getLinkState(self.arm_id, l_id)[5], l_id)
+        return newPos, newOrn
+
+    def get_link_v_w_flipped(self, l_id):
+        newLinVel = self.switch_translation(self.sim.getLinkState(self.arm_id, l_id, computeForwardKinematics=1, computeLinkVelocity=1)[6])
+        newAngVel = self.switch_rotation(self.sim.getLinkState(self.arm_id, l_id, computeForwardKinematics=1, computeLinkVelocity=1)[7], l_id)
         return newLinVel, newAngVel
 
     def get_wrist_wrench(self):

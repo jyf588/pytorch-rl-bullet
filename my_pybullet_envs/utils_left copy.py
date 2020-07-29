@@ -50,16 +50,16 @@ H_MAX = 0.18
 # manipulable range
 TX_MIN = -0.1
 TX_MAX = 0.25
-TY_MIN = -0.1
-TY_MAX = 0.5
+TY_MIN = 0.1
+TY_MAX = -0.5
 # whole table range
 X_MIN = -0.1
 X_MAX = 0.3
-Y_MIN = -0.3
-Y_MAX = 0.7
+Y_MIN = 0.3
+Y_MAX = -0.7
 
-TABLE_OFFSET_R = [0.1, 0.2, 0.0]
-TABLE_OFFSET_L = [0.1, -2.2, 0.0]
+TABLE_OFFSET_LEFT = [0.1, -0.2, 0.0]
+TABLE_OFFSET_RIGHT = [0.1, 0.2, 0.0]
 # TODO: during training, make table a bit thicker/higher?
 
 BULLET_CONTACT_ITER = 200
@@ -216,6 +216,11 @@ def create_sym_prim_shape_helper_new(odict):
     shape = SHAPE_NAME_MAP[odict["shape"]]
     dim = to_bullet_dimension(shape, odict["radius"], odict["height"])
     if "color" in odict:
+        import pdb; pdb.set_trace()
+        l_pos = odict["position"].copy()
+        l_pos[1] = -1 * l_pos[1] - 2
+        l_or = odict["orientation"]
+        l_or = (-l_or[0], l_or[1], -l_or[2], l_or[3])
         sid = create_prim_shape(
             odict["mass"],
             shape,
@@ -225,17 +230,12 @@ def create_sym_prim_shape_helper_new(odict):
             odict["orientation"],
             COLOR2RGBA[odict["color"]],
         )
-        odict["position"][1] = -1 * odict["position"][1] - 2
-        # create_prim_shape(
-        #     odict["mass"],
-        #     shape,
-        #     dim,
-        #     odict["mu"],
-        #     odict["position"],
-        #     odict["orientation"],
-        #     COLOR2RGBA[odict["color"]],
-        # )
     else:
+        import pdb; pdb.set_trace()
+        l_pos = odict["position"].copy()
+        l_pos[1] = -1 * l_pos[1] - 2
+        l_or = odict["orientation"]
+        l_or = (-l_or[0], l_or[1], -l_or[2], l_or[3])
         sid = create_prim_shape(
             odict["mass"],
             shape,
@@ -245,40 +245,20 @@ def create_sym_prim_shape_helper_new(odict):
             odict["orientation"],
             (0.9, 0.9, 0.9, 1),
         )
-        odict["position"][1] = -1 * odict["position"][1] - 2
-        # create_prim_shape(
-        #     odict["mass"],
-        #     shape,
-        #     dim,
-        #     odict["mu"],
-        #     odict["position"],
-        #     odict["orientation"],
-        #     (0.9, 0.9, 0.9, 1),
-        # )
         # give some default white color.
     return sid
 
 
-def create_table(mu, sim=p, side="r"):
-
+def create_table(mu, sim=p):
     table_id = None
-
-    if side == "r":
-        table_id = sim.loadURDF(
-            os.path.join(currentdir, "assets/tabletop.urdf"),
-            TABLE_OFFSET_R,
-            useFixedBase=1,
-        )
-    else:
-        table_id = sim.loadURDF(
-            os.path.join(currentdir, "assets/tabletop.urdf"),
-            TABLE_OFFSET_L,
-            useFixedBase=1,
-        )
+    table_id = sim.loadURDF(
+        os.path.join(currentdir, "assets/tabletop.urdf"),
+        TABLE_OFFSET_LEFT,
+        useFixedBase=1,
+    )
     sim.changeVisualShape(table_id, -1, rgbaColor=COLOR2RGBA["grey"])
     sim.changeDynamics(table_id, -1, lateralFriction=mu)
     return table_id
-
 
 
 def to_bullet_dimension(shape, half_width, height):

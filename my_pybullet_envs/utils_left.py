@@ -18,8 +18,7 @@ PALM_EULER_OF_INIT = [1.8, -1.57, 0]
 
 SHAPE_IND_MAP = {-1: p.GEOM_SPHERE, 0: p.GEOM_CYLINDER, 1: p.GEOM_BOX}
 SHAPE_IND_TO_NAME_MAP = {-1: "sphere", 0: "cylinder", 1: "box"}
-NAME_TO_SHAPE_IND_MAP = {name: shape_ind for shape_ind,
-                         name in SHAPE_IND_TO_NAME_MAP.items()}
+NAME_TO_SHAPE_IND_MAP = {name: shape_ind for shape_ind, name in SHAPE_IND_TO_NAME_MAP.items()}
 SHAPE_NAME_MAP = {
     "sphere": p.GEOM_SPHERE,
     "cylinder": p.GEOM_CYLINDER,
@@ -59,8 +58,8 @@ X_MAX = 0.3
 Y_MIN = -0.3
 Y_MAX = 0.7
 
-TABLE_OFFSET_R = [0.1, 0.2, 0.0]
-TABLE_OFFSET_L = [0.1, -2.2, 0.0]
+TABLE_OFFSET = [0.1, -0.2, 0.0]
+#TABLE_OFFSET = [0.1, 0.2, 0.0]
 # TODO: during training, make table a bit thicker/higher?
 
 BULLET_CONTACT_ITER = 200
@@ -216,74 +215,40 @@ def create_sym_prim_shape_helper_new(odict):
     # where shape and color are their names, and half_width replaced with radius
     shape = SHAPE_NAME_MAP[odict["shape"]]
     dim = to_bullet_dimension(shape, odict["radius"], odict["height"])
+    pos = odict["position"]
+    pos[1] = -pos[1]
+    orn = odict["orientation"]
+    orn = (-orn[0], orn[1], -orn[2], orn[3])
     if "color" in odict:
-        import pdb; pdb.set_trace()
         sid = create_prim_shape(
             odict["mass"],
             shape,
             dim,
             odict["mu"],
-            odict["position"],
-            odict["orientation"],
-            COLOR2RGBA[odict["color"]],
-        )
-        l_pos = odict["position"].copy()
-        l_pos[1] = -1 * l_pos[1] - 2
-        l_or = odict["orientation"]
-        l_or = (-l_or[0], l_or[1], -l_or[2], l_or[3])
-        create_prim_shape(
-            odict["mass"],
-            shape,
-            dim,
-            odict["mu"],
-            l_pos,
-            l_or,
+            pos,
+            orn,
             COLOR2RGBA[odict["color"]],
         )
     else:
-        import pdb; pdb.set_trace()
         sid = create_prim_shape(
             odict["mass"],
             shape,
             dim,
             odict["mu"],
-            odict["position"],
-            odict["orientation"],
-            (0.9, 0.9, 0.9, 1),
-        )
-        l_pos = odict["position"].copy()
-        l_pos[1] = -1 * l_pos[1] - 2
-        l_or = odict["orientation"]
-        l_or = (-l_or[0], l_or[1], -l_or[2], l_or[3])
-        create_prim_shape(
-            odict["mass"],
-            shape,
-            dim,
-            odict["mu"],
-            l_pos,
-            l_or,
+            pos,
+            orn,
             (0.9, 0.9, 0.9, 1),
         )
         # give some default white color.
     return sid
 
 
-def create_table(mu, sim=p, side="r"):
-
-    table_id = None
-
-    if side == "r":
-        table_id = sim.loadURDF(
-            os.path.join(currentdir, "assets/tabletop.urdf"),
-            TABLE_OFFSET_R,
-            useFixedBase=1,
-        )
-    else:
-        table_id = sim.loadURDF(
-            os.path.join(currentdir, "assets/tabletop.urdf"),
-            TABLE_OFFSET_L,
-            useFixedBase=1,
-        )
+def create_table(mu, sim=p):
+    table_id = sim.loadURDF(
+        os.path.join(currentdir, "assets/tabletop.urdf"),
+        TABLE_OFFSET,
+        useFixedBase=1,
+    )
     sim.changeVisualShape(table_id, -1, rgbaColor=COLOR2RGBA["grey"])
     sim.changeDynamics(table_id, -1, lateralFriction=mu)
     return table_id
@@ -326,8 +291,7 @@ def get_n_optimal_init_arm_qs(
     arm_qs_costs = []
     ref = np.array([0.0] * 3 + [-1.57] + [0.0] * 3)
     for ind, cand_quat in enumerate(INIT_PALM_CANDIDATE_QUATS):
-        _, cand_quat = p.multiplyTransforms([0., 0, 0], list(
-            cand_quat), [0., 0, 0], list(desired_obj_quat))
+        _, cand_quat = p.multiplyTransforms([0., 0, 0], list(cand_quat), [0., 0, 0], list(desired_obj_quat))
         p_pos, p_quat = p.multiplyTransforms(
             desired_obj_pos, cand_quat, p_pos_of, p_quat_of
         )

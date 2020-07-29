@@ -86,7 +86,7 @@ FLOOR_MU = 1.0
 HAND_MU = 1.0
 OBJ_MASS = 3.5
 
-IS_CUDA = True
+IS_CUDA = False
 DEVICE = "cuda" if IS_CUDA else "cpu"
 
 ITER = None
@@ -143,17 +143,6 @@ VISION_DELAY = 2
 PLACING_CONTROL_SKIP = 6
 GRASPING_CONTROL_SKIP = 6
 
-def switchDirections(target_list):
-    new_list = []
-    for i in range(len(target_list)):
-        # 5th joint ignored in urdf
-        if i not in (1, 3, 5, 6):
-            new_list.append(target_list[i] * -1)
-        else:
-            new_list.append(target_list[i])
-
-    return new_list
-
 
 def planning(trajectory, retract_stage=False):
     # TODO: total traj length 300+5 now
@@ -180,7 +169,6 @@ def planning(trajectory, retract_stage=False):
         else:
             tar_arm_q = trajectory[idx]
 
-        #tar_arm_q = switchDirections(tar_arm_q)
 
         if retract_stage:
             proj_arm_q = init_arm_q + (idx+1) * init_arm_dq * utils.TS
@@ -200,13 +188,11 @@ def planning(trajectory, retract_stage=False):
             forces=[max_force * 5] * len(env_core.robot.arm_dofs),
         )
 
-        tar_arm_q_2 = switchDirections(tar_arm_q)
-
         p.setJointMotorControlArray(
             bodyIndex=env_core.robot.arm_id_2,
             jointIndices=env_core.robot.arm_dofs,
             controlMode=p.POSITION_CONTROL,
-            targetPositions=list(tar_arm_q_2),
+            targetPositions=list(tar_arm_q),
             targetVelocities=list(tar_arm_vel),
             forces=[max_force * 5] * len(env_core.robot.arm_dofs),
         )
@@ -262,6 +248,22 @@ def planning(trajectory, retract_stage=False):
             targetPositions=[0.0] * len(env_core.robot.fin_zerodofs),
             forces=[max_force / 4.0] * len(env_core.robot.fin_zerodofs),
         )
+
+        # left_file = None
+        # right_file = None
+
+        # if planning == "reaching":
+        #     left_file = open("./reaching.txt")
+        #     right_file = open("./reaching.txt")
+        # elif planning == "moving":
+        #     left_file = open("./reaching.txt")
+        #     right_file = open("./reaching.txt")
+        # elif planning == "retracting":
+        #     left_file = open("./reaching.txt")
+        #     right_file = open("./reaching.txt")
+
+        # left_file.write()
+        # right_file.write()
 
         diff = np.linalg.norm(
             env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0] - tar_arm_q
@@ -658,8 +660,8 @@ for trial in range(NUM_TRIALS):
 
     if WITH_REACHING:
         env_core.robot.reset_with_certain_arm_q([0.0] * 7)
-        reach_save_path = homedir + "/container_data/PB_REACH.npz"
-        reach_read_path = homedir + "/container_data/OR_REACH.npz"
+        reach_save_path = homedir + "/container_data_left/PB_REACH.npz"
+        reach_read_path = homedir + "/container_data_left/OR_REACH.npz"
         Traj_reach = openrave.get_traj_from_openrave_container(
             OBJECTS, np.array([0.0] * 7), Qreach, reach_save_path, reach_read_path
         )
@@ -720,8 +722,8 @@ for trial in range(NUM_TRIALS):
     Qmove_init = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
     print(f"Qmove_init: {Qmove_init}")
     print(f"Qdestin: {Qdestin}")
-    move_save_path = homedir + "/container_data/PB_MOVE.npz"
-    move_read_path = homedir + "/container_data/OR_MOVE.npz"
+    move_save_path = homedir + "/container_data_left/PB_MOVE.npz"
+    move_read_path = homedir + "/container_data_left/OR_MOVE.npz"
     Traj_move = openrave.get_traj_from_openrave_container(
         OBJECTS, Qmove_init, Qdestin, move_save_path, move_read_path
     )
@@ -850,8 +852,8 @@ for trial in range(NUM_TRIALS):
         #                 -1.021]
         Qretract_end = [0.0] * 7
 
-        retract_save_path = homedir + "/container_data/PB_RETRACT.npz"
-        retract_read_path = homedir + "/container_data/OR_RETRACT.npz"
+        retract_save_path = homedir + "/container_data_left/PB_RETRACT.npz"
+        retract_read_path = homedir + "/container_data_left/OR_RETRACT.npz"
 
         OBJECTS[0, :] = np.array([p_tx, p_ty, p_tz, 0.0])  # note: p_tz is 0 for placing
 

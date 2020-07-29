@@ -7,7 +7,7 @@ import os
 import sys
 from tqdm import tqdm
 from typing import *
-from my_pybullet_envs import utils
+from my_pybullet_envs import utils_left as utils
 from state_saver import StateSaver
 
 import numpy as np
@@ -23,7 +23,7 @@ import time
 import inspect
 from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import ImaginaryArmObjSession
 
-from my_pybullet_envs.inmoov_shadow_demo_env_v4 import InmoovShadowHandDemoEnvV4
+from my_pybullet_envs.inmoov_shadow_demo_env_v4_left import InmoovShadowHandDemoEnvV4
 
 from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
 
@@ -145,15 +145,6 @@ PLACING_CONTROL_SKIP = 6
 GRASPING_CONTROL_SKIP = 6
 
 
-def switchDirections(target_list):
-    for i in range(len(target_list)):
-        # 5th joint ignored in urdf
-        if i not in (1, 3, 5, 6):
-            target_list[i] *= -1
-
-    return target_list
-
-
 def planning(trajectory, retract_stage=False):
     # TODO: total traj length 300+5 now
 
@@ -178,8 +169,6 @@ def planning(trajectory, retract_stage=False):
             tar_arm_q = trajectory[-1]
         else:
             tar_arm_q = trajectory[idx]
-
-        #tar_arm_q = switchDirections(tar_arm_q)
 
         if retract_stage:
             proj_arm_q = init_arm_q + (idx+1) * init_arm_dq * utils.TS
@@ -228,6 +217,7 @@ def planning(trajectory, retract_stage=False):
             targetPositions=list(tar_fin_q),
             forces=[max_force] * len(env_core.robot.fin_actdofs),
         )
+
         p.setJointMotorControlArray(
             bodyIndex=env_core.robot.arm_id,
             jointIndices=env_core.robot.fin_zerodofs,
@@ -414,9 +404,7 @@ def is_close(obj_dict_a, obj_dict_b, dist=CLOSE_THRES):
     return (xa - xb) ** 2 + (ya - yb) ** 2 < dist ** 2
 
 
-def get_stacking_obs(
-    obj_state: dict, top_oid: int, btm_oid: int,
-):
+def get_stacking_obs(obj_state: dict, top_oid: int, btm_oid: int):
     """Retrieves stacking observations.
 
     Args:
@@ -454,6 +442,11 @@ def get_stacking_obs(
         top_half_height = utils.perturb_scalar(
             np.random, top_half_height, r=0.01)
 
+    """ Flip for left """
+    top_pos = (top_pos[0], -top_pos[1], top_pos[2])
+    btm_pos = (btm_pos[0], -btm_pos[1], btm_pos[2])
+    top_quat = (top_quat[0], -top_quat[1], -top_quat[2], top_quat[3])
+    btm_quat = (btm_quat[0], -btm_quat[1], -btm_quat[2], btm_quat[3])
 
     return top_pos, top_up, btm_pos, btm_up, top_half_height
 
@@ -536,6 +529,11 @@ for trial in range(NUM_TRIALS):
 
     """Imaginary arm session to get q_reach"""
 
+    """ Flip grasp and place """
+    """ BUG: MAY TAKE OUT """
+    # g_ty *= -1
+    # p_ty *= -1
+
     if USE_GV5:
         sess = ImaginaryArmObjSession()
         Qreach = np.array(
@@ -545,7 +543,7 @@ for trial in range(NUM_TRIALS):
         # maybe not necessary to create table and robot twice. Decide later
         desired_obj_pos = [g_tx, g_ty, 0.0]
 
-        table_id = utils.create_table(FLOOR_MU)
+        table_id = utils.create_table(FLOOR_MU, "right")
 
         robot = InmoovShadowNew(
             init_noise=False, timestep=utils.TS, np_random=np.random,
@@ -571,11 +569,11 @@ for trial in range(NUM_TRIALS):
             desired_obj_pos = [p_tx, p_ty,
                                utils.PLACE_START_CLEARANCE + utils.H_MAX]
 
-    table_id = utils.create_table(FLOOR_MU)
+    table_id = utils.create_table(FLOOR_MU, "left")
 
     robot = InmoovShadowNew(
         init_noise=False, timestep=utils.TS, np_random=np.random,)
-
+    import pdb;pdb.set_trace()
     Qdestin = utils.get_n_optimal_init_arm_qs(
         robot, p_pos_of_ave, p_quat_of_ave, desired_obj_pos, table_id
     )[0]
@@ -591,7 +589,7 @@ for trial in range(NUM_TRIALS):
     p.setTimeStep(utils.TS)
     p.setGravity(0, 0, -utils.GRAVITY)
 
-    table_id = utils.create_table(FLOOR_MU)
+    table_id = utils.create_table(FLOOR_MU, "left")
 
     env_core = InmoovShadowHandDemoEnvV4(
         np_random=np.random,
@@ -622,6 +620,11 @@ for trial in range(NUM_TRIALS):
     objs, top_id, btm_id = load_obj_and_construct_state(all_dicts)
     OBJECTS = construct_obj_array_for_openrave(all_dicts)
 
+    """ Flip Objects to pass into calculations """
+    """ BUG: May Take out """
+    # for position in OBJECTS:
+    #     position[1] *= -1
+
     # state_saver.track(
     #     trial=trial,
     #     task="stack",
@@ -639,8 +642,8 @@ for trial in range(NUM_TRIALS):
 
     if WITH_REACHING:
         env_core.robot.reset_with_certain_arm_q([0.0] * 7)
-        reach_save_path = homedir + "/container_data/PB_REACH.npz"
-        reach_read_path = homedir + "/container_data/OR_REACH.npz"
+        reach_save_path = homedir + "/container_data_left/PB_REACH.npz"
+        reach_read_path = homedir + "/container_data_left/OR_REACH.npz"
         Traj_reach = openrave.get_traj_from_openrave_container(
             OBJECTS, np.array(
                 [0.0] * 7), Qreach, reach_save_path, reach_read_path
@@ -658,10 +661,7 @@ for trial in range(NUM_TRIALS):
         env_core.robot.reset_with_certain_arm_q(Qreach)
         # input("press enter")
 
-
     g_obs = get_grasp_policy_obs_tensor(g_tx, g_ty, t_half_height, is_box)
-
-    import pdb; pdb.set_trace()
 
     """Grasp"""
     env_core.change_control_skip_scaling(           # demo uses 12
@@ -705,8 +705,8 @@ for trial in range(NUM_TRIALS):
     Qmove_init = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
     print(f"Qmove_init: {Qmove_init}")
     print(f"Qdestin: {Qdestin}")
-    move_save_path = homedir + "/container_data/PB_MOVE.npz"
-    move_read_path = homedir + "/container_data/OR_MOVE.npz"
+    move_save_path = homedir + "/container_data_left/PB_MOVE.npz"
+    move_read_path = homedir + "/container_data_left/OR_MOVE.npz"
     Traj_move = openrave.get_traj_from_openrave_container(
         OBJECTS, Qmove_init, Qdestin, move_save_path, move_read_path
     )
@@ -835,8 +835,8 @@ for trial in range(NUM_TRIALS):
         #                 -1.021]
         Qretract_end = [0.0] * 7
 
-        retract_save_path = homedir + "/container_data/PB_RETRACT.npz"
-        retract_read_path = homedir + "/container_data/OR_RETRACT.npz"
+        retract_save_path = homedir + "/container_data_left/PB_RETRACT.npz"
+        retract_read_path = homedir + "/container_data_left/OR_RETRACT.npz"
 
         # note: p_tz is 0 for placing
         OBJECTS[0, :] = np.array([p_tx, p_ty, p_tz, 0.0])

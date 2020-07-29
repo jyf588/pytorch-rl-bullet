@@ -1,4 +1,4 @@
-from .inmoov_shadow_hand_v2 import InmoovShadowNew
+from .inmoov_shadow_hand_v2_left import InmoovShadowNew
 
 import pybullet as p
 import time
@@ -6,7 +6,7 @@ import numpy as np
 import os
 import inspect
 
-from . import utils
+from . import utils_left as utils
 
 currentdir = os.path.dirname(
     os.path.abspath(inspect.getfile(inspect.currentframe()))
@@ -88,9 +88,7 @@ class InmoovShadowHandDemoEnvV4:
         self.timer += 1
 
     def get_robot_contact_obs(self):
-        self.observation = self.robot.get_robot_observation(
-            self.withVel, self.diffTar
-        )
+        self.observation = self.robot.get_robot_observation(self.withVel, self.diffTar, True)
 
         curContact = []
         for i in range(self.robot.ee_id, p.getNumJoints(self.robot.arm_id)):

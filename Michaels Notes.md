@@ -2,6 +2,29 @@
 New
 ------------
 
+# Running
+
+- python3 main_sim_clean_test_left.py --seed 1099 --test_placing 0 --long_move 1 --use_height 1 --add_place_stack_bit 1 --render 1 --sleep 1
+
+# Openrave
+(My mac)
+
+Left:
+
+sudo docker run -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/michaelhayashi/container_data_left:/data --name openravecont1 openrave-ha:v3 /bin/bash
+
+sudo docker run -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/michaelhayashi/container_data_left:/data --name openravecont2 openrave-ha:v3 /bin/bash
+
+sudo docker run -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/michaelhayashi/container_data_left:/data --name openravecont3 openrave-ha:v3 /bin/bash
+
+Right:
+
+sudo docker run -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/michaelhayashi/container_data:/data --name openravecont4 openrave-ha:v3 /bin/bash
+
+sudo docker run -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/michaelhayashi/container_data:/data --name openravecont5 openrave-ha:v3 /bin/bash
+
+sudo docker run -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/michaelhayashi/container_data:/data --name openravecont6 openrave-ha:v3 /bin/bash
+
 # Changes
 - Left Arm (Check sticky note)
 
@@ -178,20 +201,19 @@ Grasping:
 
 Whole Module without language and vision:
 - python main_sim_clean_test.py --seed 1099 --test_placing 0 --long_move 1 --use_height 0 --add_place_stack_bit 0
-- python main_sim_clean_test.py --seed 1099 --test_placing 0 --long_move 1 --use_height 1 --add_place_stack_bit 1 --render 1 --sleep 1
+- python3 main_sim_clean_test_left.py --seed 1099 --test_placing 0 --long_move 1 --use_height 1 --add_place_stack_bit 1 --render 1 --sleep 1
 
 
 #### Openrave
 
 xhost +si:localuser:mikehaya
 
-
+(Sydney)
 sudo docker run --gpus=all -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v /home/mikehaya/container_data:/data --name openravecont openrave-ha:v3 /bin/bash
 
 sudo docker run --gpus=all -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v /home/mikehaya/container_data:/data --name openravecont2 openrave-ha:v3 /bin/bash
 
 sudo docker run --gpus=all -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v /home/mikehaya/container_data:/data --name openravecont3 openrave-ha:v3 /bin/bash
-
 
 
 

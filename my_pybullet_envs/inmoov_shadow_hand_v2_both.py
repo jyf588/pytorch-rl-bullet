@@ -113,7 +113,7 @@ class InmoovShadowNew:
                                         useFixedBase=1)
 
         self.arm_id_2 = self.sim.loadURDF(os.path.join(currentdir,
-                                                       "assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand_v2_2_left_mod.urdf"),
+                                                       "assets/inmoov_ros/inmoov_description/robots/left_experimental.urdf"),
                                           list(self.base_init_pos_2), self.sim.getQuaternionFromEuler(
             list(self.base_init_euler)),
             flags=self.sim.URDF_USE_SELF_COLLISION | self.sim.URDF_USE_INERTIA_FROM_FILE
@@ -366,17 +366,6 @@ class InmoovShadowNew:
 
         return obs
 
-    def switchDirections(self, target_list):
-        new_list = []
-        for i in range(len(target_list)):
-            # 5th joint ignored in urdf
-            if i not in (1, 3, 5, 6):
-                new_list.append(target_list[i] * -1)
-            else:
-                new_list.append(target_list[i])
-
-        return new_list
-
     def apply_action(self, a):
         # TODO: a is already scaled, how much to scale? decide in Env.
         self.act = np.array(a)
@@ -398,12 +387,11 @@ class InmoovShadowNew:
             controlMode=self.sim.POSITION_CONTROL,
             targetPositions=list(self.tar_arm_q),
             forces=[self.maxForce * 3] * len(self.arm_dofs))  # TODO: wrist force limit?
-        tar_arm_q_2 = self.switchDirections(self.tar_arm_q)
         self.sim.setJointMotorControlArray(
             bodyIndex=self.arm_id_2,
             jointIndices=self.arm_dofs,
             controlMode=self.sim.POSITION_CONTROL,
-            targetPositions=list(tar_arm_q_2),
+            targetPositions=list(self.tar_arm_q),
             forces=[self.maxForce * 3] * len(self.arm_dofs))
         self.sim.setJointMotorControlArray(
             bodyIndex=self.arm_id,

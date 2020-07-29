@@ -81,7 +81,7 @@ class InmoovShadowNew:
         self.conservative_range = conservative_range
 
         self.base_init_pos = np.array([-0.30, 0.348, 0.272])
-        self.base_init_pos_2 = np.array([-0.30, -2.348, 0.272])
+        # self.base_init_pos = np.array([-0.44, 0.348, 0.272])
         self.base_init_euler = np.array([0,0,0])
         self.arm_dofs = [0, 1, 2, 3, 4, 6, 7]
         self.fin_actdofs = [9, 10, 11, 14, 15, 16, 19, 20, 21, 25, 26, 27, 29, 30, 31, 32, 33]
@@ -106,13 +106,6 @@ class InmoovShadowNew:
                                  flags=self.sim.URDF_USE_SELF_COLLISION | self.sim.URDF_USE_INERTIA_FROM_FILE
                                        | self.sim.URDF_USE_SELF_COLLISION_EXCLUDE_ALL_PARENTS,
                                  useFixedBase=1)
-
-        # self.arm_id_2 = self.sim.loadURDF(os.path.join(currentdir,
-        #                                      "assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand_v2_2_left_mod.urdf"),
-        #                          list(self.base_init_pos_2), self.sim.getQuaternionFromEuler(list(self.base_init_euler)),
-        #                          flags=self.sim.URDF_USE_SELF_COLLISION | self.sim.URDF_USE_INERTIA_FROM_FILE
-        #                                | self.sim.URDF_USE_SELF_COLLISION_EXCLUDE_ALL_PARENTS,
-        #                          useFixedBase=1)
 
         # self.print_all_joints_info()
 
@@ -292,10 +285,8 @@ class InmoovShadowNew:
             pos, orn = self.get_link_pos_quat(link)
             linVel, angVel = self.get_link_v_w(link)
             obs.extend(pos)
-            obs.extend(orn)
             if withVel:
                 obs.extend(linVel)
-                obs.extend(angVel)
 
         a_q, a_dq = self.get_q_dq(self.arm_dofs)
         obs.extend(list(a_q))
@@ -312,17 +303,6 @@ class InmoovShadowNew:
             obs.extend(list(self.tar_fin_q))
 
         return obs
-
-    def switchDirections(self, target_list):
-        new_list = []
-        for i in range(len(target_list)):
-            # 5th joint ignored in urdf
-            if i not in (1, 3, 5, 6):
-                new_list.append(target_list[i] * -1)
-            else:
-                new_list.append(target_list[i])
-
-        return new_list
 
     def apply_action(self, a):
         # TODO: a is already scaled, how much to scale? decide in Env.
@@ -341,13 +321,6 @@ class InmoovShadowNew:
             controlMode=self.sim.POSITION_CONTROL,
             targetPositions=list(self.tar_arm_q),
             forces=[self.maxForce * 3] * len(self.arm_dofs))  # TODO: wrist force limit?
-        tar_arm_q_2 = self.switchDirections(self.tar_arm_q)
-        # self.sim.setJointMotorControlArray(
-        #     bodyIndex=self.arm_id_2,
-        #     jointIndices=self.arm_dofs,
-        #     controlMode=self.sim.POSITION_CONTROL,
-        #     targetPositions=list(tar_arm_q_2),
-        #     forces=[self.maxForce * 3] * len(self.arm_dofs))
         self.sim.setJointMotorControlArray(
             bodyIndex=self.arm_id,
             jointIndices=self.fin_actdofs,
