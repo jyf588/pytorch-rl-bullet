@@ -12,7 +12,7 @@ import inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 
 
-class InmoovShadowHandGraspEnvV6NoOrientation(gym.Env):
+class InmoovShadowHandGraspEnvNoOrientationV0(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array'], 'video.frames_per_second': 50}
 
     def __init__(self,
