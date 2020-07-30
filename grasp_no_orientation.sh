@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --mem-per-cpu=2G
 #SBATCH --gres=gpu:1
-#SBATCH --partition=move-interactive
+#SBATCH --partition=move
 # only use the following if you want email notification
 #SBATCH --mail-user=mikephayashi@gmail.com
 #SBATCH --mail-type=ALL

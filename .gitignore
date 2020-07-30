@@ -112,3 +112,6 @@ train_*.sh
 figures/table1
 .vscode/
 *.mypy_cache/*
+
+# Michael - testing
+/test
