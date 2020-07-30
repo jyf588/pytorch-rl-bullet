@@ -7,7 +7,7 @@ import os
 import sys
 from tqdm import tqdm
 from typing import *
-from my_pybullet_envs import utils_left as utils
+from my_pybullet_envs import utils
 from state_saver import StateSaver
 
 import numpy as np
@@ -23,9 +23,9 @@ import time
 import inspect
 from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import ImaginaryArmObjSession
 
-from my_pybullet_envs.inmoov_shadow_demo_env_v4_left import InmoovShadowHandDemoEnvV4
+from my_pybullet_envs.inmoov_shadow_demo_env_v4_no_orientation import InmoovShadowHandDemoEnvV4
 
-from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
+from my_pybullet_envs.inmoov_shadow_hand_v2_no_orientation import InmoovShadowNew
 
 currentdir = os.path.dirname(os.path.abspath(
     inspect.getfile(inspect.currentframe())))
@@ -616,19 +616,11 @@ for trial in range(NUM_TRIALS):
     # env_core.robot.reset_with_certain_arm_q(Qreach)
     # input("press enter")
 
-
-
+    # for i in range(len(all_dicts)):
+    #all_dicts[i]["position"][1] *= -1
 
     objs, top_id, btm_id = load_obj_and_construct_state(all_dicts)
     OBJECTS = construct_obj_array_for_openrave(all_dicts)
-    """ Flip y positions """
-    for i in range(len(OBJECTS)):
-        OBJECTS[i][1] *= -1
-    """
-    {2: {'shape': 'box', 'radius': 0.035941487572190636, 'height': 0.1737531760717065, 'position': [0.1985981609573155, -0.229288899069151, 0.08687658803585326], 'orientation': (0.0, 0.0, 0.2847587652805973, 0.9585992100955799), 'mass': 3.5, 'mu': 1.0},
-    """
-    for key, value in objs.items():
-        objs[key]['position'][1] *= -1
 
     # state_saver.track(
     #     trial=trial,
@@ -647,8 +639,8 @@ for trial in range(NUM_TRIALS):
 
     if WITH_REACHING:
         env_core.robot.reset_with_certain_arm_q([0.0] * 7)
-        reach_save_path = homedir + "/container_data_left/PB_REACH.npz"
-        reach_read_path = homedir + "/container_data_left/OR_REACH.npz"
+        reach_save_path = homedir + "/container_data/PB_REACH.npz"
+        reach_read_path = homedir + "/container_data/OR_REACH.npz"
         Traj_reach = openrave.get_traj_from_openrave_container(
             OBJECTS, np.array(
                 [0.0] * 7), Qreach, reach_save_path, reach_read_path
@@ -665,6 +657,7 @@ for trial in range(NUM_TRIALS):
     else:
         env_core.robot.reset_with_certain_arm_q(Qreach)
         # input("press enter")
+
 
     g_obs = get_grasp_policy_obs_tensor(g_tx, g_ty, t_half_height, is_box)
 
@@ -710,8 +703,8 @@ for trial in range(NUM_TRIALS):
     Qmove_init = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
     print(f"Qmove_init: {Qmove_init}")
     print(f"Qdestin: {Qdestin}")
-    move_save_path = homedir + "/container_data_left/PB_MOVE.npz"
-    move_read_path = homedir + "/container_data_left/OR_MOVE.npz"
+    move_save_path = homedir + "/container_data/PB_MOVE.npz"
+    move_read_path = homedir + "/container_data/OR_MOVE.npz"
     Traj_move = openrave.get_traj_from_openrave_container(
         OBJECTS, Qmove_init, Qdestin, move_save_path, move_read_path
     )
@@ -840,8 +833,8 @@ for trial in range(NUM_TRIALS):
         #                 -1.021]
         Qretract_end = [0.0] * 7
 
-        retract_save_path = homedir + "/container_data_left/PB_RETRACT.npz"
-        retract_read_path = homedir + "/container_data_left/OR_RETRACT.npz"
+        retract_save_path = homedir + "/container_data/PB_RETRACT.npz"
+        retract_read_path = homedir + "/container_data/OR_RETRACT.npz"
 
         # note: p_tz is 0 for placing
         OBJECTS[0, :] = np.array([p_tx, p_ty, p_tz, 0.0])

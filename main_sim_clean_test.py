@@ -661,8 +661,6 @@ for trial in range(NUM_TRIALS):
 
     g_obs = get_grasp_policy_obs_tensor(g_tx, g_ty, t_half_height, is_box)
 
-    import pdb; pdb.set_trace()
-
     """Grasp"""
     env_core.change_control_skip_scaling(           # demo uses 12
         c_skip=GRASPING_CONTROL_SKIP
