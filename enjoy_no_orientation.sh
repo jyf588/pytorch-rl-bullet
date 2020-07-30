@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #SBATCH --job-name="enjoy_no_orientation"
-#SBATCH --output=enjoyp_no_orientation.out
+#SBATCH --output=enjoy_no_orientation.out
 
 #SBATCH --cpus-per-task=32
 #SBATCH --mem-per-cpu=2G
@@ -17,7 +17,7 @@ echo "SLURMTMPDIR="$SLURMTMPDIR
 echo "working directory = "$SLURM_SUBMIT_DIR
 # sample process
 
-grasp_env="InmoovHandGraspBulletEnvNoOrientation-v0-v0"
+grasp_env="InmoovHandGraspBulletEnvNoOrientation-v0"
 
 grasp_pi="0729_12_n"
 grasp_dir="trained_models_${grasp_pi}"

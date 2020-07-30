@@ -17,7 +17,7 @@ echo "SLURMTMPDIR="$SLURMTMPDIR
 echo "working directory = "$SLURM_SUBMIT_DIR
 # sample process
 
-grasp_env="InmoovHandGraspBulletEnvNoOrientation-v0-v0"
+grasp_env="InmoovHandGraspBulletEnvNoOrientation-v0"
 
 grasp_pi="0729_12_n"
 grasp_dir="trained_models_${grasp_pi}"
