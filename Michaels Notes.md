@@ -4,9 +4,9 @@ New
 
 # Running
 
-- python3 main_sim_clean_test_left.py --seed 1099 --test_placing 0 --long_move 1 --use_height 1 --add_place_stack_bit 1 --render 1 --sleep 1
+- python3 main_sim_clean_test_left_no_orientation.py --seed 1099 --test_placing 0 --long_move 1 --use_height 1 --add_place_stack_bit 1 --render 1 --sleep 1
 
-python3 main_sim_clean_test.py --seed 1099 --test_placing 0 --long_move 1 --use_height 1 --add_place_stack_bit 1 --render 1 --sleep 1
+python3 main_sim_clean_test_no_orientation.py --seed 1099 --test_placing 0 --long_move 1 --use_height 1 --add_place_stack_bit 1 --render 1 --sleep 1
 
 # Openrave
 (My mac)
@@ -26,6 +26,11 @@ sudo docker run -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/m
 sudo docker run -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/michaelhayashi/container_data:/data --name openravecont5 openrave-ha:v3 /bin/bash
 
 sudo docker run -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/michaelhayashi/container_data:/data --name openravecont6 openrave-ha:v3 /bin/bash
+
+python move_single.py 0 l
+python move_single.py 1 l
+python move_single.py 2 l
+
 
 # Changes
 - Left Arm (Check sticky note)

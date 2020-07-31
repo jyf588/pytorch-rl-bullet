@@ -444,6 +444,11 @@ def get_stacking_obs(
     top_up = utils.quat_to_upv(top_quat)
     btm_up = utils.quat_to_upv(btm_quat)
 
+    top_pos = (top_pos[0], -top_pos[1], top_pos[2])
+    btm_pos = (btm_pos[0], -btm_pos[1], btm_pos[2])
+    top_up = (top_up[0], -top_up[1], top_up[2])
+    btm_up = (btm_up[0], -btm_up[1], btm_up[2])
+
     top_half_height = obj_state[top_oid]["height"] / 2
 
     if ADD_WHITE_NOISE:
@@ -617,10 +622,10 @@ for trial in range(NUM_TRIALS):
     # input("press enter")
 
 
-
-
     objs, top_id, btm_id = load_obj_and_construct_state(all_dicts)
     OBJECTS = construct_obj_array_for_openrave(all_dicts)
+
+    # p p.getBasePositionAndOrientation(btm_id)
     """ Flip y positions """
     for i in range(len(OBJECTS)):
         OBJECTS[i][1] *= -1
@@ -629,6 +634,7 @@ for trial in range(NUM_TRIALS):
     """
     for key, value in objs.items():
         objs[key]['position'][1] *= -1
+        objs[key]['orientation'] = (-objs[key]['orientation'][0], objs[key]['orientation'][1], -objs[key]['orientation'][2], objs[key]['orientation'][3])
 
     # state_saver.track(
     #     trial=trial,
@@ -647,8 +653,8 @@ for trial in range(NUM_TRIALS):
 
     if WITH_REACHING:
         env_core.robot.reset_with_certain_arm_q([0.0] * 7)
-        reach_save_path = homedir + "/container_data/PB_REACH.npz"
-        reach_read_path = homedir + "/container_data/OR_REACH.npz"
+        reach_save_path = homedir + "/container_data_left/PB_REACH.npz"
+        reach_read_path = homedir + "/container_data_left/OR_REACH.npz"
         Traj_reach = openrave.get_traj_from_openrave_container(
             OBJECTS, np.array(
                 [0.0] * 7), Qreach, reach_save_path, reach_read_path
@@ -711,8 +717,8 @@ for trial in range(NUM_TRIALS):
     Qmove_init = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
     print(f"Qmove_init: {Qmove_init}")
     print(f"Qdestin: {Qdestin}")
-    move_save_path = homedir + "/container_data/PB_MOVE.npz"
-    move_read_path = homedir + "/container_data/OR_MOVE.npz"
+    move_save_path = homedir + "/container_data_left/PB_MOVE.npz"
+    move_read_path = homedir + "/container_data_left/OR_MOVE.npz"
     Traj_move = openrave.get_traj_from_openrave_container(
         OBJECTS, Qmove_init, Qdestin, move_save_path, move_read_path
     )
@@ -841,8 +847,8 @@ for trial in range(NUM_TRIALS):
         #                 -1.021]
         Qretract_end = [0.0] * 7
 
-        retract_save_path = homedir + "/container_data/PB_RETRACT.npz"
-        retract_read_path = homedir + "/container_data/OR_RETRACT.npz"
+        retract_save_path = homedir + "/container_data_left/PB_RETRACT.npz"
+        retract_read_path = homedir + "/container_data_left/OR_RETRACT.npz"
 
         # note: p_tz is 0 for placing
         OBJECTS[0, :] = np.array([p_tx, p_ty, p_tz, 0.0])

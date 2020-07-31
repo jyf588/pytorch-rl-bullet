@@ -758,6 +758,7 @@ for trial in range(NUM_TRIALS):
     # #####
     # # input("reset")
 
+
     """Prepare for placing"""
     env_core.change_control_skip_scaling(c_skip=PLACING_CONTROL_SKIP)
 

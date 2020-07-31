@@ -27,7 +27,7 @@ seed="10150"
 r_thres="1800"
 n_trials="10000"
 
-srun bash -c "/sailhome/mikehaya/miniconda2/envs/dash/bin/python3 ./pytorch-rl-bullet/main.py --cuda --env-name ${grasp_env} --algo ppo --use-gae --log-interval 10 \
+srun bash -c "/sailhome/mikehaya/miniconda2/envs/dash/bin/python3 ./pytorch-rl-bullet/main.py --env-name ${grasp_env} --algo ppo --use-gae --log-interval 10 \
     --num-steps 260 --num-processes 32  --lr 3e-4 --entropy-coef 0 --value-loss-coef 0.5 --ppo-epoch 10 \
     --num-mini-batch 16 --gamma 0.99 --gae-lambda 0.95 --num-env-steps ${samples} --use-linear-lr-decay \
     --use-proper-time-limits --clip-param 0.2 --save-dir ${grasp_dir} --seed ${seed} \
