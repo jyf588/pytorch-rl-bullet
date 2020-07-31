@@ -27,7 +27,7 @@ seed="10150"
 r_thres="1800"
 n_trials="10000"
 
-srun bash -c "/sailhome/mikehaya/miniconda2/envs/dash/bin/python3 ./pytorch-rl-bullet/enjoy.py --env-name ${grasp_env} --load-dir \"${grasp_dir}/ppo/\" --non-det 0 --seed=18991 \
+srun bash -c "/sailhome/mikehaya/miniconda2/envs/dash/bin/python3 ./enjoy.py --env-name ${grasp_env} --load-dir \"${grasp_dir}/ppo/\" --non-det 0 --seed=18991 \
     --renders 0 --random_top_shape 1 --cotrain_onstack_grasp 0 --grasp_floor 1 --obs_noise 1 --n_best_cand 1 \
     --has_test_phase 0 --use_obj_heights 1 \
     --save_final_states 1 --r_thres ${r_thres} --save_final_s 25 --save_final_e 45 --n_trials ${n_trials}"

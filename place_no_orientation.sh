@@ -20,7 +20,7 @@ echo "working directory = "$SLURM_SUBMIT_DIR
 grasp_pi="0729_12_n"
 grasp_dir="trained_models_${grasp_pi}"
 place_env="InmoovShadowHandPlaceEnvNoOrientation-v0"
-place_dir="${grasp_dir}_place_0510_12"
+place_dir="${grasp_dir}_place_0729_12"
 samples_place="16000000"
 seed_place="8350"
 
