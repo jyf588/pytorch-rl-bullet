@@ -47,19 +47,30 @@ HALF_W_MIN_BTM = 0.045  # only stack on larger objects
 H_MIN = 0.13
 H_MAX = 0.18
 
+# # manipulable range
+# TX_MIN = -0.1
+# TX_MAX = 0.25
+# TY_MIN = -0.2
+# TY_MAX = 0.2
+# # whole table range
+# X_MIN = -0.1
+# X_MAX = 0.3
+# Y_MIN = -0.5
+# Y_MAX = 0.5
+
 # manipulable range
 TX_MIN = -0.1
 TX_MAX = 0.25
-TY_MIN = 0.1
-TY_MAX = -0.5
+TY_MIN = -0.1
+TY_MAX = 0.5
 # whole table range
 X_MIN = -0.1
 X_MAX = 0.3
-Y_MIN = 0.3
-Y_MAX = -0.7
+Y_MIN = -0.3
+Y_MAX = 0.7
 
-TABLE_OFFSET_LEFT = [0.1, -0.2, 0.0]
-TABLE_OFFSET_RIGHT = [0.1, 0.2, 0.0]
+# TABLE_OFFSET = [0.1, 0, 0.0]
+TABLE_OFFSET = [0.1, 0.2, 0.0]
 # TODO: during training, make table a bit thicker/higher?
 
 BULLET_CONTACT_ITER = 200
@@ -216,11 +227,6 @@ def create_sym_prim_shape_helper_new(odict):
     shape = SHAPE_NAME_MAP[odict["shape"]]
     dim = to_bullet_dimension(shape, odict["radius"], odict["height"])
     if "color" in odict:
-        import pdb; pdb.set_trace()
-        l_pos = odict["position"].copy()
-        l_pos[1] = -1 * l_pos[1] - 2
-        l_or = odict["orientation"]
-        l_or = (-l_or[0], l_or[1], -l_or[2], l_or[3])
         sid = create_prim_shape(
             odict["mass"],
             shape,
@@ -231,11 +237,6 @@ def create_sym_prim_shape_helper_new(odict):
             COLOR2RGBA[odict["color"]],
         )
     else:
-        import pdb; pdb.set_trace()
-        l_pos = odict["position"].copy()
-        l_pos[1] = -1 * l_pos[1] - 2
-        l_or = odict["orientation"]
-        l_or = (-l_or[0], l_or[1], -l_or[2], l_or[3])
         sid = create_prim_shape(
             odict["mass"],
             shape,
@@ -250,10 +251,9 @@ def create_sym_prim_shape_helper_new(odict):
 
 
 def create_table(mu, sim=p):
-    table_id = None
     table_id = sim.loadURDF(
         os.path.join(currentdir, "assets/tabletop.urdf"),
-        TABLE_OFFSET_LEFT,
+        TABLE_OFFSET,
         useFixedBase=1,
     )
     sim.changeVisualShape(table_id, -1, rgbaColor=COLOR2RGBA["grey"])

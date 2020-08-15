@@ -7,7 +7,7 @@ import os
 import sys
 from tqdm import tqdm
 from typing import *
-from my_pybullet_envs import utils
+from my_pybullet_envs import utils_2_arms_b as utils
 from state_saver import StateSaver
 
 import numpy as np
@@ -23,9 +23,9 @@ import time
 import inspect
 from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import ImaginaryArmObjSession
 
-from my_pybullet_envs.inmoov_shadow_demo_env_v4 import InmoovShadowHandDemoEnvV4
+from my_pybullet_envs.inmoov_shadow_demo_env_v4_2_arms_b import InmoovShadowHandDemoEnvV4
 
-from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
+from my_pybullet_envs.inmoov_shadow_hand_v2_2_arms_b import InmoovShadowNew
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 homedir = os.path.expanduser("~")
@@ -71,7 +71,7 @@ SURROUNDING_OBJS_MAX_NUM = 4
 ADD_WHITE_NOISE = False
 RENDER = bool(args.render)
 
-CLOSE_THRES = 0.25
+CLOSE_THRES = 0.15
 
 NUM_TRIALS = 300
 
@@ -90,6 +90,8 @@ IS_CUDA = False
 DEVICE = "cuda" if IS_CUDA else "cpu"
 
 ITER = None
+
+IS_LEFT = False
 
 if USE_GV5:
     GRASP_PI = "0313_2_n_25_45"
@@ -113,9 +115,9 @@ else:
         PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
         if ADD_PLACE_STACK_BIT:
-            GRASP_PI = "0510_0_n_25_45"
-            GRASP_DIR = "./trained_models_%s/ppo/" % "0510_0_n"
-            PLACE_PI = "0510_0_n_place_0510_0"          # 68/83
+            GRASP_PI = "0729_12_n_25_45"
+            GRASP_DIR = "./trained_models_%s/ppo/" % "0729_12_n"
+            PLACE_PI = "0729_12_n_place_0729_12"          # 68/83
             PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
     else:
         GRASP_PI = "0411_0_n_25_45"
@@ -422,6 +424,15 @@ def get_stacking_obs(
     else:
         btm_pos, btm_quat = p.getBasePositionAndOrientation(btm_oid)
 
+    if IS_LEFT:
+        top_pos = (top_pos[0], -top_pos[1] + 0.348, top_pos[2])
+        btm_pos = (btm_pos[0], -btm_pos[1] + 0.348, btm_pos[2])
+        top_quat = (-top_quat[0], top_quat[1], -top_quat[2], top_quat[3])
+        btm_quat = (-btm_quat[0], btm_quat[1], -btm_quat[2], btm_quat[3])
+    else:
+        top_pos = (top_pos[0], top_pos[1] + 0.348, top_pos[2])
+        btm_pos = (btm_pos[0], btm_pos[1] + 0.348, btm_pos[2])
+
     top_up = utils.quat_to_upv(top_quat)
     btm_up = utils.quat_to_upv(btm_quat)
 
@@ -473,6 +484,8 @@ else:
     p.connect(p.DIRECT)
 
 for trial in range(NUM_TRIALS):
+
+
     """Sample two/N objects"""
 
     all_dicts = []
@@ -487,6 +500,8 @@ for trial in range(NUM_TRIALS):
             btm_dict["position"][1],
             btm_dict["height"],
         )
+
+
         t_half_height = top_dict["height"] / 2
 
         if ADD_WHITE_NOISE:
@@ -507,12 +522,21 @@ for trial in range(NUM_TRIALS):
         if is_close(top_dict, btm_dict, dist=dist):
             continue  # discard & re-sample
         else:
+            if g_ty > p_ty:
+                IS_LEFT = True
+            else:
+                IS_LEFT = False
             all_dicts = [top_dict, btm_dict]
             gen_surrounding_objs(all_dicts)
             del top_dict, btm_dict
             break
 
     """Imaginary arm session to get q_reach"""
+
+    # Change for left side
+    if IS_LEFT:
+        g_ty *= -1
+        p_ty *= -1
 
     if USE_GV5:
         sess = ImaginaryArmObjSession()
@@ -556,6 +580,10 @@ for trial in range(NUM_TRIALS):
     del table_id, robot, desired_obj_pos
     p.resetSimulation()
 
+    # Adjust for grasping and placing
+    g_ty += 0.348
+    p_ty += 0.348
+
     """Clean up the simulation, since this is only imaginary."""
 
     """Setup Bullet world."""
@@ -576,7 +604,9 @@ for trial in range(NUM_TRIALS):
         robot_mu=HAND_MU,
         control_skip=GRASPING_CONTROL_SKIP,
         sleep=DUMMY_SLEEP,
+        is_left=IS_LEFT
     )
+
     env_core.change_init_fin_q(INIT_FIN_Q)
 
     # Qreach = [-0.23763184568016021, 0.3488536398002119, -0.7548165106788512,
@@ -592,6 +622,7 @@ for trial in range(NUM_TRIALS):
 
     objs, top_id, btm_id = load_obj_and_construct_state(all_dicts)
     OBJECTS = construct_obj_array_for_openrave(all_dicts)
+
 
     # state_saver.track(
     #     trial=trial,
