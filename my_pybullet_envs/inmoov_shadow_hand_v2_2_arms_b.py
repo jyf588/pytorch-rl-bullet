@@ -81,10 +81,8 @@ class InmoovShadowNew:
         self.conservative_clip = conservative_clip
         self.conservative_range = conservative_range
 
-        self.base_init_pos = np.array([-0.30, 0, 0.272])
-        self.base_init_pos_2 = np.array([-0.30, 0, 0.272])
         # self.base_init_pos = np.array([-0.30, 0.348, 0.272])
-        # self.base_init_pos_2 = np.array([-0.30, 0.052, 0.272])
+        # self.base_init_pos_2 = np.array([-0.30, 0.348, 0.272])
         self.base_init_euler = np.array([0,0,0])
         self.arm_dofs = [0, 1, 2, 3, 4, 6, 7]
         self.fin_actdofs = [9, 10, 11, 14, 15, 16, 19, 20, 21, 25, 26, 27, 29, 30, 31, 32, 33]

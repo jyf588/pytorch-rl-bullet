@@ -114,9 +114,9 @@ else:
         PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
         if ADD_PLACE_STACK_BIT:
-            GRASP_PI = "0510_0_n_25_45"
-            GRASP_DIR = "./trained_models_%s/ppo/" % "0510_0_n"
-            PLACE_PI = "0510_0_n_place_0510_0"          # 68/83
+            GRASP_PI = "0729_12_n_25_45"
+            GRASP_DIR = "./trained_models_%s/ppo/" % "0729_12_n"
+            PLACE_PI = "0729_12_n_place_0729_12"          # 68/83
             PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
     else:
         GRASP_PI = "0411_0_n_25_45"
