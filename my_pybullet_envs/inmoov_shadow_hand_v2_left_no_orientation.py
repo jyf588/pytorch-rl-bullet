@@ -101,7 +101,7 @@ class InmoovShadowNew:
         self.np_random = np_random
 
         self.arm_id = self.sim.loadURDF(os.path.join(currentdir,
-                                             "assets/inmoov_ros/inmoov_description/robots/left_experimental.urdf"),
+                                             "assets/inmoov_ros/inmoov_description/robots/left_arm.urdf"),
                                  list(self.base_init_pos), self.sim.getQuaternionFromEuler(list(self.base_init_euler)),
                                  flags=self.sim.URDF_USE_SELF_COLLISION | self.sim.URDF_USE_INERTIA_FROM_FILE
                                        | self.sim.URDF_USE_SELF_COLLISION_EXCLUDE_ALL_PARENTS,
