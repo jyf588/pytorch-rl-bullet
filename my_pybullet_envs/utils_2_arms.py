@@ -50,8 +50,8 @@ H_MAX = 0.18
 # manipulable range
 TX_MIN = -0.1
 TX_MAX = 0.25
-TY_MIN = -0.2
-TY_MAX = 0.2
+TY_MIN = -0.1
+TY_MAX = 0.5
 # whole table range
 X_MIN = -0.1
 X_MAX = 0.3

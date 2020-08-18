@@ -25,7 +25,7 @@ from my_pybullet_envs.inmoov_arm_obj_imaginary_sessions import ImaginaryArmObjSe
 
 from my_pybullet_envs.inmoov_shadow_demo_env_v4_2_arms import InmoovShadowHandDemoEnvV4
 
-from my_pybullet_envs.inmoov_shadow_hand_v2_2_arms import InmoovShadowNew
+from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 homedir = os.path.expanduser("~")
@@ -71,7 +71,7 @@ SURROUNDING_OBJS_MAX_NUM = 4
 ADD_WHITE_NOISE = False
 RENDER = bool(args.render)
 
-CLOSE_THRES = 0.15
+CLOSE_THRES = 0.25
 
 NUM_TRIALS = 300
 
@@ -91,7 +91,7 @@ DEVICE = "cuda" if IS_CUDA else "cpu"
 
 ITER = None
 
-IS_LEFT = False
+IS_LEFT = True
 
 if USE_GV5:
     GRASP_PI = "0313_2_n_25_45"
@@ -425,13 +425,13 @@ def get_stacking_obs(
         btm_pos, btm_quat = p.getBasePositionAndOrientation(btm_oid)
 
     if IS_LEFT:
-        top_pos = (top_pos[0], -top_pos[1] + 0.348, top_pos[2])
-        btm_pos = (btm_pos[0], -btm_pos[1] + 0.348, btm_pos[2])
+        top_pos = (top_pos[0], -top_pos[1] + 0.398, top_pos[2])
+        btm_pos = (btm_pos[0], -btm_pos[1] + 0.398, btm_pos[2])
         top_quat = (-top_quat[0], top_quat[1], -top_quat[2], top_quat[3])
         btm_quat = (-btm_quat[0], btm_quat[1], -btm_quat[2], btm_quat[3])
     else:
-        top_pos = (top_pos[0], top_pos[1] + 0.348, top_pos[2])
-        btm_pos = (btm_pos[0], btm_pos[1] + 0.348, btm_pos[2])
+        top_pos = (top_pos[0], top_pos[1] + 0.398, top_pos[2])
+        btm_pos = (btm_pos[0], btm_pos[1] + 0.398, btm_pos[2])
 
     top_up = utils.quat_to_upv(top_quat)
     btm_up = utils.quat_to_upv(btm_quat)
@@ -522,21 +522,12 @@ for trial in range(NUM_TRIALS):
         if is_close(top_dict, btm_dict, dist=dist):
             continue  # discard & re-sample
         else:
-            if g_ty > p_ty:
-                IS_LEFT = True
-            else:
-                IS_LEFT = False
             all_dicts = [top_dict, btm_dict]
             gen_surrounding_objs(all_dicts)
             del top_dict, btm_dict
             break
 
     """Imaginary arm session to get q_reach"""
-
-    # Change for left side
-    if IS_LEFT:
-        g_ty *= -1
-        p_ty *= -1
 
     if USE_GV5:
         sess = ImaginaryArmObjSession()
@@ -581,8 +572,8 @@ for trial in range(NUM_TRIALS):
     p.resetSimulation()
 
     # Adjust for grasping and placing
-    g_ty += 0.348
-    p_ty += 0.348
+    # g_ty += 0.398
+    # p_ty += 0.398
 
     """Clean up the simulation, since this is only imaginary."""
 
@@ -620,8 +611,14 @@ for trial in range(NUM_TRIALS):
     # env_core.robot.reset_with_certain_arm_q(Qreach)
     # input("press enter")
 
-    objs, top_id, btm_id = load_obj_and_construct_state(all_dicts)
     OBJECTS = construct_obj_array_for_openrave(all_dicts)
+    for i in range(len(all_dicts)):
+        all_dicts[i]["position"][1] -= 0.398
+        if IS_LEFT:
+            all_dicts[i]["position"][1] *= -1
+    objs, top_id, btm_id = load_obj_and_construct_state(all_dicts)
+
+    
 
 
     # state_saver.track(

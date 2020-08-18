@@ -81,8 +81,8 @@ class InmoovShadowNew:
         self.conservative_clip = conservative_clip
         self.conservative_range = conservative_range
 
-        self.base_init_pos = np.array([-0.30, 0, 0.272])
-        self.base_init_pos_2 = np.array([-0.30, 0, 0.272])
+        self.base_init_pos = np.array([-0.30, -0.05, 0.272])
+        self.base_init_pos_2 = np.array([-0.30, 0.05, 0.272])
         # self.base_init_pos = np.array([-0.30, 0.348, 0.272])
         # self.base_init_pos_2 = np.array([-0.30, 0.052, 0.272])
         self.base_init_euler = np.array([0,0,0])
@@ -366,10 +366,10 @@ class InmoovShadowNew:
         return joints_taus
 
     def switch_y_left(self, tup):
-        return (tup[0], -tup[1] + 0.348, tup[2])
+        return (tup[0], -tup[1] + 0.398, tup[2])
 
     def switch_y_right(self, tup):
-        return (tup[0], tup[1] + 0.348, tup[2])
+        return (tup[0], tup[1] + 0.398, tup[2])
 
     def get_link_pos_quat(self, l_id):
         newPos = self.sim.getLinkState(self.arm_id, l_id)[4]
