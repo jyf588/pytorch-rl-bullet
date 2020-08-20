@@ -15,14 +15,14 @@ import pybullet_utils.bullet_client as bc
 import exp.loader
 import system.policy
 from system import openrave
-from system.bullet_world import BulletWorld
+from system.bullet_world_2_arms import BulletWorld
 from system.vision_module import VisionModule
-from my_pybullet_envs.inmoov_shadow_hand_v2_2_arms import InmoovShadowNew
+from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
 
 from NLP_module import NLPmod
 
 import ns_vqa_dart.bullet.seg
-import my_pybullet_envs.utils_2_arms as utils
+import my_pybullet_envs.utils as utils
 from ns_vqa_dart.bullet import dash_object, util
 
 from speech import get_voice_input
@@ -128,6 +128,8 @@ class DemoEnvironment:
         self.n_total_steps = self.duration_list[-1]
 
         self.stage, self.stage_ts = self.get_current_stage()
+
+        self.is_left = False
 
     def cleanup(self):
         # p.disconnect()
@@ -308,6 +310,8 @@ class DemoEnvironment:
         for idx in state["objects"].keys():
             orn = state["objects"][idx]["orientation"]
             state["objects"][idx]["up_vector"] = util.orientation_to_up(orn)
+
+            
         return state
 
     def plan(self):
@@ -323,8 +327,10 @@ class DemoEnvironment:
 
         # First, get the current observation which we will store as the initial
         # observation for planning reach/transport and for grasping.
+
         if self.command_pointer == 0:
             self.initial_obs = self.get_observation()
+
         # This is a continuous command, so we simply modify the observation assuming
         # task success.
         elif self.command_pointer > 0:
@@ -351,6 +357,41 @@ class DemoEnvironment:
             self.is_sphere,
         ) = task_params
 
+        # obtained from initial_obs
+        self.src_xy = self.initial_obs[self.src_idx]["position"][:2]
+
+        if -0.102 < self.src_xy[1] < 0.498 and -0.102 < self.dst_xyz[1] < 0.498:
+            # Left
+            self.is_left = True
+            if self.w is not None:
+                self.w.robot_env.robot.switch_to_left()
+
+        elif -0.498 < self.src_xy[1] < 0.102 and -0.498 < self.dst_xyz[1] < 0.102:
+            # Right
+            self.is_left = False
+            if self.w is not None:
+                self.w.robot_env.robot.switch_to_right()
+        else:
+            # TODO: NEITHER
+            pass
+
+        for i in range(len(self.initial_obs)):
+            if self.is_left:
+                self.initial_obs[i]["position"][1] = -(self.initial_obs[i]["position"][1] - 0.398)
+            else:
+                self.initial_obs[i]["position"][1] = self.initial_obs[i]["position"][1] + 0.398
+        
+        if self.is_left:
+            self.src_xy[1] = -(self.src_xy[1] - 0.398)
+            self.dst_xyz[1] = -(self.dst_xyz[1] - 0.398)
+            plan_xyz[1] = -(plan_xyz[1] - 0.398)
+            self.policy_dst_xyz[1] = -(self.policy_dst_xyz[1] - 0.398)
+        else:
+            self.src_xy[1] = self.src_xy[1] + 0.398
+            self.dst_xyz[1] = self.dst_xyz[1] + 0.398
+            plan_xyz[1] = plan_xyz[1] + 0.398
+            self.policy_dst_xyz[1] = self.policy_dst_xyz[1] + 0.398
+
         # Extract policy-related variables according to the shape.
         policy_dict = self.shape2policy_dict[
             "sphere" if self.is_sphere else "universal"
@@ -363,9 +404,6 @@ class DemoEnvironment:
         self.p_pos_of_ave = policy_dict["p_pos_of_ave"]
         self.p_quat_of_ave = policy_dict["p_quat_of_ave"]
 
-        # obtained from initial_obs
-        self.src_xy = self.initial_obs[self.src_idx]["position"][:2]
-
         # Compute the goal arm poses for reaching and transport.
         self.q_reach_dst, self.q_transport_dst = self.compute_qs(
             src_xy=self.src_xy, dst_xyz=plan_xyz,
@@ -373,6 +411,7 @@ class DemoEnvironment:
 
         # Create the bullet world now that we've finished our imaginary
         # sessions.
+
         if self.w is None:
             self.w = BulletWorld(
                 opt=self.bullet_opt,
@@ -381,6 +420,7 @@ class DemoEnvironment:
                 scene=self.scene,
                 visualize=self.opt.render_bullet,
                 use_control_skip=self.opt.use_control_skip,
+                is_left = self.is_left
             )
 
             # If reaching is disabled, set the robot arm directly to the dstination
@@ -458,7 +498,7 @@ class DemoEnvironment:
             )
             self.task = "place" if dst_idx is None else "stack"
             self.place_dst_xy = [dst_x, dst_y]  # used outside for head animation
-            self.command_pointer += 1
+            # self.command_pointer += 1
 
         # # We currently only support placing spheres, not stacking them.
         # if self.task == "stack":
@@ -503,6 +543,7 @@ class DemoEnvironment:
         self.sim = bc.BulletClient(connection_mode=p.DIRECT)  # this is always session 1
         src_xyz = [src_xy[0], src_xy[1], 0.0]
         table_id = utils.create_table(self.bullet_opt.floor_mu, self.sim)
+
         robot = InmoovShadowNew(
             init_noise=False, timestep=utils.TS, np_random=np.random, sim=self.sim
         )
@@ -622,6 +663,7 @@ class DemoEnvironment:
             self.grasp_obs = system.policy.wrap_obs(
                 self.get_grasp_observation(), is_cuda=self.opt.is_cuda
             )
+
             with torch.no_grad():
                 _, self.grasp_action, _, self.hidden_states = self.grasp_policy.act(
                     self.grasp_obs,
@@ -805,6 +847,11 @@ class DemoEnvironment:
 
         tdict = self.obs[self.src_idx]
         t_pos = tdict["position"]
+        if self.is_left:
+            t_pos = (t_pos[0], -t_pos[1] + 0.398, t_pos[2])
+        else:
+            t_pos = (t_pos[0], t_pos[1] + 0.398, t_pos[2])
+        
         if tdict["shape"] == "sphere":
             t_up = [0.0, 0.0, 1.0]  # sph does not have up vec
         else:
@@ -816,10 +863,16 @@ class DemoEnvironment:
         if self.task == "stack":
             bdict = self.obs[self.dst_idx]
             b_pos = bdict["position"]
+            if self.is_left:
+                b_pos = (b_pos[0], -b_pos[1] + 0.398, b_pos[2])
+            else:
+                b_pos = (b_pos[0], b_pos[1] + 0.398, b_pos[2])
             b_up = bdict["up_vector"]
         elif self.task == "place":
             b_pos = [0.0, 0.0, 0.0]
             b_up = [0.0, 0.0, 1.0]
+
+        
 
         if self.policy_opt.use_height and not self.is_sphere:
             p_obs = self.w.robot_env.get_robot_contact_txtytz_halfh_shape_2obj6dUp_obs_nodup_from_up(

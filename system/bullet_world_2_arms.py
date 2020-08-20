@@ -11,7 +11,7 @@ from typing import *
 
 import system.policy
 from my_pybullet_envs.inmoov_shadow_demo_env_v4_2_arms import InmoovShadowHandDemoEnvV4
-import my_pybullet_envs.utils as utils
+import my_pybullet_envs.utils_2_arms as utils
 from ns_vqa_dart.bullet.renderer import BulletRenderer
 import ns_vqa_dart.bullet.util as util
 
@@ -25,6 +25,7 @@ class BulletWorld:
         visualize: bool,
         p: Optional = None,
         use_control_skip: Optional[bool] = False,
+        is_left=False,
     ):
         """
         Args:
@@ -50,6 +51,7 @@ class BulletWorld:
         self.scene = scene
         self.visualize = visualize
         self.use_control_skip = use_control_skip
+        self.is_left = is_left
 
         if p is None:
             self.bc = self.create_bullet_client()
@@ -129,6 +131,7 @@ class BulletWorld:
             withVel=False,
             diffTar=True,
             robot_mu=self.opt.hand_mu,
+            is_left=self.is_left,
         )
         init_fin_q = np.array(
             [0.4, 0.4, 0.4] * 3 + [0.4, 0.4, 0.4] + [0.0, 1.0, 0.1, 0.5, 0.1]
@@ -162,6 +165,12 @@ class BulletWorld:
             oids: A list of object IDs corresponding to the object order in the
                 input scene.
         """
+
+        # for i in range(len(scene)):
+        #     scene[i]["position"][1] += 0.398
+            # scene[i]["position"][1] *= -1
+            # scene[i]["orientation"] = (-scene[i]["orientation"][0], scene[i]["orientation"][1], -scene[i]["orientation"][2], scene[i]["orientation"][3])
+
         renderer = BulletRenderer(p=self.bc)
         oids = renderer.load_objects_from_state(odicts=scene, position_mode="com")
         return oids

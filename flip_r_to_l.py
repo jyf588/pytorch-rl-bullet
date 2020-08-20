@@ -13,8 +13,10 @@ TODO: Generalize replace negatives function
 FIXME: Escape "." with "\"
 """
 
-open_file = open("/Users/michaelhayashi/Documents/CURIS/pytorch-rl-bullet/my_pybullet_envs/assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand_v2_2.urdf", "r")
-new_file = open("/Users/michaelhayashi/Documents/CURIS/pytorch-rl-bullet/my_pybullet_envs/assets/inmoov_ros/inmoov_description/robots/left_experimental.urdf", "w+")
+# open_file = open("/Users/michaelhayashi/Documents/CURIS/pytorch-rl-bullet/my_pybullet_envs/assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand_v2_2.urdf", "r")
+# new_file = open("/Users/michaelhayashi/Documents/CURIS/pytorch-rl-bullet/my_pybullet_envs/assets/inmoov_ros/inmoov_description/robots/left_experimental.urdf", "w+")
+open_file = open("/Users/michaelhayashi/Documents/CURIS/pytorch-rl-bullet/my_pybullet_envs/assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand_v2_1_right_hand.urdf", "r")
+new_file = open("/Users/michaelhayashi/Documents/CURIS/pytorch-rl-bullet/my_pybullet_envs/assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand_v2_1_left_hand.urdf", "w+")
 
 def conditional_replace_origin(match):
     groups = match.groups()

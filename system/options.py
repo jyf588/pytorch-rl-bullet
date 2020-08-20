@@ -36,7 +36,7 @@ def set_unity_container_cfgs(opt, port):
 
 BASE_SYSTEM_OPTIONS = argparse.Namespace(
     seed=101,
-    is_cuda=True,
+    is_cuda=False,
     enable_reaching=True,
     enable_retract=True,
     scene_place_src_idx=0,
@@ -52,7 +52,7 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     upv_noise=0.04,
     height_noise=0.02,
     render_unity=False,
-    render_bullet=False,
+    render_bullet=True,
     visualize_unity=False,
     cam_version="v2",
     use_control_skip=True,
@@ -67,7 +67,8 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     retract_head_speed=0,
     head_speed=0,
     save_states=True,  # To check reproducibility.
-    policy_id="0411",  # [0404, 0411, 0510]
+    # policy_id="0411",  # [0404, 0411, 0510]
+    policy_id="0729",
     save_first_pov_image=False,
     save_third_pov_image=False,
     scenes_root_dir="system/data",  # os.path.join(util.get_user_homedir(), "data/dash"),
@@ -202,6 +203,13 @@ def get_policy_options_and_paths(policy_id: str):
         grasp_dir = f"./trained_models_%s/ppo/" % "0510_0_n"
         place_pi = f"0510_0_n_place_0510_0"
         place_dir = f"./trained_models_%s/ppo/" % place_pi
+    elif policy_id == "0729":
+        policy_options.use_height = True
+        policy_options.use_place_stack_bit = True
+        grasp_pi = "0729_12_n_25_45"
+        grasp_dir = "./trained_models_%s/ppo/" % "0729_12_n"
+        place_pi = "0729_12_n_place_0729_12"          # 68/83
+        place_dir = "./trained_models_%s/ppo/" % place_pi
 
     shape2policy_paths = {
         "universal": {

@@ -103,7 +103,6 @@ class InmoovShadowNew:
         self.maxForce = 200.    # TODO
         self.np_random = np_random
 
-        self.is_left = is_left
         self.arm_id = self.sim.loadURDF(os.path.join(currentdir,
                                              "assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand_v2_2.urdf"),
                                  list(self.base_init_pos), self.sim.getQuaternionFromEuler(list(self.base_init_euler)),
@@ -118,13 +117,16 @@ class InmoovShadowNew:
                                        | self.sim.URDF_USE_SELF_COLLISION_EXCLUDE_ALL_PARENTS,
                                  useFixedBase=1)
         
+        self.is_left = is_left
+        self.cur_is_left = False
         if self.is_left:
-            self.arm_id = self.arm_id_2
+            self.switch_to_left()
 
         # self.print_all_joints_info()
 
         for i in range(-1, self.sim.getNumJoints(self.arm_id)):
             self.sim.changeDynamics(self.arm_id, i, jointDamping=0.0, linearDamping=0.0, angularDamping=0.0)
+            self.sim.changeDynamics(self.arm_id_2, i, jointDamping=0.0, linearDamping=0.0, angularDamping=0.0)
 
         self.scale_mass_inertia(-1, self.ee_id, 0.01)
         self.scale_mass_inertia(self.ee_id, self.sim.getNumJoints(self.arm_id), 10.0)
@@ -133,19 +135,38 @@ class InmoovShadowNew:
             mu = self.np_random.uniform(0.8, 1.2)
             for i in range(self.ee_id, self.sim.getNumJoints(self.arm_id)):
                 self.sim.changeDynamics(self.arm_id, i, lateralFriction=mu)
+                self.sim.changeDynamics(self.arm_id_2, i, lateralFriction=mu)
 
         # use np for multi-indexing
         self.ll = np.array([self.sim.getJointInfo(self.arm_id, i)[8] for i in range(self.sim.getNumJoints(self.arm_id))])
         self.ul = np.array([self.sim.getJointInfo(self.arm_id, i)[9] for i in range(self.sim.getNumJoints(self.arm_id))])
 
         self.sim.enableJointForceTorqueSensor(self.arm_id, self.ee_id, 1)
+        self.sim.enableJointForceTorqueSensor(self.arm_id_2, self.ee_id, 1)
 
         # self.sim.stepSimulation()
         # input("press enter")
 
+    def switch_to_left(self):
+        if not self.cur_is_left:
+            temp = self.arm_id
+            self.arm_id = self.arm_id_2
+            self.arm_id_2 = temp
+        self.is_left = True
+        self.cur_is_left = True
+    
+    def switch_to_right(self):
+        if self.cur_is_left:
+            temp = self.arm_id_2
+            self.arm_id_2 = self.arm_id
+            self.arm_id = temp
+        self.is_left = False
+        self.cur_is_left = False
+
     def change_hand_friction(self, mu):
         for i in range(self.ee_id, self.sim.getNumJoints(self.arm_id)):
             self.sim.changeDynamics(self.arm_id, i, lateralFriction=mu)
+            self.sim.changeDynamics(self.arm_id_2, i, lateralFriction=mu)
 
     def print_all_joints_info(self):
         for i in range(self.sim.getNumJoints(self.arm_id)):
@@ -163,6 +184,15 @@ class InmoovShadowNew:
             total_m += mass
             self.sim.changeDynamics(self.arm_id, i, mass=mass)
             self.sim.changeDynamics(self.arm_id, i, localInertiaDiagonal=lid)
+        for i in range(start, end):
+            dyn = self.sim.getDynamicsInfo(self.arm_id_2, i)
+            mass = dyn[0]
+            mass = mass * ratio
+            lid = dyn[2]
+            lid = (lid[0] * ratio, lid[1] * ratio, lid[2] * ratio,)
+            total_m += mass
+            self.sim.changeDynamics(self.arm_id_2, i, mass=mass)
+            self.sim.changeDynamics(self.arm_id_2, i, localInertiaDiagonal=lid)
         # print(total_m)
 
     def perturb(self, arr, r=0.02):
@@ -190,10 +220,13 @@ class InmoovShadowNew:
 
         for ind in range(len(self.arm_dofs)):
             self.sim.resetJointState(self.arm_id, self.arm_dofs[ind], init_arm_q[ind], 0.0)
+            self.sim.resetJointState(self.arm_id_2, self.arm_dofs[ind], init_arm_q[ind], 0.0)
         for ind in range(len(self.fin_actdofs)):
             self.sim.resetJointState(self.arm_id, self.fin_actdofs[ind], init_fin_q[ind], 0.0)
+            self.sim.resetJointState(self.arm_id_2, self.fin_actdofs[ind], init_fin_q[ind], 0.0)
         for ind in range(len(self.fin_zerodofs)):
             self.sim.resetJointState(self.arm_id, self.fin_zerodofs[ind], 0.0, 0.0)
+            self.sim.resetJointState(self.arm_id_2, self.fin_zerodofs[ind], 0.0, 0.0)
         self.tar_arm_q = init_arm_q
         self.tar_fin_q = init_fin_q
 
@@ -206,6 +239,7 @@ class InmoovShadowNew:
             tar_act_q = np.array(tar_act_q)
         for ind in range(len(self.all_findofs)):
             self.sim.resetJointState(self.arm_id, self.all_findofs[ind], all_fin_q[ind], 0.0)
+            self.sim.resetJointState(self.arm_id_2, self.all_findofs[ind], all_fin_q[ind], 0.0)
         self.tar_fin_q = np.array(tar_act_q)
 
     def reset_with_certain_arm_q_finger_states(self, arm_q, all_fin_q, tar_act_q):
@@ -215,6 +249,7 @@ class InmoovShadowNew:
             arm_q = np.array(arm_q)
         for ind in range(len(self.arm_dofs)):
             self.sim.resetJointState(self.arm_id, self.arm_dofs[ind], arm_q[ind], 0.0)
+            self.sim.resetJointState(self.arm_id_2, self.arm_dofs[ind], arm_q[ind], 0.0)
         self.tar_arm_q = arm_q
         self.reset_only_certain_finger_states(all_fin_q, tar_act_q)
 
@@ -236,6 +271,7 @@ class InmoovShadowNew:
         while not closeEnough and iter < 50:
             for ind in range(len(self.arm_dofs)):
                 self.sim.resetJointState(self.arm_id, self.arm_dofs[ind], sp[ind])
+                self.sim.resetJointState(self.arm_id_2, self.arm_dofs[ind], sp[ind])
 
             jointPoses = self.sim.calculateInverseKinematics(self.arm_id, self.ee_id, wx_trans, wx_quat,
                                                       lowerLimits=ll.tolist(), upperLimits=ul.tolist(),

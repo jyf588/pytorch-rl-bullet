@@ -53,7 +53,8 @@ START_ARM_Q = {
 }
 
 
-async def send_to_client(websocket, path):
+# async def send_to_client(websocket, path):
+def send_to_client():
     """Sends and receives data to and from Unity.
 
     Args:
@@ -202,23 +203,23 @@ async def send_to_client(websocket, path):
                             ) = bullet2unity.states.compute_b_ani_tar(opt, env)
 
                             # Encode, send, receive, and decode.
-                            message = interface.encode(
-                                state_id=frame_id,
-                                bullet_state=render_state,
-                                bullet_animation_target=b_ani_tar,
-                                head_speed=head_speed,
-                                save_third_pov_image=opt.save_third_pov_image,
-                                bullet_cam_targets=bullet_cam_targets,
-                            )
-                            await websocket.send(message)
-                            reply = await websocket.recv()
-                            data = interface.decode(
-                                frame_id, reply, bullet_cam_targets=bullet_cam_targets,
-                            )
+                            # message = interface.encode(
+                            #     state_id=frame_id,
+                            #     bullet_state=render_state,
+                            #     bullet_animation_target=b_ani_tar,
+                            #     head_speed=head_speed,
+                            #     save_third_pov_image=opt.save_third_pov_image,
+                            #     bullet_cam_targets=bullet_cam_targets,
+                            # )
+                            # await websocket.send(message)
+                            # reply = await websocket.recv()
+                            # data = interface.decode(
+                            #     frame_id, reply, bullet_cam_targets=bullet_cam_targets,
+                            # )
 
-                            # Hand the data to the env for processing.
-                            if send_image:
-                                env.set_unity_data(data)
+                            # # Hand the data to the env for processing.
+                            # if send_image:
+                            #     env.set_unity_data(data)
                             if should_step:
                                 is_done, openrave_success = env.step()
                 if not is_render_step:
@@ -314,4 +315,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Start the python server.
-    interface.run_server(hostname=args.hostname, port=args.port, handler=send_to_client)
+    send_to_client()
+    # interface.run_server(hostname=args.hostname, port=args.port, handler=send_to_client)

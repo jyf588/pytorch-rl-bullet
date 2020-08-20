@@ -12,7 +12,6 @@ New
 (My mac)
 
 Left:
-
 sudo docker run -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/michaelhayashi/container_data_left:/data --name openravecont1 openrave-ha:v3 /bin/bash
 
 sudo docker run -ti --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/michaelhayashi/container_data_left:/data --name openravecont2 openrave-ha:v3 /bin/bash
