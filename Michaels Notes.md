@@ -73,12 +73,6 @@ rosrun xacro xacro --inorder -o inmoov_shadow_hand_v2_2.urdf ./src/inmoov_descri
 
 scp -i ./key mikephayashi@35.233.191.126:~/catkin_ws/inmoov_shadow_hand_v2_2.urdf /Users/michaelhayashi/Documents/CURIS/pytorch-rl-bullet/my_pybullet_envs/assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand_v2_2.urdf
 
-
-# TODO 
-
-#systems/options.py
-Change render_unity=False to true
-
 # urdf
 - /Users/michaelhayashi/Documents/CURIS/pytorch-rl-bullet/my_pybullet_envs/inmoov_shadow_hand_v2.py
 - /Users/michaelhayashi/Documents/CURIS/pytorch-rl-bullet/my_pybullet_envs/assets/inmoov_ros/inmoov_description/robots/inmoov_shadow_hand_v2_2.urdf
@@ -125,38 +119,3 @@ Container 3:
 real    0m45.626s
 user    0m0.257s
 sys     0m0.317s
-
-#### Problems
-
-Starting containers
-https://www.youtube.com/watch?v=CCAK7GhmiEM
-https://github.com/moby/moby/issues/8710 slobo commented on Jan 22, 2015
-
----
-
-sudo docker run -ti --rm -e DISPLAY=host.docker.internal:0 -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/michaelhayashi/container_data:/data --name openravecont openrave-ha:v3 /bin/bash
-
-sudo docker run -ti --rm -e DISPLAY=host.docker.internal:0 -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/michaelhayashi/container_data:/data --name openravecont2 openrave-ha:v3 /bin/bash
-
-sudo docker run -ti --rm -e DISPLAY=host.docker.internal:0 -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/michaelhayashi/container_data:/data --name openravecont3 openrave-ha:v3 /bin/bash
-
-----
-
-socat TCP-LISTEN:6000,reuseaddr,fork UNIX-CLIENT:\"$DISPLAY\"
-
-sudo docker run -ti --rm -e DISPLAY=host.docker.internal:0 -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/michaelhayashi/Documents/CURIS/data:/data --name openravecont openrave-ha:v3 /bin/bash
-
-sudo docker run -ti --rm -e DISPLAY=host.docker.internal:0 -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/michaelhayashi/Documents/CURIS/data:/data --name openravecont2 openrave-ha:v3 /bin/bash
-
-sudo docker run -ti --rm -e DISPLAY=host.docker.internal:0 -v /tmp/.X11-unix:/tmp/.X11-unix -v /Users/michaelhayashi/Documents/CURIS/data:/data --name openravecont3 openrave-ha:v3 /bin/bash
-
-----
-
-Make sure "exp" is not installed for python
-
-Changed testmanip_0510.sh "python" to "python3"
-
-Changed IS_CUDA = True to False in main_sim_clean_test.py:89
-
-main_sim_clean_test.py
-Changed GRASP_PI = "0510_0_n_25_45" to 1226_from_fixed

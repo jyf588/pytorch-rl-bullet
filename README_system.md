@@ -19,6 +19,8 @@ Also ensure that you are running everything from the `pytorch-rl-bullet` branch.
 Before running the system, make sure that OpenRAVE is running. See `README_INSTALL.md` for
 instructions on doing so.
 
+To use the left arm/ambidextrous system, see `README_left_arm.md`.
+
 #### Download the DASH Unity client application.
 
 Next, download the Unity client application from the Google Drive Link
