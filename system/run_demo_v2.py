@@ -20,6 +20,7 @@ import system.options
 import system.openrave
 import bullet2unity.states
 import scene.util as scene_util
+
 from system.states_env import StatesEnv
 import scene.generate as scene_gen
 from system.env import DemoEnvironment
@@ -41,15 +42,6 @@ from system.options import (
 
 global args
 
-STAGE2ANIMATION_Z_OFFSET = {
-    "plan": 0.3,
-    "reach": 0.1,
-    "grasp": 0.1,
-    "retract": 0.3,
-}
-TASK2ANIMATION_Z_OFFSET = {"place": 0.1, "stack": 0.2}
-
-
 async def send_to_client(websocket, path):
     """Sends and receives data to and from Unity.
 
@@ -61,30 +53,20 @@ async def send_to_client(websocket, path):
 
     # Run all sets in experiment.
     opt = SYSTEM_OPTIONS[args.mode]
+    opt.start_head_steps = 2 * 40 * 6  # fps / ( x // control skip) = seconds
+    opt.start_head_speed = 25
+    opt.reach_head_speed = 50
+    opt.move_head_speed = 90
+    opt.retract_head_speed = 90
+    opt.render_frequency = 6
     set_name2opt = exp.loader.ExpLoader(exp_name=args.exp).set_name2opt
 
     opt = system.options.set_unity_container_cfgs(opt=opt, port=args.port)
     system.openrave.check_clean_container(container_dir=opt.container_dir)
 
-    #  test time
-    # opt.save_first_pov_image = False
-    # opt.save_states = False
-    # opt.save_third_pov_image = False
-    # opt.save_predictions = False
-    # VISION_OPTIONS.save_predictions = False
-
-    success_metrics = {"overall": {}, "scenes": {}}
     examples = []
     for set_name, set_opt in set_name2opt.items():
         task = set_opt["task"]
-
-        # Initialize data structures to track success.
-        success_metrics["overall"][set_name] = {
-            "n_success": 0,
-            "n_or_success": 0,
-            "n_trials": 0,
-        }
-        success_metrics["scenes"][set_name] = {}
 
         # Load scenes.
         scenes_dir = os.path.join(opt.scenes_root_dir, args.exp)
@@ -94,15 +76,15 @@ async def send_to_client(websocket, path):
             continue
 
         for scene_id, scene in enumerate(scenes):
-            if opt.start_sid is not None and int(scene_id) < opt.start_sid:
-                continue
-            elif opt.end_sid is not None and int(scene_id) >= opt.end_sid:
-                continue
+            # if opt.start_sid is not None and int(scene_id) < opt.start_sid:
+            #     continue
+            # elif opt.end_sid is not None and int(scene_id) >= opt.end_sid:
+            #     continue
             examples.append((set_name, set_opt, task, scene_id, scene))
     random.seed(opt.seed)
     random.shuffle(examples)
-    # test 30 examples
-    # examples = examples[:30]
+
+    examples = examples[:30]
 
     # Define paths.
     if opt.unity_captures_dir is not None:
@@ -111,7 +93,6 @@ async def send_to_client(websocket, path):
     run_dir = os.path.join(opt.root_outputs_dir, args.exp, opt.policy_id, run_time_str)
     outputs_dir = os.path.join(run_dir, "pickle")
     states_dir = os.path.join(run_dir, "states")
-    successes_path = os.path.join(run_dir, "successes.json")
     os.makedirs(outputs_dir)
     os.makedirs(states_dir)
 
@@ -139,9 +120,8 @@ async def send_to_client(websocket, path):
     else:
         p.connect(p.DIRECT)
 
-    # test time
-    # start_time2 = time.time()
-    for idx in range(args.start_idx, len(examples)):
+    start_time2 = time.time()
+    for idx in range(0, len(examples)):
         set_name, set_opt, task, scene_id, scene = examples[idx]
         bullet_cam_targets = {}
         # Modify the scene for placing, and determine placing destination.
@@ -152,33 +132,33 @@ async def send_to_client(websocket, path):
                 place_dst_xy,
                 place_dest_object,
             ) = scene_util.convert_scene_for_placing(opt, scene)
-
-        if args.mode == "unity_dataset":
-            env = StatesEnv(
-                opt=opt,
-                experiment=args.exp,
-                set_name=set_name,
-                scene_id=scene_id,
-                scene=scene,
-                task=task,
-                place_dst_xy=place_dst_xy,
-            )
-        else:
-            env = DemoEnvironment(
-                opt=opt,
-                bullet_opt=BULLET_OPTIONS,
-                policy_opt=policy_opt,
-                shape2policy_dict=shape2policy_dict,
-                vision_opt=VISION_OPTIONS,
-                exp_name=args.exp,
-                set_name=set_name,
-                scene_id=scene_id,
-                scene=scene,
-                task=task,
-                outputs_dir=outputs_dir,
-                place_dst_xy=place_dst_xy,
-                vision_models_dict=vision_models_dict,
-            )
+        assert args.mode != "unity_dataset"
+        # if args.mode == "unity_dataset":
+        #     env = StatesEnv(
+        #         opt=opt,
+        #         experiment=args.exp,
+        #         set_name=set_name,
+        #         scene_id=scene_id,
+        #         scene=scene,
+        #         task=task,
+        #         place_dst_xy=place_dst_xy,
+        #     )
+        # else:
+        env = DemoEnvironment(
+            opt=opt,
+            bullet_opt=BULLET_OPTIONS,
+            policy_opt=policy_opt,
+            shape2policy_dict=shape2policy_dict,
+            vision_opt=VISION_OPTIONS,
+            exp_name=args.exp,
+            set_name=set_name,
+            scene_id=scene_id,
+            scene=scene,
+            task=task,
+            outputs_dir=outputs_dir,
+            place_dst_xy=place_dst_xy,
+            vision_models_dict=vision_models_dict,
+        )
 
         n_frames = 0
         frames_start = time.time()
@@ -200,21 +180,18 @@ async def send_to_client(websocket, path):
             ):
                 update_camera_target = True
 
-            is_render_step = False
+            # is_render_step = False
             if opt.render_unity:
-                # Modify the rendering frequency if we are using vision + policy,
-                # and it's during the planning or placing stage.
-                render_frequency = opt.render_frequency
-                if args.mode != "unity_dataset":
-                    if opt.obs_mode == "vision":
-                        if env.stage in "plan":
-                            render_frequency = 1
-                        elif env.stage == "place":
-                            render_frequency = policy_opt.vision_delay
+                is_render_step = env.timestep % opt.render_frequency == 0
+                if opt.obs_mode == "vision":
+                    if env.stage == "plan":
+                        is_render_step = True
+                    elif env.stage == "place":
+                        min_freq = min(opt.render_frequency, env.get_place_skip())
+                        is_render_step = env.stage_ts % min_freq == 0
 
                 # Render unity and step.
-                if env.timestep % render_frequency == 0:
-                    is_render_step = True
+                if is_render_step:
                     u_opt = get_unity_options(args.mode, opt, env)
                     for (rend_obs, rend_place, send_image, should_step) in u_opt:
                         # Compute camera targets.
@@ -236,9 +213,10 @@ async def send_to_client(websocket, path):
                         )
 
                         # Compute the animation target.
-                        b_ani_tar, head_speed = bullet2unity.states.compute_b_ani_tar(
-                            opt, env
-                        )
+                        (
+                            b_ani_tar,
+                            head_speed,
+                        ) = bullet2unity.states.compute_b_ani_tar(opt, env)
 
                         # Encode, send, receive, and decode.
                         message = interface.encode(
@@ -268,47 +246,20 @@ async def send_to_client(websocket, path):
                 is_done = True
 
             # Break out if we're done with the sequence, or it failed.
-            if is_done or not openrave_success:
-                success_metrics["overall"][set_name]["n_trials"] += 1
-                trial_succeeded = False
-                if openrave_success:
-                    success_metrics["overall"][set_name]["n_or_success"] += 1
-                    # Only check for task success if OR didn't fail.
-                    if env.check_success():
-                        trial_succeeded = True
-                        success_metrics["overall"][set_name]["n_success"] += 1
-                success_metrics["scenes"][set_name][scene_id] = {
-                    "success": trial_succeeded,
-                    "or_success": openrave_success,
-                    "stage": env.stage,
-                    "timestep": env.timestep,
-                }
+            if is_done is not None and (is_done or not openrave_success):
                 env.cleanup()
-                n_trials = success_metrics["overall"][set_name]["n_trials"]
-                n_success = success_metrics["overall"][set_name]["n_success"]
-                n_or_success = success_metrics["overall"][set_name]["n_or_success"]
-                success_rate = 0.0 if n_trials == 0 else n_success / n_trials
-                success_rate_wo_or = (
-                    0.0 if n_or_success == 0 else n_success / n_or_success
-                )
-                avg_time = 0 if n_trials == 0 else (time.time() - start_time) / n_trials
-                # test running time
-                # util.save_json(
-                #     path=successes_path, data=success_metrics, check_override=False
-                # )
                 print(
-                    f"Idx: {idx}\tExp: {args.exp}\tSet: {set_name}\tTask: {task}\tScene ID: {scene_id}\tStage: {stage}\tStage ts: {env.stage_ts}\tTimestep: {env.timestep}\n"
-                    f"Frame rate: {n_frames / (time.time() - frames_start):.2f}\tAvg trial time: {avg_time:.2f}\n"
-                    f"Success rate: {success_rate:.2f} ({n_trials})\tSuccess w/o OR failures: {success_rate_wo_or:.2f} ({n_or_success})\t# Successes: {n_success}\n"
-                    f"Saved stats to: {successes_path}"
+                    f"Exp: {args.exp} \tScene ID: {scene_id} \tStage: {stage} \tTimestep: {env.timestep}\tOR success: {openrave_success}\n"
+                    f"Frame rate: {n_frames / (time.time() - frames_start):.2f}\t\n"
                 )
                 break
             n_frames += 1
+
     total_duration = time.time() - start_time
+    total_duration2 = time.time() - start_time2
     print(f"Finished experiment.")
     print(f"Duration: {total_duration}")
-    # total_duration2 = time.time() - start_time2
-    # print(f"Duration2: {total_duration2}")
+    print(f"Duration: {total_duration2}")
     sys.exit(0)
 
 
@@ -338,29 +289,33 @@ def load_vision_models():
         )
     return vision_models_dict
 
-
 def get_unity_options(mode, opt, env):
-    if mode == "unity_dataset":
-        unity_options = [(False, False, True, True)]
-    else:
-        render_place = env.task == "place"
-        if opt.obs_mode == "vision":
-            if env.stage in ["plan", "place"]:
-                render_cur_step = True
-                # if env.stage == "plan":
-                #     render_cur_step = True
-                # elif env.stage == "place" and env.stage_progress() < 0.2:
-                #     render_cur_step = True
+    """
+    Returns:
+        rend_obs, rend_place, send_image, should_step
+    """
+    # if mode == "unity_dataset":
+    #     unity_options = [(False, False, True, True)]
+    assert mode != "unity_dataset"
+    render_place = False  # deprecated
+    if opt.obs_mode == "vision":
+        if env.stage in ["plan", "place"]:
+            render_cur_step = opt.render_obs
+            # if env.stage == "plan":
+            #     render_cur_step = True
+            # elif env.stage == "place" and env.stage_progress() < 0.2:
+            #     render_cur_step = True
 
-                unity_options = [(False, False, True, True)]
-                if render_cur_step:
-                    unity_options += [(True, render_place, False, False)]
-            else:
-                unity_options = [(opt.render_obs, render_place, False, True)]
-        elif opt.obs_mode == "gt":
-            unity_options = [(False, render_place, False, True)]
+            unity_options = [(False, False, True, True)]
+            if render_cur_step:
+                unity_options += [(True, render_place, False, False)]
         else:
-            raise ValueError(f"Invalid obs mode: {opt.obs_mode}")
+            unity_options = [(opt.render_obs, render_place, False, True)]
+    elif opt.obs_mode == "gt":
+        unity_options = [(False, render_place, False, True)]
+    else:
+        raise ValueError(f"Invalid obs mode: {opt.obs_mode}")
+
     return unity_options
 
 
@@ -369,12 +324,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("exp", type=str, help="The name of the experiment to run.")
     parser.add_argument("mode", type=str, help="The mode of the system to run.")
-    parser.add_argument(
-        "--start_idx",
-        type=int,
-        default=0,
-        help="The example index to start running from.",
-    )
     parser.add_argument(
         "--hostname",
         type=str,

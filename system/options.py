@@ -35,7 +35,8 @@ def set_unity_container_cfgs(opt, port):
 
 
 BASE_SYSTEM_OPTIONS = argparse.Namespace(
-    seed=101,
+    # seed=101,
+    seed=1234,
     is_cuda=True,
     enable_reaching=True,
     enable_retract=True,
@@ -67,12 +68,13 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     retract_head_speed=0,
     head_speed=0,
     save_states=True,  # To check reproducibility.
-    policy_id="0411",  # [0404, 0411, 0510]
+    policy_id="0901",  # [0404, 0411, 0510]
     save_first_pov_image=False,
     save_third_pov_image=False,
     scenes_root_dir="system/data",  # os.path.join(util.get_user_homedir(), "data/dash"),
     root_outputs_dir=os.path.join(homedir, "outputs/system"),
-    container_dir=os.path.join(homedir, "container_data"),
+    # container_dir=os.path.join(homedir, "container_data"),
+    container_dir=os.path.join(os.path.join(homedir, "Projects"), "container_data"),
     unity_captures_dir=None,
     two_commands=False,
 )
@@ -161,19 +163,21 @@ BULLET_OPTIONS = argparse.Namespace(
 )
 
 POLICY_OPTIONS = argparse.Namespace(
-    seed=101,
-    init_noise=True,
+    # seed=101,
+    seed=1234,
+    # init_noise=True,
+    init_noise=False,
     restore_fingers=True,
     use_arm_blending=True,
     use_height=False,  # assume sph policy does not use height or one bit.
     use_place_stack_bit=False,
     use_slow_policy=False,
-    n_reach_steps=405,
+    n_reach_steps=400,
     n_transport_steps=505,
     n_retract_steps=305,
-    grasp_control_steps=30,
+    grasp_control_steps=65,
     place_control_steps=55,
-    grasp_control_skip=12,
+    grasp_control_skip=6,
     place_control_skip=6,
     place_clip_init_tar=False,
     place_clip_init_tar_value=0.2,
@@ -202,6 +206,13 @@ def get_policy_options_and_paths(policy_id: str):
         grasp_dir = f"./trained_models_%s/ppo/" % "0510_0_n"
         place_pi = f"0510_0_n_place_0510_0"
         place_dir = f"./trained_models_%s/ppo/" % place_pi
+    elif policy_id == "0901":
+        policy_options.use_height = True
+        policy_options.use_place_stack_bit = True
+        grasp_pi = f"0901_12_n_25_45"
+        grasp_dir = f"./trained_models_%s/ppo/" % "0901_12_n"
+        place_pi = f"0901_12_n_place"
+        place_dir = f"./trained_models_%s/ppo/" % place_pi
 
     shape2policy_paths = {
         "universal": {
@@ -213,6 +224,9 @@ def get_policy_options_and_paths(policy_id: str):
             "grasp_pi": "0422_sph_n_25_45",
             "grasp_dir": "./trained_models_0422_sph_n/ppo/",
             "place_dir": "./trained_models_0422_sph_n_place_0422_sph/ppo/",
+            # "grasp_pi": grasp_pi,
+            # "grasp_dir": grasp_dir,
+            # "place_dir": place_dir,
         },
     }
     return policy_options, shape2policy_paths
@@ -247,7 +261,7 @@ def get_policy_options_and_paths(policy_id: str):
 VISION_MODELS_DIR = os.path.join(homedir, "outputs/0518_results")
 
 VISION_OPTIONS = argparse.Namespace(
-    seed=None,
+    seed=1234,
     renderer="unity",
     use_segmentation_module=True,
     separate_vision_modules=True,

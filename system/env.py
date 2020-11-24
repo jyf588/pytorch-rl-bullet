@@ -11,6 +11,7 @@ import pybullet as p
 from typing import *
 from scipy.optimize import linear_sum_assignment
 import pybullet_utils.bullet_client as bc
+from retiming import update_traj
 
 import exp.loader
 import system.policy
@@ -128,6 +129,9 @@ class DemoEnvironment:
             self.duration_list = [self.opt.start_head_steps] + self.duration_list
 
         self.duration_list = np.cumsum(self.duration_list)
+        # print(self.duration_list)
+        # self.n_total_steps = self.duration_list[-1]
+        # self.duration_list = [405, 470, 975, 1030]
         self.n_total_steps = self.duration_list[-1]
 
         self.stage, self.stage_ts = self.get_current_stage()
@@ -274,8 +278,13 @@ class DemoEnvironment:
         done = self.is_done()
 
         # Update the stage.
+        last_stage = self.stage
         if not done:
             self.stage, self.stage_ts = self.get_current_stage()
+        if last_stage == "reach" and self.stage == "grasp":
+            self.w.robot_env.robot.tar_arm_q = self.w.get_robot_q()[0]
+            # exit()
+            # print('change')
 
         # Compute whether we have finished the entire sequence.
         return done, step_succeeded
@@ -352,6 +361,11 @@ class DemoEnvironment:
         policy_dict = self.shape2policy_dict[
             "sphere" if self.is_sphere else "universal"
         ]
+        # if self.is_sphere:
+        #     self.duration_list = [405, 470, 975, 1030]
+        # else:
+        #     self.duration_list = [400, 465, 970, 1025]
+        # self.n_total_steps = self.duration_list[-1]
         self.grasp_policy = policy_dict["grasp_policy"]
         self.place_policy = policy_dict["place_policy"]
         self.hidden_states = copy.deepcopy(policy_dict["hidden_states"])
@@ -633,6 +647,7 @@ class DemoEnvironment:
                 clip=self.policy_opt.use_slow_policy,
             ),
             timestep=self.timestep,
+            is_sphere=self.is_sphere
         )
         self.masks.fill_(1.0)
 
@@ -670,6 +685,7 @@ class DemoEnvironment:
                 clip=self.policy_opt.use_slow_policy,
             ),
             timestep=self.timestep,
+            is_sphere=self.is_sphere
         )
 
     def get_place_skip(self):
@@ -689,8 +705,11 @@ class DemoEnvironment:
         # Get initial robot pose.
         if stage_ts == 0:
             self.trajectory = self.compute_trajectory(stage=stage)
-            if len(self.trajectory) == 0:
+            if self.trajectory is None or len(self.trajectory) == 0:
                 return False
+            if stage == "reach" and not self.is_sphere:
+                self.trajectory = update_traj(self.trajectory, obj_pos=np.array(self.initial_obs[self.src_idx]["position"]),
+                                    arm_dofs=self.w.robot_env.robot.arm_dofs, v1=0.4)
             self.w.robot_env.robot.tar_arm_q = self.trajectory[-1]
             self.init_tar_fin_q = self.w.robot_env.robot.tar_fin_q
             self.last_tar_arm_q, self.init_fin_q = self.w.get_robot_q()

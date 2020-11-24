@@ -10,6 +10,7 @@ import math
 import os
 import inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+from my_pybullet_envs.utils import perturb_scalar
 
 
 class InmoovShadowHandGraspEnvV6(gym.Env):
@@ -153,53 +154,72 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
 
         self.robot = InmoovShadowNew(init_noise=self.init_noise, timestep=self._timeStep, np_random=self.np_random)
 
-        arm_q = self.sample_valid_arm_q()
-        self.robot.reset_with_certain_arm_q(arm_q)
+        Qdest = None
+        while Qdest is None:
+            arm_q = self.sample_valid_arm_q()
+            self.robot.reset_with_certain_arm_q(arm_q)
+            p.stepSimulation()
+            palm_com_pos, palm_com_quat, localInertialFramePos, localInertialFrameOri, _, _, _, _ = \
+                p.getLinkState(self.robot.arm_id, 7, computeLinkVelocity=1, computeForwardKinematics=1)
+            # self.robot.reset_with_certain_arm_states(arm_q, arm_dq)
+            if not self.grasp_floor:
+                bo = self.btm_obj       # reference for safety
+                bo['shape'] = utils.SHAPE_IND_MAP[self.np_random.randint(2)]      # btm cyl or box
+                bo['half_width'] = self.np_random.uniform(utils.HALF_W_MIN_BTM, utils.HALF_W_MAX)
+                if bo['shape'] == p.GEOM_BOX:
+                    bo['half_width'] *= 0.8
+                bo['height'] = self.tz_act
+                bo['mass'] = self.np_random.uniform(utils.MASS_MIN, utils.MASS_MAX)
+                bo['mu'] = self.np_random.uniform(utils.MU_MIN, utils.MU_MAX)
 
-        if not self.grasp_floor:
-            bo = self.btm_obj       # reference for safety
-            bo['shape'] = utils.SHAPE_IND_MAP[self.np_random.randint(2)]      # btm cyl or box
-            bo['half_width'] = self.np_random.uniform(utils.HALF_W_MIN_BTM, utils.HALF_W_MAX)
-            if bo['shape'] == p.GEOM_BOX:
-                bo['half_width'] *= 0.8
-            bo['height'] = self.tz_act
-            bo['mass'] = self.np_random.uniform(utils.MASS_MIN, utils.MASS_MAX)
-            bo['mu'] = self.np_random.uniform(utils.MU_MIN, utils.MU_MAX)
+                btm_xy = utils.perturb(self.np_random, [self.tx_act, self.ty_act], 0.015)
+                btm_xyz = list(np.array(list(btm_xy) + [self.tz_act / 2.0]))
 
-            btm_xy = utils.perturb(self.np_random, [self.tx_act, self.ty_act], 0.015)
-            btm_xyz = list(np.array(list(btm_xy) + [self.tz_act / 2.0]))
+                btm_quat = p.getQuaternionFromEuler([0., 0., self.np_random.uniform(low=0, high=2.0 * math.pi)])
+                bo['id'] = utils.create_sym_prim_shape_helper(bo, btm_xyz, btm_quat)
 
-            btm_quat = p.getQuaternionFromEuler([0., 0., self.np_random.uniform(low=0, high=2.0 * math.pi)])
-            bo['id'] = utils.create_sym_prim_shape_helper(bo, btm_xyz, btm_quat)
+                if not self.warm_start:
+                    # https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/examples/constraint.py#L11
+                    _ = p.createConstraint(bo['id'], -1, -1, -1, p.JOINT_FIXED, [0, 0, 0], [0, 0, 0],
+                                           childFramePosition=btm_xyz,
+                                           childFrameOrientation=btm_quat)
 
-            if not self.warm_start:
-                # https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/examples/constraint.py#L11
-                _ = p.createConstraint(bo['id'], -1, -1, -1, p.JOINT_FIXED, [0, 0, 0], [0, 0, 0],
-                                       childFramePosition=btm_xyz,
-                                       childFrameOrientation=btm_quat)
+            to = self.top_obj
+            shape_ind = self.np_random.randint(2) if self.random_top_shape else self.det_top_shape_ind
+            to['shape'] = utils.SHAPE_IND_MAP[shape_ind]
+            to['mass'] = self.np_random.uniform(utils.MASS_MIN, utils.MASS_MAX)
+            to['mu'] = self.np_random.uniform(utils.MU_MIN, utils.MU_MAX)
+            to['half_width'] = self.np_random.uniform(utils.HALF_W_MIN, utils.HALF_W_MAX) if not self.overwrite_size else self.overwrite_radius
+            to['height'] = self.np_random.uniform(utils.H_MIN, utils.H_MAX) if not self.overwrite_size else self.overwrite_height
+            if to['shape'] == p.GEOM_BOX:
+                to['half_width'] *= 0.8
+            elif to['shape'] == p.GEOM_SPHERE:
+                to['height'] *= 0.75
+                to['half_width'] = None
 
-        to = self.top_obj
-        shape_ind = self.np_random.randint(2) if self.random_top_shape else self.det_top_shape_ind
-        to['shape'] = utils.SHAPE_IND_MAP[shape_ind]
-        to['mass'] = self.np_random.uniform(utils.MASS_MIN, utils.MASS_MAX)
-        to['mu'] = self.np_random.uniform(utils.MU_MIN, utils.MU_MAX)
-        to['half_width'] = self.np_random.uniform(utils.HALF_W_MIN, utils.HALF_W_MAX) if not self.overwrite_size else self.overwrite_radius
-        to['height'] = self.np_random.uniform(utils.H_MIN, utils.H_MAX) if not self.overwrite_size else self.overwrite_height
-        if to['shape'] == p.GEOM_BOX:
-            to['half_width'] *= 0.8
-        elif to['shape'] == p.GEOM_SPHERE:
-            to['height'] *= 0.75
-            to['half_width'] = None
+            top_xyz = np.array([self.tx_act, self.ty_act, self.tz_act + to['height'] / 2.0])
+            top_quat = p.getQuaternionFromEuler([0., 0., self.np_random.uniform(low=0, high=2.0 * math.pi)])
+            to['id'] = utils.create_sym_prim_shape_helper(to, top_xyz, top_quat)
 
-        top_xyz = np.array([self.tx_act, self.ty_act, self.tz_act + to['height'] / 2.0])
-        top_quat = p.getQuaternionFromEuler([0., 0., self.np_random.uniform(low=0, high=2.0 * math.pi)])
-        to['id'] = utils.create_sym_prim_shape_helper(to, top_xyz, top_quat)
+            # note, one-time (same for all frames) noise from init vision module
+            if self.obs_noise:
+                self.half_height_est = utils.perturb_scalar(self.np_random, self.top_obj['height']/2.0, 0.01)
+            else:
+                self.half_height_est = self.top_obj['height']/2.0
+            top_obs = np.array([self.tx, self.ty, self.tz + self.half_height_est])
+            virt_com_pos = np.array(palm_com_pos) + 0.2 * (top_obs - np.array(palm_com_pos))
+            comLinkFrame = utils.pose2mat((virt_com_pos, palm_com_quat))
+            localInertialFrame = utils.pose2mat((localInertialFramePos, localInertialFrameOri))
+            urdfLinkFrame = comLinkFrame.dot(np.linalg.inv(localInertialFrame))
+            ik_pos = urdfLinkFrame[:3, -1]
+            ik_ori = utils.mat2quat(urdfLinkFrame[:3, :3])
+            Qdest = self.robot.solve_arm_IK(ik_pos, ik_ori)
 
-        # note, one-time (same for all frames) noise from init vision module
-        if self.obs_noise:
-            self.half_height_est = utils.perturb_scalar(self.np_random, self.top_obj['height']/2.0, 0.01)
-        else:
-            self.half_height_est = self.top_obj['height']/2.0
+        diff_q = np.array(Qdest) - arm_q
+        # During training, v1 is uniformly sampled from 0.3 to 0.5. During test, v1 = 0.4
+        v1 = np.random.uniform(0.3, 0.5)
+        arm_dq = diff_q * v1 / np.linalg.norm(virt_com_pos - np.array(palm_com_pos))
+        self.robot.reset_with_certain_arm_states(arm_q, arm_dq)
 
         p.stepSimulation()  # TODO
 
@@ -212,7 +232,6 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
     def step(self, action):
 
         bottom_id = self.table_id if self.grasp_floor else self.btm_obj['id']
-
         if self.has_test_phase:
             if self.timer == self.test_start * self.control_skip:
                 self.force_global = [self.np_random.uniform(-100, 100),
@@ -361,7 +380,6 @@ class InmoovShadowHandGraspEnvV6(gym.Env):
         # output finger q's, finger tar q's.
         # velocity will be assumed to be zero at the end of transporting phase
         # return a dict.
-
         assert not self.has_test_phase
 
         obj_pos, obj_quat = p.getBasePositionAndOrientation(self.top_obj['id'])      # w2o

@@ -183,6 +183,23 @@ class InmoovShadowNew:
         self.tar_arm_q = init_arm_q
         self.tar_fin_q = init_fin_q
 
+    def reset_with_certain_arm_states(self, arm_q, arm_dq):
+        if self.init_noise:
+            init_arm_q = self.perturb(arm_q, r=0.002)
+            init_fin_q = self.perturb(self.init_fin_q, r=0.02)
+        else:
+            init_arm_q = np.copy(arm_q)
+            init_fin_q = np.array(self.init_fin_q)
+
+        for ind in range(len(self.arm_dofs)):
+            self.sim.resetJointState(self.arm_id, self.arm_dofs[ind], init_arm_q[ind], arm_dq[ind])
+        for ind in range(len(self.fin_actdofs)):
+            self.sim.resetJointState(self.arm_id, self.fin_actdofs[ind], init_fin_q[ind], 0.0)
+        for ind in range(len(self.fin_zerodofs)):
+            self.sim.resetJointState(self.arm_id, self.fin_zerodofs[ind], 0.0, 0.0)
+        self.tar_arm_q = init_arm_q
+        self.tar_fin_q = init_fin_q
+
     def reset_only_certain_finger_states(self, all_fin_q, tar_act_q):
         if self.init_noise:
             all_fin_q = self.perturb(all_fin_q, r=0.01)
@@ -306,10 +323,12 @@ class InmoovShadowNew:
 
         return obs
 
-    def apply_action(self, a):
+    def apply_action(self, a, is_sphere):
         # TODO: a is already scaled, how much to scale? decide in Env.
         self.act = np.array(a)
+        prev_arm_q, _ = self.get_q_dq(self.arm_dofs)
         self.tar_arm_q += self.act[:len(self.arm_dofs)]     # assume arm controls are the first ones.
+        tar_arm_vel = (self.tar_arm_q - prev_arm_q) / self._timestep
         if self.conservative_clip:
             cur_q, _ = self.get_q_dq(self.arm_dofs)
             self.tar_arm_q = np.clip(self.tar_arm_q, cur_q - self.conservative_range, cur_q + self.conservative_range)
@@ -317,12 +336,21 @@ class InmoovShadowNew:
             self.tar_arm_q = np.clip(self.tar_arm_q, self.ll[self.arm_dofs], self.ul[self.arm_dofs])
         self.tar_fin_q += self.act[len(self.arm_dofs):]
         self.tar_fin_q = np.clip(self.tar_fin_q, self.ll[self.fin_actdofs], self.ul[self.fin_actdofs])
-        self.sim.setJointMotorControlArray(
-            bodyIndex=self.arm_id,
-            jointIndices=self.arm_dofs,
-            controlMode=self.sim.POSITION_CONTROL,
-            targetPositions=list(self.tar_arm_q),
-            forces=[self.maxForce * 3] * len(self.arm_dofs))  # TODO: wrist force limit?
+        if is_sphere:
+            self.sim.setJointMotorControlArray(
+                bodyIndex=self.arm_id,
+                jointIndices=self.arm_dofs,
+                controlMode=self.sim.POSITION_CONTROL,
+                targetPositions=list(self.tar_arm_q),
+                forces=[self.maxForce * 3] * len(self.arm_dofs))  # TODO: wrist force limit?
+        else:
+            self.sim.setJointMotorControlArray(
+                bodyIndex=self.arm_id,
+                jointIndices=self.arm_dofs,
+                controlMode=self.sim.POSITION_CONTROL,
+                targetPositions=list(self.tar_arm_q),
+                targetVelocities=list(tar_arm_vel),
+                forces=[self.maxForce * 3] * len(self.arm_dofs))  # TODO: wrist force limit?
         self.sim.setJointMotorControlArray(
             bodyIndex=self.arm_id,
             jointIndices=self.fin_actdofs,

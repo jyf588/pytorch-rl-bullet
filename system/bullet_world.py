@@ -332,7 +332,7 @@ class BulletWorld:
         self.bc.stepSimulation()
         time.sleep(self.opt.ts)
 
-    def step_robot(self, action: np.ndarray, timestep: int):
+    def step_robot(self, action: np.ndarray, timestep: int, is_sphere: bool):
         """Applies the robot action and steps a single simulation step.
 
         Args:
@@ -344,6 +344,6 @@ class BulletWorld:
         # is enabled.
         if self.use_control_skip:
             for _ in range(self.robot_env.control_skip):
-                self.robot_env.step_sim(action=action)
+                self.robot_env.step_sim(action=action, is_sphere=is_sphere)
         else:
-            self.robot_env.step_sim(action=action)
+            self.robot_env.step_sim(action=action, is_sphere=is_sphere)

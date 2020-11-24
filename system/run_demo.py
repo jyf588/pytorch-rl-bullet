@@ -43,8 +43,8 @@ global args
 
 DEMO_COMMANDS = {
     0: [
-        "Put the green cylinder on top of the yellow box.",
-        "Then, put the red box on top of the blue cylinder.",
+        "Put the blue cylinder on top of the red box.",
+        "Then, put the yellow box on top of the green cylinder.",
     ],
     1: [
         "Pick up the red sphere that is to the left of the green box, and place it in front of the blue cylinder.",

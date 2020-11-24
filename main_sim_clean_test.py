@@ -9,7 +9,8 @@ from tqdm import tqdm
 from typing import *
 from my_pybullet_envs import utils
 from state_saver import StateSaver
-
+from ns_vqa_dart.bullet.util import delete_and_create_dir
+from retiming import update_traj
 import numpy as np
 import torch
 
@@ -29,6 +30,7 @@ from my_pybullet_envs.inmoov_shadow_hand_v2 import InmoovShadowNew
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 homedir = os.path.expanduser("~")
+homedir += "/Projects/"
 
 
 # TODO: main module depends on the following code/model:
@@ -57,6 +59,8 @@ args.det = not args.non_det
 
 """Configurations."""
 
+RETIMING = False
+SAVE_STATES = True  # palm trajectory, velocity and target reaching object
 USE_GV5 = False  # is false, use gv6
 DUMMY_SLEEP = bool(args.sleep)
 WITH_REACHING = True
@@ -73,10 +77,10 @@ RENDER = bool(args.render)
 
 CLOSE_THRES = 0.25
 
-NUM_TRIALS = 300
+NUM_TRIALS = 20
 
-GRASP_END_STEP = 35
-PLACE_END_STEP = 55
+GRASP_END_STEP = 65
+PLACE_END_STEP = 100
 
 INIT_NOISE = True
 DET_CONTACT = 0  # 0 false, 1 true
@@ -90,6 +94,12 @@ IS_CUDA = True
 DEVICE = "cuda" if IS_CUDA else "cpu"
 
 ITER = None
+
+# make directory
+if SAVE_STATES:
+    save_dir = os.path.join(homedir, "results", "original", "data")
+    delete_and_create_dir(save_dir)
+
 
 if USE_GV5:
     GRASP_PI = "0313_2_n_25_45"
@@ -113,9 +123,9 @@ else:
         PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
 
         if ADD_PLACE_STACK_BIT:
-            GRASP_PI = "0510_0_n_25_45"
-            GRASP_DIR = "./trained_models_%s/ppo/" % "0510_0_n"
-            PLACE_PI = "0510_0_n_place_0510_0"          # 68/83
+            GRASP_PI = "0901_12_n_25_45"
+            GRASP_DIR = "./trained_models_%s/ppo/" % "0901_12_n"
+            PLACE_PI = "0901_12_n_place"          # 68/83
             PLACE_DIR = "./trained_models_%s/ppo/" % PLACE_PI
     else:
         GRASP_PI = "0411_0_n_25_45"
@@ -144,7 +154,7 @@ PLACING_CONTROL_SKIP = 6
 GRASPING_CONTROL_SKIP = 6
 
 
-def planning(trajectory, retract_stage=False):
+def planning(trajectory, reach_stage=False, move_stage=False, retract_stage=False):
     # TODO: total traj length 300+5 now
 
     max_force = env_core.robot.maxForce
@@ -165,6 +175,8 @@ def planning(trajectory, retract_stage=False):
 
     for idx in range(len(trajectory) + 5):
         if idx > len(trajectory) - 1:
+            if reach_stage:
+                return
             tar_arm_q = trajectory[-1]
         else:
             tar_arm_q = trajectory[idx]
@@ -222,26 +234,6 @@ def planning(trajectory, retract_stage=False):
             forces=[max_force / 4.0] * len(env_core.robot.fin_zerodofs),
         )
 
-        diff = np.linalg.norm(
-            env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0] - tar_arm_q
-        )
-
-        if idx == len(trajectory) + 4:
-            print("diff final", diff)
-            print(
-                "vel final",
-                np.linalg.norm(env_core.robot.get_q_dq(env_core.robot.arm_dofs)[1]),
-            )
-            print("fin dofs")
-            print(
-                [
-                    "{0:0.3f}".format(n)
-                    for n in env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
-                ]
-            )
-            print("cur_fin_tar_q")
-            print(["{0:0.3f}".format(n) for n in env_core.robot.tar_fin_q])
-
         for _ in range(1):
             p.stepSimulation()
             # state_saver.save_state()
@@ -250,6 +242,101 @@ def planning(trajectory, retract_stage=False):
 
         last_tar_arm_q = tar_arm_q
 
+
+def planning_saving(trajectory, reach_stage=False, move_stage=False, retract_stage=False):
+    # TODO: total traj length 300+5 now
+
+    saved_traj = []
+    saved_vel = []
+    max_force = env_core.robot.maxForce
+
+    init_tar_fin_q = env_core.robot.tar_fin_q
+    init_fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
+
+    init_arm_dq = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[1]
+    init_arm_q = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
+    last_tar_arm_q = init_arm_q
+
+    env_core.robot.tar_arm_q = trajectory[-1]  # TODO: important!
+
+    print("init_tar_fin_q")
+    print(["{0:0.3f}".format(n) for n in init_tar_fin_q])
+    print("init_fin_q")
+    print(["{0:0.3f}".format(n) for n in init_fin_q])
+
+    for idx in range(len(trajectory) + 5):
+        if idx > len(trajectory) - 1:
+            if reach_stage:
+                return saved_traj, saved_vel
+            tar_arm_q = trajectory[-1]
+        else:
+            tar_arm_q = trajectory[idx]
+
+        if retract_stage:
+            proj_arm_q = init_arm_q + (idx+1) * init_arm_dq * utils.TS
+            blending = np.clip(
+                idx / (len(trajectory) * 0.6), 0.0, 1.0
+            )
+            tar_arm_q = tar_arm_q * blending + proj_arm_q * (1 - blending)
+
+        tar_arm_vel = (tar_arm_q - last_tar_arm_q) / utils.TS
+
+        p.setJointMotorControlArray(
+            bodyIndex=env_core.robot.arm_id,
+            jointIndices=env_core.robot.arm_dofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=list(tar_arm_q),
+            targetVelocities=list(tar_arm_vel),
+            forces=[max_force * 5] * len(env_core.robot.arm_dofs),
+        )
+
+        if retract_stage and idx >= len(trajectory) * 0.1:  # TODO: hardcoded
+            blending = np.clip(
+                (idx - len(trajectory) * 0.1) / (len(trajectory) * 0.8), 0.0, 1.0
+            )
+            # cur_fin_q = env_core.robot.get_q_dq(env_core.robot.fin_actdofs)[0]
+            tar_fin_q = env_core.robot.init_fin_q * blending + init_fin_q * (
+                1 - blending
+            )
+        else:
+            # try to keep fin q close to init_fin_q (keep finger pose)
+            # add at most offset 0.05 in init_tar_fin_q direction so that grasp is tight
+            tar_fin_q = np.clip(init_tar_fin_q, init_fin_q - 0.1, init_fin_q + 0.1)
+
+        # clip to joint limit
+        tar_fin_q = np.clip(
+            tar_fin_q,
+            env_core.robot.ll[env_core.robot.fin_actdofs],
+            env_core.robot.ul[env_core.robot.fin_actdofs],
+        )
+
+        p.setJointMotorControlArray(
+            bodyIndex=env_core.robot.arm_id,
+            jointIndices=env_core.robot.fin_actdofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=list(tar_fin_q),
+            forces=[max_force] * len(env_core.robot.fin_actdofs),
+        )
+        p.setJointMotorControlArray(
+            bodyIndex=env_core.robot.arm_id,
+            jointIndices=env_core.robot.fin_zerodofs,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=[0.0] * len(env_core.robot.fin_zerodofs),
+            forces=[max_force / 4.0] * len(env_core.robot.fin_zerodofs),
+        )
+
+        for _ in range(1):
+            p.stepSimulation()
+            # state_saver.save_state()
+        palm_com_pos, _, _, _, _, _, palm_com_vel, _ = \
+            p.getLinkState(env_core.robot.arm_id, 7, computeLinkVelocity=1, computeForwardKinematics=1)
+        saved_traj.append(np.array(palm_com_pos))
+        saved_vel.append(np.array(palm_com_vel))
+        if DUMMY_SLEEP:
+            time.sleep(utils.TS * 0.6)
+
+        last_tar_arm_q = tar_arm_q
+    return saved_traj, saved_vel
 
 def get_relative_state_for_reset(oid):
     obj_pos, obj_quat = p.getBasePositionAndOrientation(oid)  # w2o
@@ -472,10 +559,25 @@ if RENDER:
 else:
     p.connect(p.DIRECT)
 
+# debug policy
+# grasp_rewards = np.zeros(NUM_TRIALS)
+# place_rewards = np.zeros(NUM_TRIALS)
+states_dict = {}
 for trial in range(NUM_TRIALS):
     """Sample two/N objects"""
 
+    if SAVE_STATES:
+        if states_dict:  # not empty
+            states_dict['traj'] = np.stack(states_dict['traj']).tolist()
+            states_dict['vel'] = np.stack(states_dict['vel']).tolist()
+            with open(os.path.join(save_dir, str(trial - 1).zfill(3) + '.json'), 'w') as fp:
+                json.dump(states_dict, fp)
+
     all_dicts = []
+
+    states_dict = {}
+    states_dict['traj'] = []
+    states_dict['vel'] = []
 
     while True:
         top_dict = sample_obj_dict()
@@ -511,6 +613,8 @@ for trial in range(NUM_TRIALS):
             gen_surrounding_objs(all_dicts)
             del top_dict, btm_dict
             break
+
+    states_dict['obj_pos'] = [g_tx, g_ty, t_half_height]
 
     """Imaginary arm session to get q_reach"""
 
@@ -621,31 +725,61 @@ for trial in range(NUM_TRIALS):
             print("*******", success_count * 1.0 / (trial + 1))
             continue  # reaching failed
         else:
-            planning(Traj_reach)
+            if RETIMING:
+                Traj_reach = update_traj(Traj_reach, obj_pos=np.array([g_tx, g_ty, t_half_height]),
+                                        arm_dofs=env_core.robot.arm_dofs, v1=0.4)
+            if SAVE_STATES:
+                saved_traj, saved_vel = planning_saving(Traj_reach, reach_stage=True)
+                states_dict['traj'] += saved_traj
+                states_dict['vel'] += saved_vel
+            else:
+                planning(Traj_reach, reach_stage=True)
 
         print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
     else:
         env_core.robot.reset_with_certain_arm_q(Qreach)
+        p.stepSimulation()
+        palm_com_pos, palm_com_quat, localInertialFramePos, localInertialFrameOri, _, _, _, _ = \
+            p.getLinkState(env_core.robot.arm_id, 7, computeLinkVelocity=1, computeForwardKinematics=1)
+        top_obs = [g_tx, g_ty, t_half_height]
+        # move to virtual pos
+        virt_com_pos = np.array(palm_com_pos) + 0.2 * (top_obs - np.array(palm_com_pos))
+        comLinkFrame = utils.pose2mat((virt_com_pos, palm_com_quat))
+        localInertialFrame = utils.pose2mat((localInertialFramePos, localInertialFrameOri))
+        urdfLinkFrame = comLinkFrame.dot(np.linalg.inv(localInertialFrame))
+        ik_pos = urdfLinkFrame[:3, -1]
+        ik_ori = utils.mat2quat(urdfLinkFrame[:3, :3])
+        Qdest = env_core.robot.solve_arm_IK(ik_pos, ik_ori)
+        diff_q = np.array(Qdest) - Qreach
+        # v1 = np.random.uniform(0.4, 0.6)
+        v1 = 0.4
+        arm_dq = diff_q * v1 / np.linalg.norm(virt_com_pos - np.array(palm_com_pos))
+        env_core.robot.reset_with_certain_arm_states(Qreach, arm_dq)
         # input("press enter")
 
+    q = env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0]
+    env_core.robot.tar_arm_q = q
     g_obs = get_grasp_policy_obs_tensor(g_tx, g_ty, t_half_height, is_box)
 
     """Grasp"""
     env_core.change_control_skip_scaling(           # demo uses 12
-        c_skip=GRASPING_CONTROL_SKIP
+        c_skip=GRASPING_CONTROL_SKIP, arm_scale=0.006
     )
     control_steps = 0
+    # reward = 0
     for i in range(GRASP_END_STEP):
         with torch.no_grad():
             value, action, _, recurrent_hidden_states = g_actor_critic.act(
                 g_obs, recurrent_hidden_states, masks, deterministic=args.det
             )
 
-        for i in range(GRASPING_CONTROL_SKIP):
-            env_core.step_sim(policy.unwrap_action(action, IS_CUDA))
-            # state_saver.save_state()
+        # for i in range(GRASPING_CONTROL_SKIP):
+        #     env_core.step_sim(policy.unwrap_action(action, IS_CUDA))
+        #     # state_saver.save_state()
 
-        env_core.step(policy.unwrap_action(action, IS_CUDA))
+        env_core.step(policy.unwrap_action(action, IS_CUDA), is_sphere=False)
+        # reward += env_core.grasp_step(action=policy.unwrap_action(action, IS_CUDA), table_id=table_id, top_id=top_id,
+        #                               g_tx=g_tx, g_ty=g_ty, np_random=np.random)
 
         g_obs = get_grasp_policy_obs_tensor(g_tx, g_ty, t_half_height, is_box)
 
@@ -657,8 +791,11 @@ for trial in range(NUM_TRIALS):
         masks.fill_(1.0)
         # pose_saver.get_poses()
 
-    final_g_obs = copy.copy(g_obs)
-    del g_obs, g_tx, g_ty, t_half_height
+#     print('reward', reward)
+#     rewards[trial] = reward
+# print('mean', np.mean(rewards))
+# print('median', np.median(rewards))
+# np.savez("/home/jiangsli/Projects/reward0.npz", rewards)
 
     state = get_relative_state_for_reset(top_id)
     print("after grasping", state)
@@ -685,7 +822,7 @@ for trial in range(NUM_TRIALS):
         print("*******", success_count * 1.0 / (trial + 1))
         continue  # transporting failed
     else:
-        planning(Traj_move)
+        planning(Traj_move, move_stage=True)
 
     print("arm q", env_core.robot.get_q_dq(env_core.robot.arm_dofs)[0])
     # input("after moving")
@@ -764,7 +901,7 @@ for trial in range(NUM_TRIALS):
             )
 
         for i in range(PLACING_CONTROL_SKIP):
-            env_core.step_sim(policy.unwrap_action(action, IS_CUDA))
+            env_core.step_sim(policy.unwrap_action(action, IS_CUDA), is_sphere=False)
             # state_saver.save_state()
         # env_core.step(policy.unwrap_action(action, IS_CUDA))
 
