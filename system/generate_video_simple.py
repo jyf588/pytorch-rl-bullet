@@ -50,7 +50,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dst_path",
         type=str,
-        default="/home/yifengj/test1124_2.mp4",
+        default="/home/yifengj/test1124_3.mp4",
         help="The destination path to write the mp4 video to.",
     )
     args = parser.parse_args()
