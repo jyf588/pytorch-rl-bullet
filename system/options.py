@@ -74,7 +74,7 @@ BASE_SYSTEM_OPTIONS = argparse.Namespace(
     scenes_root_dir="system/data",  # os.path.join(util.get_user_homedir(), "data/dash"),
     root_outputs_dir=os.path.join(homedir, "outputs/system"),
     # container_dir=os.path.join(homedir, "container_data"),
-    container_dir=os.path.join(os.path.join(homedir, "Projects"), "container_data"),
+    container_dir=os.path.join(homedir, "container_data"),
     unity_captures_dir=None,
     two_commands=False,
 )
@@ -116,12 +116,12 @@ GT_DEMO_OPTIONS.obs_mode = "gt"  # TODO
 
 VISION_DEMO_OPTIONS = copy.deepcopy(DEMO_OPTIONS)
 VISION_DEMO_OPTIONS.obs_mode = "vision"
-VISION_DEMO_OPTIONS.start_sid = 1
-VISION_DEMO_OPTIONS.end_sid = 2
+VISION_DEMO_OPTIONS.start_sid = 0
+VISION_DEMO_OPTIONS.end_sid = 4
 VISION_DEMO_OPTIONS.save_first_pov_image = True
 # Debugging demo vision.
 # VISION_DEMO_OPTIONS.render_obs = True
-# VISION_DEMO_OPTIONS.render_frequency = 100
+# VISION_DEMO_OPTIONS.render_frequency = 30
 # VISION_DEMO_OPTIONS.use_control_skip = True
 
 TEST_VISION_OPTIONS = copy.deepcopy(TEST_OPTIONS)
@@ -175,7 +175,7 @@ POLICY_OPTIONS = argparse.Namespace(
     n_reach_steps=400,
     n_transport_steps=505,
     n_retract_steps=305,
-    grasp_control_steps=65,
+    grasp_control_steps=35,
     place_control_steps=55,
     grasp_control_skip=6,
     place_control_skip=6,
