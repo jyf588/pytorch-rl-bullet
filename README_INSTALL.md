@@ -5,7 +5,6 @@ This section contains prerequisites to running the DASH system.
 First, clone the main repo and its submodules. (modified from https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gail and https://github.com/openai/baselines)
 ```
 git clone https://github.com/jyf588/pytorch-rl-bullet.git
-git checkout bullet_ppo
 git submodule update --init --recursive
 ```
 
